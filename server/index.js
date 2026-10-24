@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import express from 'express'
 import { getItems, reactionsOf } from './store.js'
-import { aiEnabled, aiProvider, aiUsage, analyse, askNews, cached, explainSpike, initUsage, loadKey, writeQuery } from './ai.js'
+import { aiEnabled, aiProvider, aiUsage, analyse, aroundRun, cached, explainSpike, initUsage, loadKey, writeQuery } from './ai.js'
 import { allTags, countList, entitiesOf, findSpikes, initTags, itemKey, setTags, spikeItems, tagsOf, toCsv } from './intel.js'
 import { keyStatus } from './keys.js'
 import { currentUser, deleteUser, hasRole, initAuth, listUsers, loginRoute, logoutRoute, requireAuth, saveUser } from './auth.js'
@@ -13,6 +13,7 @@ import { buildBriefing, comparePeriods, engagementTotals, interactions, retrieve
 import { briefingConf, briefingKey, briefingWithSummary, sendBriefing, setBriefingConf, startBriefing } from './briefing.js'
 import { imageRoute, initImages, withImages } from './images.js'
 import { mountSuperAdmin } from './superadmin.js'
+import { AGENTS, ASK_SPEC, agentFacts, agentItems, agentStats, askPrompt, itemLines, sourceCard, specFor } from './around.js'
 import { createWatch, deleteWatch, enabledWatches, itemsForWatch, listWatches, setEnabled, startWatches, telegramReady } from './watches.js'
 
 /** Serveur MMS : API de lecture des actualités + site compilé (dist/) en production */
@@ -351,8 +352,20 @@ app.post('/api/ai/query', express.json({ limit: '4kb' }), async (req, res) => {
   }
 })
 
-// Assistant conversationnel : réponse sourcée sur les actualités de MMS
+// Around, l'assistant IA : réponse structurée et sourcée, cartes d'articles et relances
 let askRunning = 0
+const AROUND_DAYS = [1, 7, 30, 90, 180, 365]
+
+/** Périmètre d'Around : veille choisie (sinon tout MMS) et période */
+function aroundScope(body) {
+  const { items, lastUpdate } = getItems()
+  const days = AROUND_DAYS.includes(Number(body?.days)) ? Number(body.days) : 30
+  const watchId = String(body?.watch || '')
+  const watch = watchId ? enabledWatches().find((w) => w.id === watchId) : null
+  const pool = watch ? itemsForWatch(watch.id, items) || [] : items
+  return { pool: applyFilters(pool, { flux: body?.flux }), days, lastUpdate, watch, label: `${watch ? `veille « ${watch.name} »` : 'toute la base MMS'}, ${days} derniers jours` }
+}
+
 app.post('/api/ai/ask', express.json({ limit: '40kb' }), async (req, res) => {
   if (!aiEnabled()) return res.status(400).json({ error: 'NO_KEY' })
   const question = String(req.body?.question || '').trim().slice(0, 800)
@@ -361,22 +374,61 @@ app.post('/api/ai/ask', express.json({ limit: '40kb' }), async (req, res) => {
   const history = (Array.isArray(req.body?.history) ? req.body.history : [])
     .slice(-4)
     .map((h) => ({ q: String(h?.q || '').slice(0, 800), a: String(h?.a || '').slice(0, 3000) }))
-  const days = [1, 7, 30, 90].includes(Number(req.body?.days)) ? Number(req.body.days) : 30
-  const { items, lastUpdate } = getItems()
-  const scoped = applyFilters(items, { flux: req.body?.flux, days })
+  const { pool, days, lastUpdate, watch, label } = aroundScope(req.body)
+  const scoped = applyFilters(pool, { days })
   const picked = retrieve(scoped, question, 60)
   askRunning++
   try {
-    const r = await askNews({ key: `ask|${days}|${req.body?.flux || ''}|${lastUpdate}|${JSON.stringify(history)}|${question}`, question, items: picked, history })
-    const sources = [...new Set(r.sources)]
-      .filter((n) => n >= 1 && n <= picked.length)
-      .map((n) => {
-        const it = picked[n - 1]
-        return { n, id: it.id, title: it.title, origin: it.origin, date: it.date, url: it.url }
-      })
-    res.json({ answer: r.reponse, sources, considered: picked.length })
+    const key = `around|${req.body?.regen ? Date.now() : ''}|${days}|${watch?.id || ''}|${req.body?.flux || ''}|${lastUpdate}|${JSON.stringify(history)}|${question}`
+    const r = await aroundRun(key, askPrompt({ question, items: picked, history, scope: label }), ASK_SPEC)
+    const used = [...new Set(r.sources)].filter((n) => n >= 1 && n <= picked.length)
+    const cards = await withImages(used.map((n) => picked[n - 1]))
+    res.json({
+      title: r.titre || '',
+      answer: r.reponse,
+      sources: used.map((n, k) => sourceCard(cards[k] || picked[n - 1], n)),
+      followups: (r.suivis || []).slice(0, 5),
+      considered: picked.length,
+    })
   } catch (err) {
-    console.error('Assistant :', err.message)
+    console.error('Around :', err.message)
+    res.status(500).json({ error: 'FAILED' })
+  } finally {
+    askRunning--
+  }
+})
+
+// Agents d'Around : chiffres calculés par MMS, puis rapport rédigé par l'IA
+app.post('/api/ai/agent', express.json({ limit: '8kb' }), async (req, res) => {
+  if (!aiEnabled()) return res.status(400).json({ error: 'NO_KEY' })
+  const agent = AGENTS.includes(req.body?.agent) ? req.body.agent : 'coverage'
+  const subject = String(req.body?.subject || '').trim().slice(0, 300)
+  const lang = req.body?.lang === 'en' ? 'en' : 'ar'
+  if (askRunning >= 3) return res.status(429).json({ error: 'BUSY' })
+  const { pool, days, lastUpdate, watch, label } = aroundScope(req.body)
+  const stats = agentStats(pool, subject, days)
+  const { items: found, ...numbers } = stats
+  if (!found.length) return res.json({ empty: true, stats: numbers, sources: [] })
+  const picked = agentItems(stats, subject)
+  askRunning++
+  try {
+    const key = `agent|${req.body?.regen ? Date.now() : ''}|${agent}|${lang}|${days}|${watch?.id || ''}|${req.body?.flux || ''}|${lastUpdate}|${subject}`
+    const prompt = `${agentFacts(stats, subject, label, lang)}\n\nActualités :\n${itemLines(picked)}`
+    const r = await aroundRun(key, prompt, specFor(agent))
+    const used = [...new Set(r.sources)].filter((n) => n >= 1 && n <= picked.length)
+    const cards = await withImages(used.map((n) => picked[n - 1]))
+    res.json({
+      title: r.titre || subject,
+      summary: r.resume,
+      sections: r.sections || [],
+      recommendations: r.recommandations || [],
+      followups: (r.suivis || []).slice(0, 5),
+      sources: used.map((n, k) => sourceCard(cards[k] || picked[n - 1], n)),
+      stats: numbers,
+      considered: found.length,
+    })
+  } catch (err) {
+    console.error('Around (agent) :', err.message)
     res.status(500).json({ error: 'FAILED' })
   } finally {
     askRunning--

@@ -305,42 +305,6 @@ export async function writeQuery(text) {
   return data
 }
 
-/* ---------------------------------------------------------------- assistant conversationnel */
-
-const ASK = {
-  system: `Tu es l'assistant de la plateforme MMS (veille des médias et réseaux sociaux libyens).
-On te donne une question et des actualités numérotées [1], [2]… tirées de la base de MMS.
-Réponds dans la langue de la question, de façon claire et factuelle, en 3 à 8 phrases ou en courte liste si c'est plus lisible.
-Appuie chaque fait sur les actualités en citant leur numéro entre crochets, par exemple [3].
-Si les actualités ne permettent pas de répondre, dis-le simplement. N'invente rien.
-- reponse : la réponse, avec les renvois [n] ;
-- sources : les numéros des actualités citées.`,
-  schema: {
-    type: 'object',
-    properties: { reponse: { type: 'string' }, sources: { type: 'array', items: { type: 'integer' } } },
-    required: ['reponse', 'sources'],
-    additionalProperties: false,
-  },
-  format: 'Réponds uniquement par un objet JSON de la forme {"reponse": "...", "sources": [1, 2]}',
-  valid: (d) => typeof d.reponse === 'string' && Array.isArray(d.sources),
-  name: 'reponse',
-}
-
-/** history : échanges précédents [{q, a}], pour les questions de suite */
-export async function askNews({ key, question, items, history = [] }) {
-  if (cache.has(key)) return cache.get(key)
-  const lines = items.map((it, k) => `[${k + 1}] ${it.date.slice(0, 16)} · ${it.origin} · ${it.title} — ${it.summary}`).join('\n')
-  const past = history
-    .slice(-4)
-    .map((h) => `Question : ${h.q}\nRéponse : ${h.a}`)
-    .join('\n\n')
-  const prompt = `${past ? `Échanges précédents :\n${past}\n\n` : ''}Date du jour : ${new Date().toISOString().slice(0, 10)}\nQuestion : ${question}\n\nActualités :\n${lines}`
-  const data = await run(aiProvider(), prompt, ASK)
-  const result = { ...data, at: new Date().toISOString() }
-  cache.set(key, result)
-  return result
-}
-
 /* ---------------------------------------------------------------- rapport exécutif */
 
 const BRIEF = {
@@ -374,6 +338,17 @@ export async function briefingSummary({ key, facts, items }) {
     .map((it) => `- [${it.date.slice(0, 10)}] (${it.category}, ${it.origin}) ${it.title} — ${it.summary}`)
     .join('\n')
   const data = await run(aiProvider(), `${facts}\n\nActualités marquantes :\n${lines}`, BRIEF)
+  const result = { ...data, at: new Date().toISOString() }
+  cache.set(key, result)
+  return result
+}
+
+/* ---------------------------------------------------------------- Around (réponses et agents) */
+
+/** Lance une consigne d'Around sur le moteur disponible ; même cache que le reste de l'IA */
+export async function aroundRun(key, prompt, spec) {
+  if (cache.has(key)) return cache.get(key)
+  const data = await run(aiProvider(), prompt, spec)
   const result = { ...data, at: new Date().toISOString() }
   cache.set(key, result)
   return result

@@ -11,7 +11,8 @@ import { type Facets, type Filters, type Flux, type NewsResponse, DrillContext, 
 import { SpikeBanner } from './components/Intel'
 import { CommandHero } from './components/Hero'
 import { useFx, useTheme } from './lib/fx'
-import { Assistant, ComparePeriods, ExecutiveBriefing, InstallButton, ShareOfVoice, Team } from './components/Pro'
+import { ComparePeriods, ExecutiveBriefing, InstallButton, ShareOfVoice, Team } from './components/Pro'
+import { Around } from './components/Around'
 import { PRO_TEXT } from './lib/pro'
 import { type I18n, type Lang, I18nContext, initialLang, makeI18n, saveLang } from './lib/i18n'
 import { useAlerts, useCollapsed, useFavorites } from './lib/prefs'
@@ -421,7 +422,7 @@ export default function App() {
                       {view === 'favorites' && <Favorites />}
                       {view === 'help' && <Help />}
                       {view === 'admin' && <Admin />}
-                      {view === 'assistant' && <Assistant flux={flux} />}
+                      {view === 'assistant' && <Around flux={flux} />}
                       {view === 'sov' && <ShareOfVoice flux={flux} />}
                       {view === 'compare' && <ComparePeriods flux={flux} />}
                       {view === 'briefing' && <ExecutiveBriefing flux={flux} />}
