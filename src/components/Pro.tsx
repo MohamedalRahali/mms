@@ -782,7 +782,11 @@ export function Assistant({ flux }: { flux: Flux | '' }) {
   const [days, setDays] = useState(30)
   const [busy, setBusy] = useState(false)
   const end = useRef<HTMLDivElement>(null)
-  useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }), [turns])
+  // Accolades obligatoires : les navigateurs récents renvoient une promesse depuis scrollIntoView,
+  // que React prendrait pour une fonction de nettoyage (page blanche)
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [turns])
 
   async function ask(question: string) {
     const q = question.trim()
