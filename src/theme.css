@@ -1828,19 +1828,17 @@ select option {
   width: 110px;
   height: 110px;
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 35% 30%, #fff 0 6%, transparent 22%), conic-gradient(from 0deg, var(--green), var(--cyan), #1d7a4e, var(--gold), var(--green));
-  box-shadow:
-    0 0 40px color-mix(in srgb, var(--green) 55%, transparent),
-    inset 0 0 30px rgba(0, 0, 0, 0.35);
-  animation:
-    fx-orb 8s linear infinite,
-    fx-pulse 3s ease-in-out infinite;
+  overflow: hidden;
+  /* Logo Around sur fond blanc : le disque blanc le fait ressortir sur le thème sombre */
+  background: #fff;
+  box-shadow: 0 0 40px color-mix(in srgb, #1e88e5 55%, transparent);
+  animation: fx-pulse 3s ease-in-out infinite;
 }
-@keyframes fx-orb {
-  to {
-    filter: hue-rotate(360deg);
-  }
+.mms-chat__orb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 @keyframes fx-pulse {
   50% {

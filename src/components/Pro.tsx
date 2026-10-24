@@ -829,7 +829,9 @@ export function Assistant({ flux }: { flux: Flux | '' }) {
       <div className="mms-chat__log">
         {turns.length === 0 && (
           <div className="mms-chat__hello">
-            <span className="mms-chat__orb" aria-hidden />
+            <span className="mms-chat__orb" aria-hidden>
+              <img src="/around-logo.png" alt="" />
+            </span>
             <div className="mms-chat__chips">
               {p.asSuggestions.map((s) => (
                 <button key={s} type="button" onClick={() => ask(s)} dir="auto">

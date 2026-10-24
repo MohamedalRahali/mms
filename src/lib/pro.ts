@@ -5,7 +5,7 @@ import { useI18n } from './i18n'
 export const PRO_TEXT = {
   ar: {
     // menu
-    navAssistant: 'المساعد الذكي',
+    navAssistant: 'Around',
     navSov: 'حصة الحضور',
     navCompare: 'مقارنة الفترات',
     navBriefing: 'التقرير التنفيذي',
@@ -94,8 +94,8 @@ export const PRO_TEXT = {
     brLast: 'آخر إرسال',
     weekdays: ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],
     // assistant
-    asTitle: 'المساعد الذكي',
-    asIntro: 'اسأل عن أي موضوع في الإعلام الليبي. يجيب المساعد من أخبار MMS ويذكر مصادره.',
+    asTitle: 'Around',
+    asIntro: 'Around، مساعدك الذكي: اسأل عن أي موضوع في الإعلام الليبي، فيجيب من أخبار MMS ويذكر مصادره.',
     asPlaceholder: 'اكتب سؤالك…',
     asSend: 'إرسال',
     asThinking: 'يبحث في الأخبار…',
@@ -138,7 +138,7 @@ export const PRO_TEXT = {
     install: 'تثبيت التطبيق',
   },
   en: {
-    navAssistant: 'AI assistant',
+    navAssistant: 'Around',
     navSov: 'Share of voice',
     navCompare: 'Period comparison',
     navBriefing: 'Executive report',
@@ -219,8 +219,8 @@ export const PRO_TEXT = {
     brNoChannel: 'No sending channel: add email (SMTP) or a Telegram bot in the settings file.',
     brLast: 'Last sent',
     weekdays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-    asTitle: 'AI assistant',
-    asIntro: 'Ask about any topic in the Libyan media. The assistant answers from MMS news and cites its sources.',
+    asTitle: 'Around',
+    asIntro: 'Around, your AI assistant: ask about any topic in the Libyan media. It answers from MMS news and cites its sources.',
     asPlaceholder: 'Type your question…',
     asSend: 'Send',
     asThinking: 'Searching the news…',
