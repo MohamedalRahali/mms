@@ -239,7 +239,7 @@ ${more > 0 ? `<p style="color:#555;font-size:13px">… و${more} خبر آخر �
 }
 
 let transport = null
-async function sendMail(to, mail) {
+export async function sendMail(to, mail) {
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS) throw Object.assign(new Error('smtp_missing'), { code: 'smtp_missing' })
   if (!transport) {
     let nodemailer
@@ -257,6 +257,47 @@ async function sendMail(to, mail) {
     })
   }
   await transport.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to: to.join(', '), ...mail })
+}
+
+/* ---------------------------------------------------------------- Telegram */
+
+// Bot Telegram : TELEGRAM_BOT_TOKEN et TELEGRAM_CHAT_ID (une ou plusieurs discussions, séparées par des virgules)
+export const telegramReady = () => Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID)
+
+export function buildAlertTelegram(watch, found) {
+  const link = `${(process.env.PUBLIC_URL || 'http://localhost:5174').replace(/\/$/, '')}/?watch=${watch.id}`
+  const shown = found.slice(0, 8)
+  const lines = shown.map(
+    ({ it }) => `• <b>${esc(it.title)}</b>\n${esc(it.origin)} · ${esc(dateAr.format(new Date(it.date)))}${it.url ? `\n${esc(it.url)}` : ''}`,
+  )
+  const more = found.length - shown.length
+  return [
+    `🔔 <b>MMS · رصد مبرمج: ${esc(watch.name)}</b>`,
+    `${found.length} خبر جديد`,
+    '',
+    ...lines,
+    more > 0 ? `… و${more} خبر آخر` : '',
+    '',
+    `<a href="${esc(link)}">عرض كل النتائج</a>`,
+  ]
+    .join('\n')
+    .slice(0, 4000)
+}
+
+export async function sendTelegram(text) {
+  const chats = String(process.env.TELEGRAM_CHAT_ID)
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean)
+  for (const chat of chats) {
+    const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chat_id: chat, text, parse_mode: 'HTML', disable_web_page_preview: true }),
+      signal: AbortSignal.timeout(20_000),
+    })
+    if (!res.ok) throw new Error(`Telegram ${res.status}`)
+  }
 }
 
 /* ---------------------------------------------------------------- vérification */
@@ -289,7 +330,11 @@ export async function runWatches() {
       ].slice(0, KEEP_MATCHES)
       watch.matchCount += found.length
       try {
-        if (watch.recipients.length) await sendMail(watch.recipients, buildAlertEmail(watch, found))
+        // Telegram en plus de l'e-mail ; son échec ne fait pas renvoyer l'e-mail
+        if (telegramReady()) await sendTelegram(buildAlertTelegram(watch, found)).catch((err) => console.error(`Veille « ${watch.name} » : ${err.message}`))
+        // Sans SMTP mais avec Telegram, l'alerte part seulement sur Telegram, sans erreur
+        const smtp = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS)
+        if (watch.recipients.length && (smtp || !telegramReady())) await sendMail(watch.recipients, buildAlertEmail(watch, found))
         watch.lastError = null
         // Envoyés (ou sans destinataire) : on ne les signalera plus
         watch.notified = [...watch.notified, ...found.map(({ it }) => itemKey(it))].slice(-5000)

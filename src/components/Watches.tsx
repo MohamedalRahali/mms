@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { PageHead } from './Extras'
 import { type Flux, FLUX_KEYS } from '../lib/news'
 import { useI18n } from '../lib/i18n'
+import { can, useAuth } from '../lib/auth'
 import { THEMES, type Watch, WATCH_TEXT, ZONES, themesToRules } from '../lib/watches'
 
 /** Écran « الرصد المبرمج » : zone surveillée, thèmes à cocher, période, destinataires, puis liste des veilles */
@@ -267,6 +268,7 @@ function WatchRow({ watch, onChange, onOpen }: { watch: Watch; onChange: () => v
 }
 
 export function Watches({ onOpen }: { onOpen: (id: string) => void }) {
+  const auth = useAuth()
   const i = useI18n()
   const w = WATCH_TEXT[i.lang]
   const [list, setList] = useState<Watch[] | null>(null)
@@ -297,7 +299,7 @@ export function Watches({ onOpen }: { onOpen: (id: string) => void }) {
       <PageHead title={w.title} intro={w.intro} />
       {!smtp && <p className="mms-note">{w.smtpMissing}</p>}
       <div className="mms-watchpage">
-        <WatchForm onCreated={reload} />
+        {can(auth?.user, 'analyst') && <WatchForm onCreated={reload} />}
         <section className="mms-widget">
           <header className="mms-widget__head mms-widget__head--plain">
             <div>

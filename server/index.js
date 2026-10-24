@@ -3,12 +3,17 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import express from 'express'
-import { getItems } from './store.js'
-import { aiEnabled, aiProvider, aiUsage, analyse, cached, initUsage, loadKey } from './ai.js'
+import { getItems, reactionsOf } from './store.js'
+import { aiEnabled, aiProvider, aiUsage, analyse, askNews, cached, explainSpike, initUsage, loadKey, writeQuery } from './ai.js'
+import { allTags, countList, entitiesOf, findSpikes, initTags, itemKey, setTags, spikeItems, tagsOf, toCsv } from './intel.js'
 import { keyStatus } from './keys.js'
-import { currentUser, initAuth, loginRoute, logoutRoute, requireAuth } from './auth.js'
+import { currentUser, deleteUser, hasRole, initAuth, listUsers, loginRoute, logoutRoute, requireAuth, saveUser } from './auth.js'
+import { compileQuery, queryError, searchText } from './query.js'
+import { buildBriefing, comparePeriods, engagementTotals, interactions, retrieve, shareOfVoice, topEngaged } from './insights.js'
+import { briefingConf, briefingKey, briefingWithSummary, sendBriefing, setBriefingConf, startBriefing } from './briefing.js'
 import { imageRoute, initImages, withImages } from './images.js'
-import { createWatch, deleteWatch, enabledWatches, itemsForWatch, listWatches, setEnabled, startWatches } from './watches.js'
+import { mountSuperAdmin } from './superadmin.js'
+import { createWatch, deleteWatch, enabledWatches, itemsForWatch, listWatches, setEnabled, startWatches, telegramReady } from './watches.js'
 
 /** Serveur MMS : API de lecture des actualités + site compilé (dist/) en production */
 
@@ -29,28 +34,61 @@ function counts(items, key) {
 }
 
 function applyFilters(items, q) {
-  const text = String(q.q || '')
-    .trim()
-    .toLowerCase()
+  // Recherche booléenne (AND / OR / NOT, parenthèses, "expressions exactes")
+  const match = compileQuery(String(q.q || '').trim())
+  // Mots à exclure, séparés par des virgules : la fiche est écartée si elle en contient un
+  const exclude = String(q.exclude || '')
+    .split(/[,،]/)
+    .map((w) => w.trim().toLowerCase())
+    .filter(Boolean)
   const days = Number(q.days) || 0
   const since = days ? Date.now() - days * 86_400_000 : 0
+  const haystack = (it) => `${it.title} ${it.summary} ${it.origin}`.toLowerCase()
   return items.filter(
     (it) =>
       (!q.flux || it.flux === q.flux) &&
       (!q.category || it.category === q.category) &&
       (!q.channel || it.channel === q.channel) &&
+      (!q.media || it.media === q.media) &&
+      (!q.sub || it.subType === q.sub) &&
       (!q.lang || it.lang === q.lang) &&
+      (!q.source || it.origin === q.source) &&
+      (!q.tone || it.tone === q.tone) &&
+      (!q.entity || entitiesOf(it).includes(q.entity)) &&
+      (!q.tag || tagsOf(it).includes(q.tag)) &&
+      (!q.important || (it.importance || 1) >= 2) &&
       (!since || Date.parse(it.date) >= since) &&
-      (!text || `${it.title} ${it.summary} ${it.origin}`.toLowerCase().includes(text)),
+      (!match || match(searchText(it))) &&
+      (!exclude.length || !exclude.some((w) => haystack(it).includes(w))),
   )
+}
+
+const withTags = (items) => items.map((it) => ({ ...it, key: itemKey(it), tags: tagsOf(it) }))
+
+// Les commentaires ne sont listés que si on les demande (média « commentaires ») ; ailleurs ils sont
+// rattachés à leur publication
+const poolOf = (cache, q) => (q.media === 'comment' ? cache.comments : cache.items)
+
+/** Commentaires d'une publication, ou fil de son sujet de forum, joints aux fiches de la page */
+const withReactions = (items) =>
+  items.map((it) => (it.media !== 'comment' && (it.comments || it.replies || it.parentId) ? { ...it, reactions: reactionsOf(it).slice(0, 80), parentId: undefined } : it))
+
+/** Publications éditoriales et réactions (commentaires, réponses de forum) d'une sélection */
+function reactionTotals(found, comments) {
+  const replies = found.filter((it) => it.media === 'forum' && it.parent).length
+  return { editorial: found.length - replies, comments: comments.length, replies }
 }
 
 const app = express()
 // Derrière nginx (VPS), pour que le cookie de session passe en « Secure » en HTTPS
 app.set('trust proxy', 1)
 
+// Console Super Admin (/superadmin) : blocages IP et pays, maintenance et journaux passent avant tout le reste
+mountSuperAdmin(app, root)
+
 // Connexion : seules ces routes sont ouvertes, tout le reste de l'API demande une session
 initAuth(path.join(root, 'data'))
+initTags(path.join(root, 'data'))
 app.post('/api/auth/login', express.json({ limit: '4kb' }), loginRoute)
 app.post('/api/auth/logout', logoutRoute)
 app.get('/api/auth/me', (req, res) => {
@@ -59,6 +97,16 @@ app.get('/api/auth/me', (req, res) => {
   res.json({ user })
 })
 app.use('/api', requireAuth)
+
+// Droits par rôle : lecture pour tous ; création et modification pour les analystes ; équipe et envois programmés pour les administrateurs
+function minRole(req) {
+  const p = req.path
+  if (p.startsWith('/users') || p.startsWith('/briefing/schedule') || p === '/briefing/send') return req.method === 'GET' && !p.startsWith('/users') ? 'viewer' : 'admin'
+  if (req.method === 'GET') return 'viewer'
+  if (p.startsWith('/watches') || p.startsWith('/dashboards') || p.startsWith('/tags') || p === '/ai/analysis' || p === '/briefing/summary') return 'analyst'
+  return 'viewer'
+}
+app.use('/api', (req, res, next) => (hasRole(req.user, minRole(req)) ? next() : res.status(403).json({ error: 'FORBIDDEN' })))
 
 initImages(path.join(root, 'data'))
 initUsage(path.join(root, 'data'))
@@ -93,15 +141,28 @@ app.get('/api/health', (_req, res) => {
 })
 
 app.get('/api/news', async (req, res) => {
-  const { items, lastUpdate, demo } = getItems()
+  const cache = getItems()
+  const { lastUpdate, demo } = cache
+  const items = poolOf(cache, req.query)
   // Filtre « الرصد » : mêmes règles et même période que la veille
   const watched = req.query.watch ? itemsForWatch(String(req.query.watch), items) : items
   if (!watched) return res.status(404).json({ error: 'NO_WATCH' })
   const found = applyFilters(watched, req.query)
+  // Tri : le plus récent (par défaut), le plus important, ou le plus d'interactions
+  if (req.query.sort === 'engagement') found.sort((a, b) => interactions(b) - interactions(a) || (b.engagement?.views || 0) - (a.engagement?.views || 0))
+  else if (req.query.sort === 'importance') found.sort((a, b) => (b.importance || 1) - (a.importance || 1) || b.date.localeCompare(a.date))
   const size = Math.min(Math.max(Number(req.query.size) || 20, 1), 100)
   const pages = Math.max(Math.ceil(found.length / size), 1)
   const page = Math.min(Math.max(Number(req.query.page) || 1, 1), pages)
-  res.json({ total: found.length, page, pages, items: await withImages(found.slice((page - 1) * size, page * size)), lastUpdate, demo })
+  res.json({
+    total: found.length,
+    page,
+    pages,
+    items: withReactions(withTags(await withImages(found.slice((page - 1) * size, page * size)))),
+    queryError: req.query.q ? queryError(String(req.query.q)) : '',
+    lastUpdate,
+    demo,
+  })
 })
 
 app.get('/api/news/latest', async (_req, res) => {
@@ -110,19 +171,64 @@ app.get('/api/news/latest', async (_req, res) => {
 })
 
 app.get('/api/news/facets', (_req, res) => {
-  const { items } = getItems()
+  const { items, comments } = getItems()
   res.json({
     flux: counts(items, 'flux'),
+    media: [...counts(items, 'media'), ...(comments.length ? [{ name: 'comment', count: comments.length }] : [])],
+    subTypes: counts(
+      items.filter((it) => it.media === 'broadcast' && it.subType),
+      'subType',
+    ),
     categories: counts(items, 'category'),
     channels: counts(items, 'channel'),
     languages: counts(items, 'lang'),
+    sources: counts(items, 'origin').slice(0, 80),
+    tags: allTags(),
   })
 })
 
+// Export CSV des fiches filtrées (5 000 au plus), avec les mêmes filtres que la liste
+app.get('/api/news/export.csv', (req, res) => {
+  const items = poolOf(getItems(), req.query)
+  const watched = req.query.watch ? itemsForWatch(String(req.query.watch), items) : items
+  const found = applyFilters(watched || [], req.query).slice(0, 5000)
+  res.setHeader('content-type', 'text/csv; charset=utf-8')
+  res.setHeader('content-disposition', `attachment; filename="mms-${new Date().toISOString().slice(0, 10)}.csv"`)
+  res.send(toCsv(found))
+})
+
+// Détection des pics : dernières 24 h comparées aux 7 jours d'avant
+app.get('/api/news/spikes', (req, res) => {
+  const { items } = getItems()
+  res.json({ spikes: findSpikes(applyFilters(items, { flux: req.query.flux })) })
+})
+
+// Étiquettes d'équipe, communes à tous les postes : data/tags.json
+app.get('/api/tags', (_req, res) => res.json({ tags: allTags() }))
+app.put('/api/tags', express.json({ limit: '4kb' }), (req, res) => {
+  const key = String(req.body?.key || '').slice(0, 600)
+  if (!key) return res.status(400).json({ error: 'NO_KEY' })
+  res.json({ tags: setTags(key, req.body?.tags) })
+})
+
+/** Tonalité jour par jour, sur les mêmes jours que la courbe */
+function toneDays(items, perDay) {
+  const rows = perDay.map((d) => ({ date: d.date, positive: 0, neutral: 0, negative: 0 }))
+  const index = new Map(rows.map((d, i) => [d.date, i]))
+  for (const it of items) {
+    const i = index.get(toDay(it.date))
+    if (i != null && it.tone) rows[i][it.tone]++
+  }
+  return rows
+}
+
 app.get('/api/news/stats', (req, res) => {
-  const { items, lastUpdate, demo } = getItems()
+  const cache = getItems()
+  const { lastUpdate, demo } = cache
+  const items = poolOf(cache, req.query)
   const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365)
   const found = applyFilters(items, { ...req.query, days })
+  const foundComments = req.query.media === 'comment' ? found : applyFilters(cache.comments, { ...req.query, media: '', days })
   const perDay = []
   for (let i = days - 1; i >= 0; i--) perDay.push({ date: toDay(new Date(Date.now() - i * 86_400_000).toISOString()), count: 0 })
   const index = new Map(perDay.map((d, i) => [d.date, i]))
@@ -140,6 +246,18 @@ app.get('/api/news/stats', (req, res) => {
     categories: counts(found, 'category'),
     sources: counts(found, 'origin').slice(0, 10),
     channels: counts(found, 'channel'),
+    media: counts(found, 'media'),
+    reactions: reactionTotals(found, foundComments),
+    tones: counts(
+      found.filter((it) => it.tone),
+      'tone',
+    ),
+    toneDays: toneDays(found, perDay),
+    people: countList(found, 'people'),
+    orgs: countList(found, 'orgs'),
+    places: countList(found, 'places'),
+    engagement: engagementTotals(found),
+    topEngaged: withTags(topEngaged(found, 8)),
     lastUpdate,
     demo,
   })
@@ -183,9 +301,175 @@ app.post('/api/ai/analysis', async (req, res) => {
   }
 })
 
+// Explication d'un pic par l'IA, gardée en mémoire tant que le pic ne bouge pas
+let spikeRunning = false
+app.post('/api/ai/spike', express.json({ limit: '2kb' }), async (req, res) => {
+  if (!aiEnabled()) return res.status(400).json({ error: 'NO_KEY' })
+  const { items } = getItems()
+  const scoped = applyFilters(items, { flux: req.body?.flux })
+  const spike = findSpikes(scoped).find((s) => s.dim === req.body?.dim && s.name === req.body?.name)
+  if (!spike) return res.status(404).json({ error: 'NO_SPIKE' })
+  if (spikeRunning) return res.status(429).json({ error: 'BUSY' })
+  spikeRunning = true
+  try {
+    const found = spikeItems(scoped, spike.dim, spike.name)
+    res.json({
+      result: await explainSpike({
+        key: `spike|${spike.dim}|${spike.name}|${spike.count}`,
+        label: spike.name,
+        count: spike.count,
+        avg: spike.avg,
+        items: found,
+      }),
+    })
+  } catch (err) {
+    console.error('Explication du pic :', err.message)
+    res.status(500).json({ error: err.code || 'FAILED', message: err.message })
+  } finally {
+    spikeRunning = false
+  }
+})
+
+/* ---------------------------------------------------------------- niveau Meltwater */
+
+// Assistant de requête : une phrase → requête booléenne
+let queryRunning = false
+app.post('/api/ai/query', express.json({ limit: '4kb' }), async (req, res) => {
+  if (!aiEnabled()) return res.status(400).json({ error: 'NO_KEY' })
+  const text = String(req.body?.text || '').trim().slice(0, 500)
+  if (!text) return res.status(400).json({ error: 'EMPTY' })
+  if (queryRunning) return res.status(429).json({ error: 'BUSY' })
+  queryRunning = true
+  try {
+    const r = await writeQuery(text)
+    res.json({ query: r.requete, explanation: r.explication, error: queryError(r.requete) })
+  } catch (err) {
+    console.error('Assistant de requête :', err.message)
+    res.status(500).json({ error: 'FAILED' })
+  } finally {
+    queryRunning = false
+  }
+})
+
+// Assistant conversationnel : réponse sourcée sur les actualités de MMS
+let askRunning = 0
+app.post('/api/ai/ask', express.json({ limit: '40kb' }), async (req, res) => {
+  if (!aiEnabled()) return res.status(400).json({ error: 'NO_KEY' })
+  const question = String(req.body?.question || '').trim().slice(0, 800)
+  if (!question) return res.status(400).json({ error: 'EMPTY' })
+  if (askRunning >= 3) return res.status(429).json({ error: 'BUSY' })
+  const history = (Array.isArray(req.body?.history) ? req.body.history : [])
+    .slice(-4)
+    .map((h) => ({ q: String(h?.q || '').slice(0, 800), a: String(h?.a || '').slice(0, 3000) }))
+  const days = [1, 7, 30, 90].includes(Number(req.body?.days)) ? Number(req.body.days) : 30
+  const { items, lastUpdate } = getItems()
+  const scoped = applyFilters(items, { flux: req.body?.flux, days })
+  const picked = retrieve(scoped, question, 60)
+  askRunning++
+  try {
+    const r = await askNews({ key: `ask|${days}|${req.body?.flux || ''}|${lastUpdate}|${JSON.stringify(history)}|${question}`, question, items: picked, history })
+    const sources = [...new Set(r.sources)]
+      .filter((n) => n >= 1 && n <= picked.length)
+      .map((n) => {
+        const it = picked[n - 1]
+        return { n, id: it.id, title: it.title, origin: it.origin, date: it.date, url: it.url }
+      })
+    res.json({ answer: r.reponse, sources, considered: picked.length })
+  } catch (err) {
+    console.error('Assistant :', err.message)
+    res.status(500).json({ error: 'FAILED' })
+  } finally {
+    askRunning--
+  }
+})
+
+// Part de voix : jusqu'à 6 acteurs (noms ou requêtes booléennes)
+app.get('/api/news/sov', (req, res) => {
+  const { items } = getItems()
+  const actors = String(req.query.actors || '')
+    .split('|')
+    .map((a) => a.trim().slice(0, 200))
+    .filter(Boolean)
+    .slice(0, 6)
+  const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365)
+  res.json(shareOfVoice(applyFilters(items, { flux: req.query.flux }), actors, days))
+})
+
+// Comparaison de périodes : les N derniers jours contre les N d'avant
+app.get('/api/news/compare', (req, res) => {
+  const { items } = getItems()
+  const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 180)
+  res.json(comparePeriods(applyFilters(items, { flux: req.query.flux }), days))
+})
+
+// Rapport exécutif : chiffres, synthèse IA (si déjà rédigée), envoi programmé
+function briefingScope(q) {
+  const { items, lastUpdate } = getItems()
+  const days = [7, 14, 30].includes(Number(q.days)) ? Number(q.days) : 7
+  return { items: applyFilters(items, { flux: q.flux }), days, lastUpdate }
+}
+app.get('/api/briefing', (req, res) => {
+  const { items, days, lastUpdate } = briefingScope(req.query)
+  const { items: all, ...data } = buildBriefing(items, days)
+  res.json({ ...data, top: withTags(data.top), engaged: withTags(data.engaged), summary: cached(briefingKey(days, lastUpdate, all.length)), ai: aiEnabled() })
+})
+let briefRunning = false
+app.post('/api/briefing/summary', async (req, res) => {
+  if (!aiEnabled()) return res.status(400).json({ error: 'NO_KEY' })
+  if (briefRunning) return res.status(429).json({ error: 'BUSY' })
+  briefRunning = true
+  try {
+    const { items, days, lastUpdate } = briefingScope(req.query)
+    const { summary } = await briefingWithSummary(items, days, lastUpdate)
+    res.json({ summary })
+  } catch (err) {
+    console.error('Rapport exécutif :', err.message)
+    res.status(500).json({ error: 'FAILED' })
+  } finally {
+    briefRunning = false
+  }
+})
+app.get('/api/briefing/schedule', (_req, res) => res.json(briefingConf()))
+app.put('/api/briefing/schedule', express.json({ limit: '8kb' }), (req, res) => res.json(setBriefingConf(req.body)))
+app.post('/api/briefing/send', async (_req, res) => {
+  try {
+    res.json({ sent: await sendBriefing() })
+  } catch (err) {
+    console.error('Rapport exécutif :', err.message)
+    res.status(err.code === 'NO_CHANNEL' ? 400 : 500).json({ error: err.code || 'FAILED' })
+  }
+})
+
+// Équipe : comptes et rôles (administrateurs)
+app.get('/api/users', (_req, res) => res.json({ users: listUsers() }))
+app.post('/api/users', express.json({ limit: '4kb' }), (req, res) => {
+  try {
+    res.status(201).json({ user: saveUser(req.body, true) })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.code || 'FAILED' })
+  }
+})
+app.patch('/api/users/:email', express.json({ limit: '4kb' }), (req, res) => {
+  try {
+    res.json({ user: saveUser({ ...req.body, email: req.params.email }, false) })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.code || 'FAILED' })
+  }
+})
+app.delete('/api/users/:email', (req, res) => {
+  try {
+    deleteUser(req.params.email, req.user.email)
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.code || 'FAILED' })
+  }
+})
+
 // Veille programmée (الرصد المبرمج)
 app.get('/api/news/watches', (_req, res) => res.json({ watches: enabledWatches() }))
-app.get('/api/watches', (_req, res) => res.json({ watches: listWatches(), smtp: Boolean(process.env.SMTP_USER && process.env.SMTP_PASS) }))
+app.get('/api/watches', (_req, res) =>
+  res.json({ watches: listWatches(), smtp: Boolean(process.env.SMTP_USER && process.env.SMTP_PASS), telegram: telegramReady() }),
+)
 app.post('/api/watches', express.json({ limit: '100kb' }), (req, res) => {
   try {
     res.status(201).json({ watch: createWatch(req.body || {}) })
@@ -215,7 +499,8 @@ app.post('/api/feedback', express.json({ limit: '20kb' }), (req, res) => {
 
 // Tableaux de bord composés par les clients, communs à tous les postes : data/dashboards.json
 const BOARDS_FILE = path.join(root, 'data', 'dashboards.json')
-const TYPES = new Set(['news', 'bars', 'columns', 'pie', 'line', 'kpi', 'table', 'cloud'])
+const TYPES = new Set(['news', 'bars', 'columns', 'pie', 'line', 'kpi', 'table', 'cloud', 'tone'])
+const DIMS = ['channels', 'categories', 'sources', 'flux', 'tones', 'people', 'orgs', 'places']
 const int = (v, min, max) => Math.min(Math.max(Math.round(Number(v) || 0), min), max)
 const str = (v, max) => String(v ?? '').slice(0, max)
 
@@ -235,7 +520,7 @@ function cleanBoards(input) {
         title: str(w.title, 120),
         flux: w.flux === 'libye' ? 'libye' : '',
         days: int(w.days, 1, 365),
-        dim: ['channels', 'categories', 'sources', 'flux'].includes(w.dim) ? w.dim : 'channels',
+        dim: DIMS.includes(w.dim) ? w.dim : 'channels',
         metric: ['total', 'broadcasts', 'sources', 'average'].includes(w.metric) ? w.metric : 'total',
         category: str(w.category, 60),
         x: int(w.x, 0, 11),
@@ -246,9 +531,26 @@ function cleanBoards(input) {
   }))
 }
 
+// Tableau « التحليل الإعلامي » (tonalité, personnalités, organisations, lieux), proposé une fois aux tableaux déjà enregistrés
+const INTEL_BOARD = {
+  id: 'intel',
+  name: '',
+  widgets: [
+    { id: 'i1', type: 'pie', dim: 'tones', days: 7, x: 0, y: 0, w: 4, h: 8 },
+    { id: 'i2', type: 'tone', dim: 'tones', days: 30, x: 4, y: 0, w: 8, h: 8 },
+    { id: 'i3', type: 'bars', dim: 'people', days: 7, x: 0, y: 8, w: 6, h: 9 },
+    { id: 'i4', type: 'bars', dim: 'orgs', days: 7, x: 6, y: 8, w: 6, h: 9 },
+    { id: 'i5', type: 'cloud', dim: 'places', days: 7, x: 0, y: 17, w: 6, h: 6 },
+    { id: 'i6', type: 'columns', dim: 'sources', days: 7, x: 6, y: 17, w: 6, h: 6 },
+  ],
+}
+
 app.get('/api/dashboards', (_req, res) => {
   try {
-    res.json({ boards: cleanBoards(JSON.parse(fs.readFileSync(BOARDS_FILE, 'utf8')).boards) })
+    const file = JSON.parse(fs.readFileSync(BOARDS_FILE, 'utf8'))
+    const boards = file.boards
+    if (!file.intel && Array.isArray(boards) && !boards.some((b) => b?.id === 'intel')) boards.push(INTEL_BOARD)
+    res.json({ boards: cleanBoards(boards) })
   } catch {
     res.json({ boards: null })
   }
@@ -258,7 +560,7 @@ app.put('/api/dashboards', express.json({ limit: '300kb' }), (req, res) => {
   const boards = cleanBoards(req.body?.boards)
   if (!boards) return res.status(400).json({ error: 'INVALID' })
   fs.mkdirSync(path.dirname(BOARDS_FILE), { recursive: true })
-  fs.writeFileSync(BOARDS_FILE, JSON.stringify({ savedAt: new Date().toISOString(), boards }, null, 2))
+  fs.writeFileSync(BOARDS_FILE, JSON.stringify({ savedAt: new Date().toISOString(), intel: true, boards }, null, 2))
   res.json({ boards })
 })
 
@@ -269,6 +571,7 @@ if (fs.existsSync(dist)) {
 }
 
 startWatches(path.join(root, 'data'))
+startBriefing(path.join(root, 'data'))
 
 // Sur le VPS, MMS_HOST=127.0.0.1 : seul nginx (HTTPS) parle au serveur
 const HOST = process.env.MMS_HOST || undefined

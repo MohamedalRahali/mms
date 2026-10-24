@@ -1,8 +1,7 @@
 import { useState, type FormEvent } from 'react'
-import { Globe } from './Globe'
 import { type User } from '../lib/auth'
 
-/** Page de connexion, dans l'esprit de NewsRadar : globe 3D animé, carte de connexion, logo du Centre */
+/** Page de connexion selon la charte MMS Radar : panneau de présentation, carte claire de connexion, logo du Centre */
 
 const TEXT = {
   ar: {
@@ -20,13 +19,17 @@ const TEXT = {
     errors: {
       BAD_CREDENTIALS: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
       LOCKED: 'محاولات كثيرة غير ناجحة. أعد المحاولة بعد 15 دقيقة.',
+      DISABLED: 'تم تعطيل هذا الحساب. اتصل بمسؤول المنصة.',
+      MAINTENANCE: 'المنصة قيد الصيانة. أعد المحاولة لاحقًا.',
       FAILED: 'تعذّر الاتصال بالخادم. أعد المحاولة.',
     } as Record<string, string>,
     badge: 'رصد · تحليل · قرار',
     heroTitle: ['كل ما يُقال،', 'في مكان واحد'],
+    heroText: 'منصة رصد وتحليل إعلامي مخصصة لفريق المركز، تجمع المصادر والتنبيهات والمؤشرات في لوحة واحدة آمنة.',
     stats: [
       ['24/7', 'رصد متواصل'],
       ['AI', 'تحليل ذكي'],
+      ['ع · EN', 'واجهة ثنائية اللغة'],
     ],
     secure: 'اتصال آمن · الدخول مخصص للحسابات المعتمدة',
   },
@@ -45,13 +48,17 @@ const TEXT = {
     errors: {
       BAD_CREDENTIALS: 'Incorrect email or password.',
       LOCKED: 'Too many attempts. Try again in 15 minutes.',
+      DISABLED: 'This account has been disabled. Contact the platform administrator.',
+      MAINTENANCE: 'The platform is under maintenance. Try again later.',
       FAILED: 'Unable to reach the server. Try again.',
     } as Record<string, string>,
     badge: 'Monitoring · Analysis · Decision',
     heroTitle: ['Everything that is said,', 'in one place'],
+    heroText: "A media monitoring and analysis platform built for the Centre's team, bringing sources, alerts and indicators together in one secure dashboard.",
     stats: [
       ['24/7', 'continuous monitoring'],
       ['AI', 'smart analysis'],
+      ['ع · EN', 'bilingual interface'],
     ],
     secure: 'Secure connection · access reserved for authorized accounts',
   },
@@ -100,44 +107,41 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
 
   return (
     <div className="mms-login" dir={lang === 'ar' ? 'rtl' : 'ltr'} lang={lang}>
-      <div className="mms-login__bg" aria-hidden>
-        <Globe />
-        <span className="mms-login__orb mms-login__orb--a" />
-        <span className="mms-login__orb mms-login__orb--b" />
-      </div>
+      <section className="mms-login__panel">
+        <header className="mms-login__top">
+          <span className="mms-login__logo">
+            <img src="/logo-npdc.png" alt="رئاسة مجلس الوزراء — المركز الوطني لدعم القرار" />
+          </span>
+          <div className="mms-login__lang" role="group" aria-label="Language">
+            <button type="button" className={lang === 'ar' ? 'is-active' : ''} onClick={() => setLang('ar')}>
+              العربية
+            </button>
+            <button type="button" className={lang === 'en' ? 'is-active' : ''} onClick={() => setLang('en')}>
+              English
+            </button>
+          </div>
+        </header>
 
-      <header className="mms-login__top">
-        <span className="mms-login__logo">
-          <img src="/logo-npdc.png" alt="رئاسة مجلس الوزراء — المركز الوطني لدعم القرار" />
-        </span>
-        <div className="mms-login__lang" role="group" aria-label="Language">
-          <button type="button" className={lang === 'ar' ? 'is-active' : ''} onClick={() => setLang('ar')}>
-            العربية
-          </button>
-          <button type="button" className={lang === 'en' ? 'is-active' : ''} onClick={() => setLang('en')}>
-            English
-          </button>
-        </div>
-      </header>
-
-      <main className="mms-login__main">
-        <section className="mms-login__hero">
+        <div className="mms-login__hero">
           <span className="mms-login__badge">{t.badge}</span>
           <h1>
             {t.heroTitle[0]}
             <br />
             <em>{t.heroTitle[1]}</em>
           </h1>
-          <ul className="mms-login__stats">
-            {t.stats.map(([n, l]) => (
-              <li key={l}>
-                <strong>{n}</strong>
-                <span>{l}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+          <p>{t.heroText}</p>
+        </div>
+        <ul className="mms-login__stats">
+          {t.stats.map(([n, l]) => (
+            <li key={l}>
+              <strong dir="ltr">{n}</strong>
+              <span>{l}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
 
+      <main className="mms-login__main">
         <form className="mms-login__card" onSubmit={submit}>
           <div className="mms-login__brand">
             <RadarMark />

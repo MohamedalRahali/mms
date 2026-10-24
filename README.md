@@ -81,7 +81,23 @@ contient une liste d'actualités (ou `{ "actualites": [...] }`) au format :
 ```
 
 Canaux reconnus : `site`, `presse`, `tv`, `radio`, `x`, `facebook`, `instagram`, `linkedin`,
-`youtube`, `tiktok`, `telegram`, `bluesky`, `reddit`, `mastodon`.
+`youtube`, `tiktok`, `telegram`, `bluesky`, `reddit`, `mastodon`, `podcast`, `forum`.
+
+Champs facultatifs des types de médias (sélecteur « الوسائط / Media » de la recherche avancée) :
+
+| Champ | Contenu |
+|---|---|
+| `media` | `article`, `broadcast`, `podcast`, `blog`, `comment`, `forum` ou `social`. Absent (anciens fichiers) : déduit du canal — `tv`, `radio`, `youtube` → broadcast ; réseaux → social ; `reddit` → forum ; sinon article |
+| `sous_type` | `tv`, `radio`, `youtube`… (sous-filtre des émissions) |
+| `ref` | identifiant stable de la fiche |
+| `media_url`, `transcription` | audio ou vidéo d'origine et texte transcrit (affiché dépliable, cherché par la recherche) |
+| `auteur` | auteur d'un commentaire ou d'un message |
+| `parent` | `{id, url, titre}` : publication commentée (`id` = son `ref`) ou premier message du sujet |
+| `fil` | `{forum, sujet, sujet_url, message_id, reponse_a}` : place du message dans le forum |
+
+Les commentaires ne sont listés que quand on choisit « Commentaires » ; ailleurs ils s'affichent sous leur
+publication (« N تعليقات »). Les réponses de forum s'affichent en retrait sous leur message.
+`/api/news?media=blog` (et `&sub=tv` pour les émissions) filtre ; `/api/news/facets` donne les comptes par média.
 
 ## Photos des actualités
 

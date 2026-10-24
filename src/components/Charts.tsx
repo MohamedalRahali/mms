@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import { BuzzBars, NewsDigest } from './Dashboard'
-import { type Count, type Stats, useFetch } from '../lib/news'
+import { type Count, type Filters, type Stats, type Tone, DrillContext, TONES, useFetch } from '../lib/news'
+import { TONE_COLORS, useIntel } from '../lib/intel'
 import { useI18n } from '../lib/i18n'
 import { useCountUp } from '../lib/motion'
 import { BUILDER_TEXT, type Dim, type WidgetConf } from '../lib/dashboards'
@@ -8,10 +9,10 @@ import { BUILDER_TEXT, type Dim, type WidgetConf } from '../lib/dashboards'
 /** Rendu de chaque type de widget : listes, barres, colonnes, camembert, courbe, chiffre clé, tableau, nuage */
 
 // Palette catégorielle de référence, dans l'ordre fixe ; le gris sert pour « autres »
-const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948']
-const OTHER = '#9a9890'
+const SERIES = ['#2fcb81', '#6ea7fd', '#e5b841', '#ff7a59', '#8ee5b8', '#b39ddb', '#f4a3c0', '#1d7a4e']
+const OTHER = '#8a9e93'
 const CATEGORY_SLOT: Record<string, number> = { politique: 0, économie: 1, société: 2, international: 3, sécurité: 4, sport: 5, culture: 6, santé: 7 }
-const FLUX_COLORS: Record<string, string> = { mosaique: '#00a362', libye: '#b8862b' }
+const FLUX_COLORS: Record<string, string> = { mosaique: '#2fcb81', libye: '#e5b841' }
 
 /** Couleur propre à chaque canal, comme les barres « Channels / Buzz » de NewsBoard */
 export const CHANNEL_COLORS: Record<string, string> = {
@@ -24,7 +25,7 @@ export const CHANNEL_COLORS: Record<string, string> = {
   linkedin: '#0a66c2',
   tiktok: '#25c2c8',
   telegram: '#29a9eb',
-  radio: '#00a362',
+  radio: '#2fcb81',
   tv: '#7b5ea7',
   presse: '#b8862b',
 }
@@ -35,14 +36,47 @@ export function colorFor(dim: Dim, name: string, rank: number) {
   if (dim === 'channels') return CHANNEL_COLORS[name] ?? OTHER
   if (dim === 'flux') return FLUX_COLORS[name] ?? OTHER
   if (dim === 'categories') return name in CATEGORY_SLOT ? SERIES[CATEGORY_SLOT[name]] : OTHER
+  if (dim === 'tones') return TONE_COLORS[name as Tone] ?? OTHER
   return SERIES[rank] ?? OTHER
+}
+
+// Filtre de la liste d'actualités ouvert par un clic sur chaque dimension ; « الرصد » reste le choix de la barre noire
+const DRILL_KEY: Partial<Record<Dim, keyof Filters>> = {
+  channels: 'channel',
+  categories: 'category',
+  sources: 'source',
+  tones: 'tone',
+  people: 'entity',
+  orgs: 'entity',
+  places: 'entity',
+}
+
+/** Clic sur une part, une barre ou un mot : la liste des actualités correspondantes, sur la période du widget */
+function useDrill(dim: Dim, days: number) {
+  const drill = useContext(DrillContext)
+  const key = DRILL_KEY[dim]
+  if (!key) return undefined
+  return (name: string) => {
+    if (name !== '__other') drill({ [key]: name, days: String(days) })
+  }
 }
 
 function useLabel(dim: Dim) {
   const i = useI18n()
+  const x = useIntel()
   const b = BUILDER_TEXT[i.lang]
   return (name: string) =>
-    name === '__other' ? b.other : dim === 'channels' ? i.channel(name) : dim === 'categories' ? i.category(name) : dim === 'flux' ? i.flux(name) : name
+    name === '__other'
+      ? b.other
+      : dim === 'channels'
+        ? i.channel(name)
+        : dim === 'categories'
+          ? i.category(name)
+          : dim === 'flux'
+            ? i.flux(name)
+            : dim === 'tones'
+              ? (x.tones[name as Tone] ?? name)
+              : name
 }
 
 /** Au-delà de « keep » parts, le reste est regroupé dans « autres » */
@@ -52,7 +86,7 @@ function fold(rows: Count[], keep: number): Count[] {
   return [...rows.slice(0, keep - 1), { name: '__other', count: rest }]
 }
 
-function Columns({ rows, dim }: { rows: Count[]; dim: Dim }) {
+function Columns({ rows, dim, onPick }: { rows: Count[]; dim: Dim; onPick?: (name: string) => void }) {
   const i = useI18n()
   const label = useLabel(dim)
   const [hover, setHover] = useState<number | null>(null)
@@ -70,6 +104,8 @@ function Columns({ rows, dim }: { rows: Count[]; dim: Dim }) {
             className="mms-cols__col"
             onMouseEnter={() => setHover(k)}
             onFocus={() => setHover(k)}
+            onClick={() => onPick?.(r.name)}
+            style={{ cursor: onPick && r.name !== '__other' ? 'pointer' : undefined }}
             aria-label={`${label(r.name)}: ${r.count}`}
           >
             <span style={{ height: `${(r.count / max) * 100}%`, background: colorFor(dim, r.name, k), opacity: hover === null || hover === k ? 1 : 0.45 }} />
@@ -87,7 +123,7 @@ function Columns({ rows, dim }: { rows: Count[]; dim: Dim }) {
   )
 }
 
-function Donut({ rows, dim }: { rows: Count[]; dim: Dim }) {
+function Donut({ rows, dim, onPick }: { rows: Count[]; dim: Dim; onPick?: (name: string) => void }) {
   const i = useI18n()
   const label = useLabel(dim)
   const [hover, setHover] = useState<number | null>(null)
@@ -120,6 +156,8 @@ function Donut({ rows, dim }: { rows: Count[]; dim: Dim }) {
             fillRule="evenodd"
             opacity={hover === null || hover === k ? 1 : 0.45}
             onMouseEnter={() => setHover(k)}
+            onClick={() => onPick?.(r.name)}
+            style={{ cursor: onPick && r.name !== '__other' ? 'pointer' : undefined }}
           />
         ))}
         <text x="50" y="49" textAnchor="middle" className="mms-donut__value">
@@ -131,7 +169,13 @@ function Donut({ rows, dim }: { rows: Count[]; dim: Dim }) {
       </svg>
       <ul className="mms-legend">
         {shown.map((r, k) => (
-          <li key={r.name} onMouseEnter={() => setHover(k)} onMouseLeave={() => setHover(null)}>
+          <li
+            key={r.name}
+            onMouseEnter={() => setHover(k)}
+            onMouseLeave={() => setHover(null)}
+            onClick={() => onPick?.(r.name)}
+            className={onPick && r.name !== '__other' ? 'is-link' : undefined}
+          >
             <i style={{ background: colorFor(dim, r.name, k) }} />
             <span dir="auto">{label(r.name)}</span>
             <b>{i.num(r.count)}</b>
@@ -192,7 +236,7 @@ function Line({ perDay }: { perDay: { date: string; count: number }[] }) {
   )
 }
 
-function Table({ rows, dim }: { rows: Count[]; dim: Dim }) {
+function Table({ rows, dim, onPick }: { rows: Count[]; dim: Dim; onPick?: (name: string) => void }) {
   const i = useI18n()
   const label = useLabel(dim)
   const b = BUILDER_TEXT[i.lang]
@@ -206,7 +250,7 @@ function Table({ rows, dim }: { rows: Count[]; dim: Dim }) {
       </thead>
       <tbody>
         {rows.map((r) => (
-          <tr key={r.name}>
+          <tr key={r.name} onClick={() => onPick?.(r.name)} className={onPick ? 'is-link' : undefined}>
             <td dir="auto">{label(r.name)}</td>
             <td>{i.num(r.count)}</td>
           </tr>
@@ -216,7 +260,7 @@ function Table({ rows, dim }: { rows: Count[]; dim: Dim }) {
   )
 }
 
-function Cloud({ rows, dim }: { rows: Count[]; dim: Dim }) {
+function Cloud({ rows, dim, onPick }: { rows: Count[]; dim: Dim; onPick?: (name: string) => void }) {
   const i = useI18n()
   const label = useLabel(dim)
   const max = Math.max(...rows.map((r) => r.count), 1)
@@ -230,6 +274,8 @@ function Cloud({ rows, dim }: { rows: Count[]; dim: Dim }) {
             key={r.name}
             dir="auto"
             title={`${label(r.name)}: ${i.num(r.count)}`}
+            onClick={() => onPick?.(r.name)}
+            className={onPick ? 'is-link' : undefined}
             style={{ fontSize: `${0.9 + k * 1.6}rem`, fontWeight: k > 0.5 ? 800 : 600, opacity: 0.6 + k * 0.4 }}
           >
             {label(r.name)}
@@ -268,24 +314,71 @@ function Kpi({ stats, metric }: { stats: Stats; metric: WidgetConf['metric'] }) 
 }
 
 function rowsOf(stats: Stats, dim: Dim): Count[] {
+  if (dim === 'tones') return TONES.map((t) => stats.tones?.find((r) => r.name === t)).filter((r): r is Count => Boolean(r))
+  if (dim === 'people' || dim === 'orgs' || dim === 'places') return stats[dim] ?? []
   return dim === 'channels' ? stats.channels : dim === 'categories' ? stats.categories : dim === 'flux' ? stats.flux : stats.sources
+}
+
+/** Tonalité jour par jour en colonnes empilées : vert positif, gris neutre, rouge négatif */
+function ToneTrend({ days, onPick }: { days: NonNullable<Stats['toneDays']>; onPick?: (tone: string) => void }) {
+  const i = useI18n()
+  const x = useIntel()
+  const [hover, setHover] = useState<number | null>(null)
+  const totals = days.map((d) => d.positive + d.neutral + d.negative)
+  const max = Math.max(...totals, 1)
+  const active = hover !== null ? days[hover] : null
+  if (totals.every((n) => n === 0)) return <p className="news-status">{i.t.noData}</p>
+  return (
+    <div className="mms-tone">
+      <p className="mms-chart__readout">
+        {active ? `${i.day(active.date)} : ${TONES.map((t) => `${x.tones[t]} ${i.num(active[t])}`).join(' · ')}` : `${x.toneTrend}`}
+      </p>
+      <div className="mms-tone__plot" dir="ltr" onMouseLeave={() => setHover(null)}>
+        {days.map((d, k) => (
+          <span key={d.date} className="mms-tone__day" onMouseEnter={() => setHover(k)} style={{ opacity: hover === null || hover === k ? 1 : 0.5 }}>
+            {TONES.map((t) => (
+              <i key={t} style={{ height: `${(d[t] / max) * 100}%`, background: TONE_COLORS[t] }} />
+            ))}
+          </span>
+        ))}
+      </div>
+      {days.length > 0 && (
+        <div className="news-daily__axis" dir="ltr">
+          <span>{i.day(days[0].date)}</span>
+          <span>{i.day(days[days.length - 1].date)}</span>
+        </div>
+      )}
+      <ul className="mms-legend mms-legend--row">
+        {TONES.map((t) => (
+          <li key={t} onClick={() => onPick?.(t)} className={onPick ? 'is-link' : undefined}>
+            <i style={{ background: TONE_COLORS[t] }} />
+            <span>{x.tones[t]}</span>
+            <b>{i.num(days.reduce((n, d) => n + d[t], 0))}</b>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
 }
 
 function StatsBody({ conf }: { conf: WidgetConf }) {
   const i = useI18n()
   const { data, error } = useFetch<Stats>(`/api/news/stats?days=${conf.days}${conf.flux ? `&flux=${conf.flux}` : ''}`)
   const label = useLabel(conf.dim)
+  const pick = useDrill(conf.dim, conf.days)
+  const pickTone = useDrill('tones', conf.days)
   if (error) return <p className="news-status news-status--error">{i.t.loadError}</p>
   if (!data) return <p className="news-status">{i.t.loading}</p>
   const rows = rowsOf(data, conf.dim)
   if (conf.type === 'line') return <Line perDay={data.perDay} />
   if (conf.type === 'kpi') return <Kpi stats={data} metric={conf.metric} />
+  if (conf.type === 'tone') return <ToneTrend days={data.toneDays ?? []} onPick={pickTone} />
   if (rows.length === 0) return <p className="news-status">{i.t.noData}</p>
-  if (conf.type === 'bars') return <BuzzBars rows={rows} label={label} color={(name, k) => colorFor(conf.dim, name, k)} />
-  if (conf.type === 'columns') return <Columns rows={rows} dim={conf.dim} />
-  if (conf.type === 'pie') return <Donut rows={rows} dim={conf.dim} />
-  if (conf.type === 'table') return <Table rows={rows} dim={conf.dim} />
-  return <Cloud rows={rows} dim={conf.dim} />
+  if (conf.type === 'bars') return <BuzzBars rows={rows} label={label} color={(name, k) => colorFor(conf.dim, name, k)} onPick={pick} />
+  if (conf.type === 'columns') return <Columns rows={rows} dim={conf.dim} onPick={pick} />
+  if (conf.type === 'pie') return <Donut rows={rows} dim={conf.dim} onPick={pick} />
+  if (conf.type === 'table') return <Table rows={rows} dim={conf.dim} onPick={pick} />
+  return <Cloud rows={rows} dim={conf.dim} onPick={pick} />
 }
 
 export function WidgetBody({ conf }: { conf: WidgetConf }) {
@@ -305,8 +398,10 @@ export function useWidgetTitles(conf: WidgetConf) {
         : i.t.digest
       : conf.type === 'line'
         ? b.perDay
-        : conf.type === 'kpi'
-          ? b.metrics[conf.metric]
-          : `${b.dims[conf.dim]} / ${b.types[conf.type]}`
+        : conf.type === 'tone'
+          ? b.types.tone
+          : conf.type === 'kpi'
+            ? b.metrics[conf.metric]
+            : `${b.dims[conf.dim]} / ${b.types[conf.type]}`
   return { path, title: conf.title.trim() || auto }
 }

@@ -132,21 +132,68 @@ export async function analyse({ items, key, fluxLabel, days }) {
   return result
 }
 
-async function run(provider, prompt) {
-  if (provider === 'claude') return withClaude(prompt)
+/* Explication d'un pic d'activité (détection des pics) : quelques phrases, sur les fiches du pic */
+const SPIKE_SCHEMA = {
+  type: 'object',
+  properties: { explication: { type: 'string' }, points: { type: 'array', items: { type: 'string' } } },
+  required: ['explication', 'points'],
+  additionalProperties: false,
+}
+const SPIKE = {
+  system: `Tu es analyste de veille médias pour la plateforme MMS (médias et réseaux sociaux libyens).
+On te signale un pic d'activité : un sujet, une personne ou une source dont les mentions des dernières 24 heures dépassent nettement la moyenne.
+Rédige en arabe standard, ton neutre et factuel :
+- explication : 2 à 3 phrases qui disent ce qui provoque le pic ;
+- points : 2 à 4 faits précis tirés des actualités fournies.
+N'invente aucun fait absent des actualités fournies.`,
+  schema: SPIKE_SCHEMA,
+  format: 'Réponds uniquement par un objet JSON de la forme {"explication": "...", "points": ["...", "..."]}',
+  valid: (d) => typeof d.explication === 'string' && Array.isArray(d.points),
+  name: 'pic',
+}
+
+export async function explainSpike({ key, label, count, avg, items }) {
+  if (cache.has(key)) return cache.get(key)
+  const lines = items
+    .slice(0, 80)
+    .map((it) => `- [${it.date.slice(0, 16)}] (${it.origin}) ${it.title} — ${it.summary}`)
+    .join('\n')
+  const prompt = `Pic : « ${label} ». ${count} mentions sur les dernières 24 heures, contre ${avg} par jour en moyenne la semaine précédente.\n\n${lines}`
+  const data = await run(aiProvider(), prompt, SPIKE)
+  const result = { ...data, at: new Date().toISOString() }
+  cache.set(key, result)
+  return result
+}
+
+const DEFAULT_SPEC = {
+  get system() {
+    return SYSTEM
+  },
+  get schema() {
+    return SCHEMA
+  },
+  get format() {
+    return FORMAT
+  },
+  valid: (d) => typeof d.synthese === 'string' && Array.isArray(d.themes) && Array.isArray(d.a_surveiller),
+  name: 'analyse',
+}
+
+async function run(provider, prompt, spec = DEFAULT_SPEC) {
+  if (provider === 'claude') return withClaude(prompt, spec)
   if (provider === 'gemini') {
     try {
-      return await withGemini(prompt)
+      return await withGemini(prompt, spec)
     } catch (err) {
       // Version gratuite saturée (429) ou autre erreur : OpenAI prend le relais s'il est configuré
       if (!process.env.OPENAI_API_KEY) throw err
       console.error('Gemini indisponible, repli sur OpenAI :', err.message)
     }
   }
-  return withOpenAI(prompt)
+  return withOpenAI(prompt, spec)
 }
 
-async function withClaude(prompt) {
+async function withClaude(prompt, spec) {
   let Anthropic
   try {
     Anthropic = (await import('@anthropic-ai/sdk')).default
@@ -158,10 +205,10 @@ async function withClaude(prompt) {
     .stream({
       model: MODEL,
       max_tokens: 16000,
-      system: SYSTEM,
+      system: spec.system,
       messages: [{ role: 'user', content: prompt }],
       thinking: { type: 'adaptive' },
-      output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
+      output_config: { effort: 'medium', format: { type: 'json_schema', schema: spec.schema } },
       // En cas de refus du modèle, le serveur relance sur un modèle de repli.
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
@@ -174,7 +221,7 @@ async function withClaude(prompt) {
 }
 
 // Environ 25 000 jetons en entrée et 1 500 en sortie : moins d'un centime par analyse avec gpt-4o-mini
-async function withOpenAI(prompt) {
+async function withOpenAI(prompt, spec) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'content-type': 'application/json' },
@@ -183,10 +230,10 @@ async function withOpenAI(prompt) {
       max_tokens: 4000,
       temperature: 0.3,
       messages: [
-        { role: 'system', content: SYSTEM },
+        { role: 'system', content: spec.system },
         { role: 'user', content: prompt },
       ],
-      response_format: { type: 'json_schema', json_schema: { name: 'analyse', strict: true, schema: SCHEMA } },
+      response_format: { type: 'json_schema', json_schema: { name: spec.name, strict: true, schema: spec.schema } },
     }),
     signal: AbortSignal.timeout(120_000),
   })
@@ -202,13 +249,13 @@ async function withOpenAI(prompt) {
 const FORMAT = `Réponds uniquement par un objet JSON de la forme
 {"synthese": "...", "themes": [{"titre": "...", "points": ["...", "..."]}], "a_surveiller": ["...", "..."]}`
 
-async function withGemini(prompt) {
+async function withGemini(prompt, spec) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY, 'content-type': 'application/json' },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: `${SYSTEM}\n${FORMAT}` }] },
+      systemInstruction: { parts: [{ text: `${spec.system}\n${spec.format}` }] },
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens: 8000 },
     }),
@@ -226,6 +273,108 @@ async function withGemini(prompt) {
   if (cand?.finishReason === 'MAX_TOKENS') throw new Error('Réponse tronquée.')
   const text = (cand?.content?.parts || []).map((p) => p.text || '').join('')
   const data = JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, ''))
-  if (typeof data.synthese !== 'string' || !Array.isArray(data.themes) || !Array.isArray(data.a_surveiller)) throw new Error('Réponse Gemini incomplète.')
+  if (!spec.valid(data)) throw new Error('Réponse Gemini incomplète.')
   return data
+}
+
+/* ---------------------------------------------------------------- assistant de requête booléenne */
+
+const QUERY = {
+  system: `Tu aides les analystes de la plateforme MMS (veille des médias libyens) à écrire une requête de recherche booléenne.
+On te décrit en langage courant (arabe, français ou anglais) ce qu'il faut trouver. Rends :
+- requete : la requête, avec les opérateurs AND, OR, NOT, des parenthèses et des "expressions exactes".
+  Mets les noms propres et les mots-clés en arabe standard ET leurs variantes latines courantes reliées par OR
+  (par exemple (الدبيبة OR Dbeibah OR Dbeibeh)). Pas de joker, pas de champ, rien d'autre que ces opérateurs ;
+- explication : une phrase, dans la langue de la demande, qui dit ce que la requête cherche.`,
+  schema: {
+    type: 'object',
+    properties: { requete: { type: 'string' }, explication: { type: 'string' } },
+    required: ['requete', 'explication'],
+    additionalProperties: false,
+  },
+  format: 'Réponds uniquement par un objet JSON de la forme {"requete": "...", "explication": "..."}',
+  valid: (d) => typeof d.requete === 'string' && typeof d.explication === 'string',
+  name: 'requete',
+}
+
+export async function writeQuery(text) {
+  const key = `query|${text}`
+  if (cache.has(key)) return cache.get(key)
+  const data = await run(aiProvider(), `Demande : ${text}`, QUERY)
+  cache.set(key, data)
+  return data
+}
+
+/* ---------------------------------------------------------------- assistant conversationnel */
+
+const ASK = {
+  system: `Tu es l'assistant de la plateforme MMS (veille des médias et réseaux sociaux libyens).
+On te donne une question et des actualités numérotées [1], [2]… tirées de la base de MMS.
+Réponds dans la langue de la question, de façon claire et factuelle, en 3 à 8 phrases ou en courte liste si c'est plus lisible.
+Appuie chaque fait sur les actualités en citant leur numéro entre crochets, par exemple [3].
+Si les actualités ne permettent pas de répondre, dis-le simplement. N'invente rien.
+- reponse : la réponse, avec les renvois [n] ;
+- sources : les numéros des actualités citées.`,
+  schema: {
+    type: 'object',
+    properties: { reponse: { type: 'string' }, sources: { type: 'array', items: { type: 'integer' } } },
+    required: ['reponse', 'sources'],
+    additionalProperties: false,
+  },
+  format: 'Réponds uniquement par un objet JSON de la forme {"reponse": "...", "sources": [1, 2]}',
+  valid: (d) => typeof d.reponse === 'string' && Array.isArray(d.sources),
+  name: 'reponse',
+}
+
+/** history : échanges précédents [{q, a}], pour les questions de suite */
+export async function askNews({ key, question, items, history = [] }) {
+  if (cache.has(key)) return cache.get(key)
+  const lines = items.map((it, k) => `[${k + 1}] ${it.date.slice(0, 16)} · ${it.origin} · ${it.title} — ${it.summary}`).join('\n')
+  const past = history
+    .slice(-4)
+    .map((h) => `Question : ${h.q}\nRéponse : ${h.a}`)
+    .join('\n\n')
+  const prompt = `${past ? `Échanges précédents :\n${past}\n\n` : ''}Date du jour : ${new Date().toISOString().slice(0, 10)}\nQuestion : ${question}\n\nActualités :\n${lines}`
+  const data = await run(aiProvider(), prompt, ASK)
+  const result = { ...data, at: new Date().toISOString() }
+  cache.set(key, result)
+  return result
+}
+
+/* ---------------------------------------------------------------- rapport exécutif */
+
+const BRIEF = {
+  system: `Tu rédiges le rapport exécutif hebdomadaire de la plateforme MMS (veille des médias libyens) pour une direction.
+On te donne les chiffres de la période, leur évolution et les actualités les plus marquantes. Rédige en arabe standard, ton neutre :
+- resume : un paragraphe de 4 à 6 phrases, l'essentiel pour un décideur pressé ;
+- faits : 4 à 7 faits marquants, une phrase chacun ;
+- tendances : 2 à 4 évolutions par rapport à la période précédente (chiffres à l'appui) ;
+- recommandations : 2 à 4 points à surveiller ou actions de communication.
+N'invente aucun fait absent des données fournies.`,
+  schema: {
+    type: 'object',
+    properties: {
+      resume: { type: 'string' },
+      faits: { type: 'array', items: { type: 'string' } },
+      tendances: { type: 'array', items: { type: 'string' } },
+      recommandations: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['resume', 'faits', 'tendances', 'recommandations'],
+    additionalProperties: false,
+  },
+  format: 'Réponds uniquement par un objet JSON de la forme {"resume": "...", "faits": ["..."], "tendances": ["..."], "recommandations": ["..."]}',
+  valid: (d) => typeof d.resume === 'string' && Array.isArray(d.faits) && Array.isArray(d.tendances) && Array.isArray(d.recommandations),
+  name: 'rapport',
+}
+
+export async function briefingSummary({ key, facts, items }) {
+  if (cache.has(key)) return cache.get(key)
+  const lines = items
+    .slice(0, 150)
+    .map((it) => `- [${it.date.slice(0, 10)}] (${it.category}, ${it.origin}) ${it.title} — ${it.summary}`)
+    .join('\n')
+  const data = await run(aiProvider(), `${facts}\n\nActualités marquantes :\n${lines}`, BRIEF)
+  const result = { ...data, at: new Date().toISOString() }
+  cache.set(key, result)
+  return result
 }

@@ -6,7 +6,7 @@ import { useEffect, useRef } from 'react'
  * des arcs de liaison entre villes, une onde radar, et une légère inclinaison qui suit la souris.
  */
 
-type V = [number, number, number]
+export type V = [number, number, number]
 
 const CITIES: V[] = [
   [36.8, 10.18, 0], // Tunis
@@ -19,13 +19,13 @@ const CITIES: V[] = [
   [48.85, 2.35, 0], // Paris
 ]
 
-function fromLatLon(lat: number, lon: number): V {
+export function fromLatLon(lat: number, lon: number): V {
   const a = (lat * Math.PI) / 180
   const b = (lon * Math.PI) / 180
   return [Math.cos(a) * Math.sin(b), Math.sin(a), Math.cos(a) * Math.cos(b)]
 }
 
-function rotate([x, y, z]: V, ry: number, rx: number): V {
+export function rotate([x, y, z]: V, ry: number, rx: number): V {
   const cy = Math.cos(ry)
   const sy = Math.sin(ry)
   const x1 = x * cy + z * sy
@@ -36,7 +36,7 @@ function rotate([x, y, z]: V, ry: number, rx: number): V {
 }
 
 /** Arc de grand cercle entre deux points, soulevé au-dessus de la surface */
-function arc(a: V, b: V, steps = 48): V[] {
+export function arc(a: V, b: V, steps = 48): V[] {
   const dot = Math.min(Math.max(a[0] * b[0] + a[1] * b[1] + a[2] * b[2], -1), 1)
   const w = Math.acos(dot) || 1e-6
   const out: V[] = []

@@ -2,6 +2,11 @@ import { type CSSProperties, useState } from 'react'
 import { type NewsItem } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { useFavorites } from '../lib/prefs'
+import { useIntel } from '../lib/intel'
+import { EntityChips, TagEditor, ToneBadge } from './Intel'
+import { EngagementChips } from './Engagement'
+import { can, useAuth } from '../lib/auth'
+import { MediaBadge, MediaContext, MediaReactions, MediaTranscript } from './MediaParts'
 
 export const HEART = 'M12 21s-7.5-4.6-9.6-9.3C1 8.4 3 5 6.4 5c2 0 3.3 1 4.1 2.2h3C14.3 6 15.6 5 17.6 5 21 5 23 8.4 21.6 11.7 19.5 16.4 12 21 12 21z'
 
@@ -79,7 +84,10 @@ function NewsMedia({ item }: { item: NewsItem }) {
 export function NewsCard({ item, variant = 'list' }: { item: NewsItem; variant?: 'list' | 'board' }) {
   const i = useI18n()
   const fav = useFavorites()
+  const x = useIntel()
   const liked = fav.has(item.id)
+  const important = (item.importance ?? 1) >= 2
+  const auth = useAuth()
   return (
     <article className={`news-card news-card--${item.flux} news-card--${variant}`}>
       <NewsMedia item={item} />
@@ -106,6 +114,7 @@ export function NewsCard({ item, variant = 'list' }: { item: NewsItem; variant?:
             <span className={`mms-flag mms-flag--${item.flux}`} title={i.flux(item.flux)} />
           </span>
         </p>
+        <MediaContext item={item} />
         <h3 dir="auto">
           {item.url ? (
             <a href={item.url} target="_blank" rel="noopener noreferrer">
@@ -123,12 +132,20 @@ export function NewsCard({ item, variant = 'list' }: { item: NewsItem; variant?:
         <p className="news-card__meta">
           <span>{i.dateTime(item.date)}</span>
           <span>{i.channel(item.channel)}</span>
+          <MediaBadge item={item} />
           {item.lang && <span>{i.language(item.lang)}</span>}
           {variant === 'list' && <span className="news-badge">{i.category(item.category)}</span>}
+          <ToneBadge tone={item.tone} />
+          {important && <span className={`mms-importance mms-importance--${item.importance}`}>{x.importance[item.importance ?? 2]}</span>}
           {item.broadcasts > 1 && <span className="news-badge news-badge--rep">{i.t.broadcastTimes(item.broadcasts)}</span>}
           {item.live && <span className="mms-tag mms-tag--live">{i.t.notConsolidated}</span>}
           {item.demo && <span className="mms-tag mms-tag--demo">{i.t.example}</span>}
         </p>
+        <MediaTranscript item={item} />
+        <EngagementChips value={item.engagement} />
+        <MediaReactions item={item} />
+        <EntityChips item={item} />
+        {variant === 'list' && can(auth?.user, 'analyst') && <TagEditor item={item} />}
       </div>
     </article>
   )

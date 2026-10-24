@@ -1,0 +1,83 @@
+import { type MediaType } from './news'
+import { useI18n } from './i18n'
+
+/** Libellés des types de médias : sélecteur MEDIA, badge des cartes, transcriptions, commentaires et forums */
+
+export const MEDIA_TEXT = {
+  ar: {
+    menu: 'الوسائط',
+    all: 'كل الوسائط',
+    types: {
+      article: 'مقالات',
+      broadcast: 'بث إذاعي وتلفزي',
+      podcast: 'بودكاست',
+      blog: 'مدونات',
+      comment: 'تعليقات',
+      forum: 'منتديات',
+      social: 'شبكات التواصل',
+    } as Record<MediaType, string>,
+    badge: {
+      article: 'مقال',
+      broadcast: 'بث',
+      podcast: 'بودكاست',
+      blog: 'مدونة',
+      comment: 'تعليق',
+      forum: 'منتدى',
+      social: 'منشور',
+    } as Record<MediaType, string>,
+    subAll: 'كل أنواع البث',
+    subTypes: { tv: 'تلفزيون', radio: 'إذاعة', youtube: 'يوتيوب' } as Record<string, string>,
+    transcript: 'النص المفرغ',
+    original: 'المصدر الأصلي',
+    listen: 'الاستماع إلى الحلقة',
+    watch: 'مشاهدة الفيديو',
+    comments: (n: number) => (n === 1 ? 'تعليق واحد' : n === 2 ? 'تعليقان' : `${n} تعليقات`),
+    replies: (n: number) => (n === 1 ? 'رد واحد' : n === 2 ? 'ردان' : `${n} ردود`),
+    thread: 'عرض النقاش',
+    commentOn: 'تعليق على',
+    reactionsTitle: 'المحتوى والتفاعل',
+    editorial: 'محتوى تحريري',
+    commentsLabel: 'تعليقات',
+    repliesLabel: 'ردود في المنتديات',
+    mediaTitle: 'الوسائط',
+  },
+  en: {
+    menu: 'Media',
+    all: 'All media',
+    types: {
+      article: 'Articles',
+      broadcast: 'Broadcasts',
+      podcast: 'Podcasts',
+      blog: 'Blogs',
+      comment: 'Comments',
+      forum: 'Forums',
+      social: 'Social networks',
+    } as Record<MediaType, string>,
+    badge: {
+      article: 'Article',
+      broadcast: 'Broadcast',
+      podcast: 'Podcast',
+      blog: 'Blog',
+      comment: 'Comment',
+      forum: 'Forum',
+      social: 'Post',
+    } as Record<MediaType, string>,
+    subAll: 'All broadcasts',
+    subTypes: { tv: 'TV', radio: 'Radio', youtube: 'YouTube' } as Record<string, string>,
+    transcript: 'Transcript',
+    original: 'Original source',
+    listen: 'Listen to the episode',
+    watch: 'Watch the video',
+    comments: (n: number) => (n === 1 ? '1 comment' : `${n} comments`),
+    replies: (n: number) => (n === 1 ? '1 reply' : `${n} replies`),
+    thread: 'Show discussion',
+    commentOn: 'Comment on',
+    reactionsTitle: 'Content and reactions',
+    editorial: 'Editorial content',
+    commentsLabel: 'Comments',
+    repliesLabel: 'Forum replies',
+    mediaTitle: 'Media',
+  },
+}
+
+export const useMedia = () => MEDIA_TEXT[useI18n().lang]

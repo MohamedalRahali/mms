@@ -58,14 +58,24 @@ export function NewsDigest({ flux, days, category }: { flux: Flux | ''; days: nu
   )
 }
 
-export function BuzzBars({ rows, label, color }: { rows: Count[]; label: (name: string) => string; color?: (name: string, rank: number) => string }) {
+export function BuzzBars({
+  rows,
+  label,
+  color,
+  onPick,
+}: {
+  rows: Count[]
+  label: (name: string) => string
+  color?: (name: string, rank: number) => string
+  onPick?: (name: string) => void
+}) {
   const i = useI18n()
   if (rows.length === 0) return <p className="news-status">{i.t.noData}</p>
   const max = Math.max(...rows.map((r) => r.count), 1)
   return (
     <ul className="mms-buzz">
       {rows.map((r, k) => (
-        <li key={r.name}>
+        <li key={r.name} className={onPick ? 'is-link' : undefined} onClick={() => onPick?.(r.name)}>
           <span dir="auto">
             {label(r.name)}: <b>{i.num(r.count)}</b>
           </span>

@@ -2,7 +2,12 @@ import { createContext, useContext } from 'react'
 
 /** Utilisateur connecté et déconnexion, partagés par toute l'application */
 
-export type User = { email: string; name: string }
+export type Role = 'viewer' | 'analyst' | 'admin'
+export type User = { email: string; name: string; role?: Role }
+
+const RANK: Record<Role, number> = { viewer: 0, analyst: 1, admin: 2 }
+/** Le compte a-t-il au moins ce rôle ? Les comptes sans rôle sont administrateurs. */
+export const can = (user: User | undefined | null, min: Role) => RANK[user?.role ?? 'admin'] >= RANK[min]
 export type Auth = { user: User; logout: () => void }
 
 export const AuthContext = createContext<Auth | null>(null)

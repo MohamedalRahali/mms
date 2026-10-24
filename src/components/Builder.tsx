@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { WidgetBody, useWidgetTitles } from './Charts'
 import { type Facets, type Flux, FLUX_KEYS, ReloadContext, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
+import { can, useAuth } from '../lib/auth'
 import {
   type Board,
   type WidgetConf,
@@ -45,6 +46,7 @@ const TYPE_ICON: Record<WidgetType, string> = {
   kpi: 'M4 4h16v16H4zm4 11h2V9H8v6zm3.5 0h2v-4h-2v4zm3.5 0h2v-6h-2v6z',
   table: 'M3 4h18v16H3zm2 2v3h6V6H5zm8 0v3h6V6h-6zm-8 5v3h6v-3H5zm8 0v3h6v-3h-6zm-8 5v2h6v-2H5zm8 0v2h6v-2h-6z',
   cloud: 'M4 9h7v3H4zm9 0h7v2h-7zM6 14h5v2H6zm7 0h4v4h-4zM3 18h8v2H3z',
+  tone: 'M3 19h18v2H3zM3 13l5-4 4 3 5-6 4 3v3l-4-3-5 6-4-3-5 4z',
 }
 
 function Svg({ d, size = 22 }: { d: string; size?: number }) {
@@ -161,7 +163,7 @@ function WidgetEditor({ initial, onApply, onClose }: { initial: WidgetConf; onAp
   const [conf, setConf] = useState(initial)
   const facets = useFetch<Facets>('/api/news/facets').data
   const set = (patch: Partial<WidgetConf>) => setConf((c) => ({ ...c, ...patch }))
-  const usesDim = !['news', 'line', 'kpi'].includes(conf.type)
+  const usesDim = !['news', 'line', 'kpi', 'tone'].includes(conf.type)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     document.addEventListener('keydown', onKey)
@@ -288,6 +290,7 @@ function PreviewCard({ conf }: { conf: WidgetConf }) {
 }
 
 export function Builder({ flux }: { flux: Flux | '' }) {
+  const auth = useAuth()
   const i = useI18n()
   const b = BUILDER_TEXT[i.lang]
   const [saved, setSaved] = useState<Board[] | null>(null)
@@ -310,7 +313,7 @@ export function Builder({ flux }: { flux: Flux | '' }) {
   const editing = draft !== null
   const boards = draft ?? saved ?? []
   const board = boards.find((x) => x.id === active) ?? boards[0]
-  const boardName = (x: Board) => x.name || (x.id === 'main' ? b.defaultBoard : b.newBoard)
+  const boardName = (x: Board) => x.name || (x.id === 'main' ? b.defaultBoard : x.id === 'intel' ? b.intelBoard : b.newBoard)
 
   // Le choix de veille dans la barre noire s'applique aux widgets réglés sur « toutes les sources »
   const scoped = (w: WidgetConf) => (flux && !w.flux && !editing ? { ...w, flux } : w)
@@ -392,32 +395,34 @@ export function Builder({ flux }: { flux: Flux | '' }) {
     setEditor(null)
   }
 
-  const bar = slot
-    ? createPortal(
-        editing ? (
-          <div className="mms-editbar">
-            <button type="button" className="mms-editbar__add" onClick={() => setEditor({ conf: makeWidget('bars'), isNew: true })}>
-              <Svg d={ICON.plus} />
-              {b.addChart}
-            </button>
-            <button type="button" className="mms-editbar__save" onClick={save} disabled={status === 'saving'}>
-              {status === 'saving' ? b.saving : b.save}
-            </button>
-            <button type="button" className="mms-editbar__cancel" onClick={cancel}>
-              {b.cancel}
-            </button>
-          </div>
-        ) : (
-          <div className="mms-editbar">
-            <button type="button" className="mms-editbar__add" onClick={startEdit} disabled={!saved}>
-              <Svg d={ICON.edit} />
-              {b.edit}
-            </button>
-          </div>
-        ),
-        slot,
-      )
-    : null
+  const canEdit = can(auth?.user, 'analyst')
+  const bar =
+    slot && canEdit
+      ? createPortal(
+          editing ? (
+            <div className="mms-editbar">
+              <button type="button" className="mms-editbar__add" onClick={() => setEditor({ conf: makeWidget('bars'), isNew: true })}>
+                <Svg d={ICON.plus} />
+                {b.addChart}
+              </button>
+              <button type="button" className="mms-editbar__save" onClick={save} disabled={status === 'saving'}>
+                {status === 'saving' ? b.saving : b.save}
+              </button>
+              <button type="button" className="mms-editbar__cancel" onClick={cancel}>
+                {b.cancel}
+              </button>
+            </div>
+          ) : (
+            <div className="mms-editbar">
+              <button type="button" className="mms-editbar__add" onClick={startEdit} disabled={!saved}>
+                <Svg d={ICON.edit} />
+                {b.edit}
+              </button>
+            </div>
+          ),
+          slot,
+        )
+      : null
 
   if (!saved || !board) return <p className="news-status">{i.t.loading}</p>
   const ordered = [...board.widgets].sort((a, c) => a.y - c.y || a.x - c.x)
@@ -439,10 +444,12 @@ export function Builder({ flux }: { flux: Flux | '' }) {
               {boardName(x)}
             </button>
           ))}
-          <button type="button" className="mms-boards__new" onClick={addBoard}>
-            <Svg d={ICON.plus} size={18} />
-            {b.newBoard}
-          </button>
+          {canEdit && (
+            <button type="button" className="mms-boards__new" onClick={addBoard}>
+              <Svg d={ICON.plus} size={18} />
+              {b.newBoard}
+            </button>
+          )}
         </div>
         {editing && (
           <div className="mms-boards__edit">

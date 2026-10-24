@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { type Count, type Flux, type Stats, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { useCountUp } from '../lib/motion'
+import { TopEngaged } from './Pro'
+import { useMedia } from '../lib/media'
+import { type MediaType } from '../lib/news'
 
 function CountUp({ value, num }: { value: number; num: (n: number) => string }) {
   return <>{num(useCountUp(value))}</>
@@ -75,6 +78,7 @@ function DailyChart({ perDay }: { perDay: Stats['perDay'] }) {
 export function StatsView({ flux }: { flux: Flux | '' }) {
   const i = useI18n()
   const { t, num, day: formatDay } = i
+  const m = useMedia()
   const [days, setDays] = useState('30')
   const { data, error, loading } = useFetch<Stats>(`/api/news/stats?days=${days}${flux ? `&flux=${flux}` : ''}`)
 
@@ -163,12 +167,34 @@ export function StatsView({ flux }: { flux: Flux | '' }) {
             <HBars rows={data.channels} label={i.channel} />
           </section>
 
+          {!!data.media?.length && (
+            <section className="news-panel">
+              <h3>{m.mediaTitle}</h3>
+              <HBars rows={data.media} label={(n) => m.types[n as MediaType] ?? n} />
+            </section>
+          )}
+
+          {data.reactions && (
+            <section className="news-panel">
+              <h3>{m.reactionsTitle}</h3>
+              <HBars
+                rows={[
+                  { name: m.editorial, count: data.reactions.editorial },
+                  { name: m.commentsLabel, count: data.reactions.comments },
+                  { name: m.repliesLabel, count: data.reactions.replies },
+                ]}
+                label={(n) => n}
+              />
+            </section>
+          )}
+
           <section className="news-panel">
             <h3>{t.fluxes}</h3>
             <HBars rows={data.flux} label={i.flux} />
           </section>
         </div>
       )}
+      {data && <TopEngaged flux={flux} days={Number(days)} />}
     </>
   )
 }

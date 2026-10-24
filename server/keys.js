@@ -7,7 +7,8 @@ import dotenv from 'dotenv'
  * MMS lit son propre environnement ; la veille Libye, son fichier ../veille-libye/.env.
  */
 
-const MMS_KEYS = ['ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY']
+// Les alertes vont par paire : bot Telegram + discussion, compte SMTP + mot de passe
+const MMS_KEYS = [['ANTHROPIC_API_KEY'], ['GEMINI_API_KEY'], ['OPENAI_API_KEY'], ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'], ['SMTP_USER', 'SMTP_PASS']]
 
 // Mêmes clés que la commande « libye cles » du collecteur ; certaines vont par paire
 const LIBYE_KEYS = [
@@ -24,7 +25,7 @@ const LIBYE_KEYS = [
 ]
 
 export function keyStatus(root) {
-  const mms = MMS_KEYS.map((name) => ({ name, set: Boolean(process.env[name]) }))
+  const mms = MMS_KEYS.map(([name, ...pair]) => ({ name, set: [name, ...pair].every((k) => Boolean(process.env[k])) }))
   let libye = null
   try {
     const env = dotenv.parse(fs.readFileSync(path.resolve(root, '../veille-libye/.env')))

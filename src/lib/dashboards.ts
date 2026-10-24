@@ -2,8 +2,8 @@ import { type Flux } from './news'
 
 /** Tableaux de bord composés par le client : widgets placés sur une grille de 12 colonnes */
 
-export type WidgetType = 'news' | 'bars' | 'columns' | 'pie' | 'line' | 'kpi' | 'table' | 'cloud'
-export type Dim = 'channels' | 'categories' | 'sources' | 'flux'
+export type WidgetType = 'news' | 'bars' | 'columns' | 'pie' | 'line' | 'kpi' | 'table' | 'cloud' | 'tone'
+export type Dim = 'channels' | 'categories' | 'sources' | 'flux' | 'tones' | 'people' | 'orgs' | 'places'
 export type Metric = 'total' | 'broadcasts' | 'sources' | 'average'
 
 export type WidgetConf = {
@@ -27,8 +27,8 @@ export const COLS = 12
 export const ROW_PX = 40
 export const GAP_PX = 16
 
-export const WIDGET_TYPES: WidgetType[] = ['news', 'bars', 'columns', 'pie', 'line', 'kpi', 'table', 'cloud']
-export const DIMS: Dim[] = ['channels', 'categories', 'sources', 'flux']
+export const WIDGET_TYPES: WidgetType[] = ['news', 'bars', 'columns', 'pie', 'line', 'tone', 'kpi', 'table', 'cloud']
+export const DIMS: Dim[] = ['channels', 'categories', 'sources', 'tones', 'people', 'orgs', 'places', 'flux']
 export const METRICS: Metric[] = ['total', 'broadcasts', 'sources', 'average']
 export const PERIODS = [1, 7, 30, 90]
 
@@ -42,6 +42,7 @@ export const DEFAULT_SIZE: Record<WidgetType, [number, number]> = {
   kpi: [3, 4],
   table: [4, 8],
   cloud: [6, 6],
+  tone: [8, 8],
 }
 
 export const newId = () => Math.random().toString(36).slice(2, 10)
@@ -105,12 +106,26 @@ export const DEFAULT_BOARDS: Board[] = [
       makeWidget('pie', { id: 'd6', dim: 'channels', days: 30, x: 8, y: 20, h: 7 }),
     ],
   },
+  {
+    // Analyse média : tonalité, personnalités, organisations, lieux (comme Meltwater)
+    id: 'intel',
+    name: '',
+    widgets: [
+      makeWidget('pie', { id: 'i1', dim: 'tones', x: 0, y: 0, w: 4 }),
+      makeWidget('tone', { id: 'i2', dim: 'tones', days: 30, x: 4, y: 0 }),
+      makeWidget('bars', { id: 'i3', dim: 'people', x: 0, y: 8, h: 9 }),
+      makeWidget('bars', { id: 'i4', dim: 'orgs', x: 6, y: 8, h: 9 }),
+      makeWidget('cloud', { id: 'i5', dim: 'places', x: 0, y: 17 }),
+      makeWidget('columns', { id: 'i6', dim: 'sources', x: 6, y: 17, h: 6 }),
+    ],
+  },
 ]
 
 /** Libellés du concepteur de tableaux de bord */
 export const BUILDER_TEXT = {
   ar: {
     defaultBoard: 'الرئيسية',
+    intelBoard: 'التحليل الإعلامي',
     edit: 'تعديل اللوحة',
     addChart: 'إضافة رسم بياني',
     save: 'حفظ',
@@ -146,14 +161,25 @@ export const BUILDER_TEXT = {
       kpi: 'رقم رئيسي',
       table: 'جدول',
       cloud: 'سحابة كلمات',
+      tone: 'تطور النبرة',
     },
-    dims: { channels: 'القنوات', categories: 'المواضيع', sources: 'المصادر', flux: 'الرصد' },
+    dims: {
+      channels: 'القنوات',
+      categories: 'المواضيع',
+      sources: 'المصادر',
+      flux: 'الرصد',
+      tones: 'النبرة',
+      people: 'الشخصيات',
+      orgs: 'المؤسسات',
+      places: 'الأماكن',
+    },
     metrics: { total: 'عدد الأخبار', broadcasts: 'مرات البث والنشر', sources: 'عدد المصادر', average: 'المعدل اليومي' },
     other: 'أخرى',
     perDay: 'عدد الأخبار في اليوم',
   },
   en: {
     defaultBoard: 'Main',
+    intelBoard: 'Media analysis',
     edit: 'Edit dashboard',
     addChart: 'Add a chart',
     save: 'Save',
@@ -189,8 +215,18 @@ export const BUILDER_TEXT = {
       kpi: 'Key figure',
       table: 'Table',
       cloud: 'Word cloud',
+      tone: 'Tone over time',
     },
-    dims: { channels: 'Channels', categories: 'Topics', sources: 'Sources', flux: 'Watches' },
+    dims: {
+      channels: 'Channels',
+      categories: 'Topics',
+      sources: 'Sources',
+      flux: 'Watches',
+      tones: 'Tone',
+      people: 'People',
+      orgs: 'Organizations',
+      places: 'Places',
+    },
     metrics: { total: 'News items', broadcasts: 'Broadcasts and posts', sources: 'Sources', average: 'Average per day' },
     other: 'Other',
     perDay: 'News per day',
