@@ -887,3 +887,42 @@ textarea.sa-input {
     animation: none;
   }
 }
+
+/* Réglages client : pays et portée des sources, logo, clés d'API */
+.sa-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.sa-meta__flag {
+  font-size: 18px;
+}
+.sa-meta__cc {
+  width: 3.4em;
+  text-align: center;
+}
+.sa-meta__reach {
+  width: 9em;
+}
+.sa-btn--small {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.sa-brandlogo {
+  max-width: 240px;
+  max-height: 80px;
+  object-fit: contain;
+  padding: 8px;
+  border-radius: 8px;
+  background: #fff;
+}
+.sa-secret {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.25);
+  word-break: break-all;
+  user-select: all;
+}

@@ -8,6 +8,8 @@ import { getItems, setHidden } from './store.js'
 import { keyStatus } from './keys.js'
 import { aiUsage } from './ai.js'
 import { mountPermissionsAdmin, permsOf, profileExists } from './permissions.js'
+import { initBrand, mountClientAdmin } from './clientAdmin.js'
+import { countryOf as sourceCountry, initSourceMeta, reachIsSet, reachOf } from './sourceMeta.js'
 import {
   all,
   countryOf,
@@ -215,6 +217,9 @@ export function mountSuperAdmin(app, root) {
   muted = readJson('sources.json', muted)
   notes = readJson('notes.json', {})
   applyMuted()
+  // Pays et portée des sources, logo du client
+  initSourceMeta(dir)
+  initBrand(dir)
   if (!configured()) console.warn('Console Super Admin désactivée : lancez « node server/superadmin-setup.js » pour créer le compte')
 
   // Connexions à la plateforme → journal de sécurité et d'activité
@@ -279,7 +284,10 @@ export function mountSuperAdmin(app, root) {
 
   /* -------- console */
   const sa = express.Router()
-  sa.use(express.json({ limit: '20kb' }))
+  // Corps limités à 20 Ko, sauf le logo du client (image en data:, 400 Ko au plus)
+  const smallJson = express.json({ limit: '20kb' })
+  const logoJson = express.json({ limit: '420kb' })
+  sa.use((req, res, next) => (req.path === '/brand' ? logoJson : smallJson)(req, res, next))
   sa.use((_req, res, next) => {
     res.setHeader('Cache-Control', 'no-store')
     next()
@@ -331,6 +339,9 @@ export function mountSuperAdmin(app, root) {
       return mine.length
     },
   })
+
+  /* ---- pays et portée des sources, logo du client, clés d'API, liens de partage */
+  mountClientAdmin(sa, { audit })
 
   sa.get('/me', (req, res) => res.json({ user: req.sa.u, expires: iso(req.sa.exp), ip: ipOf(req), country: countryOf(ipOf(req)) }))
   sa.post('/logout', (req, res) => {
@@ -756,11 +767,16 @@ export function mountSuperAdmin(app, root) {
     const catalog = readCatalog()
     for (const s of catalog) if (!origins.has(s.name)) origins.set(s.name, { name: s.name, flux: 'libye', total: 0, week: 0, last: '', channels: new Set([s.kind]), langs: new Map(), cats: new Map(), url: s.url })
     const inCatalog = new Map(catalog.map((s) => [s.name, s]))
+    // Pays et portée : réglage du Super Admin, sinon valeur déduite (catalogue, domaine, canal)
+    const originMeta = (o) => {
+      const probe = { origin: o.name, url: o.url || inCatalog.get(o.name)?.url || '', channel: [...o.channels][0] || 'site' }
+      return { country: sourceCountry(probe), reach: reachOf(probe), reachSet: reachIsSet(o.name) }
+    }
     res.json({
       lastUpdate,
       origins: [...origins.values()]
         .sort((a, b) => b.week - a.week || b.total - a.total)
-        .map((o) => ({ name: o.name, flux: o.flux, url: o.url || inCatalog.get(o.name)?.url || '', total: o.total, week: o.week, last: o.last || null, channels: [...o.channels], langs: top(o.langs, 3), topics: top(o.cats, 3), collector: inCatalog.has(o.name) ? (inCatalog.get(o.name).active ? 'active' : 'off') : '', enabled: !muted.origins.includes(o.name) })),
+        .map((o) => ({ name: o.name, flux: o.flux, url: o.url || inCatalog.get(o.name)?.url || '', total: o.total, week: o.week, last: o.last || null, channels: [...o.channels], langs: top(o.langs, 3), topics: top(o.cats, 3), collector: inCatalog.has(o.name) ? (inCatalog.get(o.name).active ? 'active' : 'off') : '', enabled: !muted.origins.includes(o.name), ...originMeta(o) })),
       channels: [...channels.values()].sort((a, b) => b.total - a.total).map((c) => ({ name: c.name, total: c.total, week: c.week, origins: c.origins.size, enabled: !muted.channels.includes(c.name) })),
     })
   })

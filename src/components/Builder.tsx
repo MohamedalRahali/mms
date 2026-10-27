@@ -4,6 +4,7 @@ import { WidgetBody, useWidgetTitles } from './Charts'
 import { type Facets, type Flux, FLUX_KEYS, ReloadContext, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { canDo, hasModule, useAuth } from '../lib/auth'
+import { ShareDialog, useBrand } from './Share'
 
 const RADAR_TYPES: string[] = ['emerging', 'stories', 'alerts', 'mood']
 import {
@@ -309,6 +310,8 @@ export function Builder({ flux }: { flux: Flux | '' }) {
   const [status, setStatus] = useState<'' | 'saving' | 'error'>('')
   const gridRef = useRef<HTMLDivElement>(null)
   const [slot, setSlot] = useState<HTMLElement | null>(null)
+  const [sharing, setSharing] = useState(false)
+  const brand = useBrand()
 
   useEffect(() => setSlot(document.getElementById('mms-appbar-slot')), [])
   useEffect(() => {
@@ -404,8 +407,22 @@ export function Builder({ flux }: { flux: Flux | '' }) {
   }
 
   const canEdit = canDo(auth?.user, 'edit_dashboards')
+  const canShare = canDo(auth?.user, 'share_dashboards')
+  // Choix du tableau dans la barre noire, pour tous les profils ; boutons d'édition pour ceux qui peuvent modifier
+  const picker =
+    boards.length > 1 ? (
+      <select className="mms-boardpick" value={board?.id ?? ''} onChange={(e) => setActive(e.target.value)} aria-label={i.lang === 'ar' ? 'اختيار لوحة القيادة' : 'Choose a dashboard'}>
+        {boards.map((x) => (
+          <option key={x.id} value={x.id}>
+            {boardName(x)}
+          </option>
+        ))}
+      </select>
+    ) : null
   const bar =
-    slot && canEdit
+    slot && !canEdit && picker
+      ? createPortal(<div className="mms-editbar">{picker}</div>, slot)
+      : slot && canEdit
       ? createPortal(
           editing ? (
             <div className="mms-editbar">
@@ -422,6 +439,7 @@ export function Builder({ flux }: { flux: Flux | '' }) {
             </div>
           ) : (
             <div className="mms-editbar">
+              {picker}
               <button type="button" className="mms-editbar__add" onClick={startEdit} disabled={!saved}>
                 <Svg d={ICON.edit} />
                 {b.edit}
@@ -438,6 +456,37 @@ export function Builder({ flux }: { flux: Flux | '' }) {
   return (
     <div className="mms-builder">
       {bar}
+      {/* En-tête du tableau : logo du client (console Super Admin), nom du tableau, partage par lien */}
+      <header className="mms-boardhead">
+        <img src={brand?.logo || '/logo-npdc.png'} alt={brand?.name || ''} />
+        <div>
+          <h2 dir="auto">{boardName(board)}</h2>
+          {brand?.name && <small dir="auto">{brand.name}</small>}
+        </div>
+        {canShare && !editing && hasModule(auth?.user, 'dashboard') && (
+          <div className="mms-boardhead__actions">
+            <button type="button" className="news-btn news-btn--ghost" onClick={() => setSharing(true)}>
+              🔗 {i.lang === 'ar' ? 'مشاركة' : 'Share'}
+            </button>
+          </div>
+        )}
+      </header>
+      {sharing && (
+        <ShareDialog
+          board={board}
+          boardName={boardName(board)}
+          onClose={() => setSharing(false)}
+          onPersist={
+            canEdit
+              ? async () => {
+                  const res = await fetch('/api/dashboards', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ boards: saved }) })
+                  if (res.ok) setSaved((await res.json()).boards)
+                  return res.ok
+                }
+              : undefined
+          }
+        />
+      )}
       <div className="mms-boards">
         <div className="mms-boards__tabs" role="tablist">
           {boards.map((x) => (

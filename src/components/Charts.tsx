@@ -322,7 +322,7 @@ function rowsOf(stats: Stats, dim: Dim): Count[] {
 }
 
 /** Tonalité jour par jour en colonnes empilées : vert positif, gris neutre, rouge négatif */
-function ToneTrend({ days, onPick }: { days: NonNullable<Stats['toneDays']>; onPick?: (tone: string) => void }) {
+export function ToneTrend({ days, onPick }: { days: NonNullable<Stats['toneDays']>; onPick?: (tone: string) => void }) {
   const i = useI18n()
   const x = useIntel()
   const [hover, setHover] = useState<number | null>(null)

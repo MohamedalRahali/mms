@@ -20,7 +20,8 @@ export type ModuleKey =
   | 'report'
   | 'alerts'
   | 'favorites'
-export type ActionKey = 'export' | 'ai_ask' | 'ai_run' | 'edit_dashboards' | 'manage_watches' | 'tags' | 'send_email' | 'schedule' | 'diffusion'
+  | 'geo'
+export type ActionKey = 'export' | 'ai_ask' | 'ai_run' | 'edit_dashboards' | 'manage_watches' | 'tags' | 'send_email' | 'schedule' | 'diffusion' | 'mark_processed' | 'share_dashboards'
 export type Perms = { profile: string; profileName: string; modules: ModuleKey[]; actions: ActionKey[] }
 export type User = { email: string; name: string; role?: Role; perms?: Perms }
 
@@ -30,8 +31,8 @@ export const can = (user: User | undefined | null, min: Role) => RANK[user?.role
 
 // Sans permissions reçues du serveur (ancienne version), mêmes droits qu'avant : par rôle
 const ROLE_ACTIONS: Record<Role, ActionKey[]> = {
-  admin: ['export', 'ai_ask', 'ai_run', 'edit_dashboards', 'manage_watches', 'tags', 'send_email', 'schedule', 'diffusion'],
-  analyst: ['export', 'ai_ask', 'ai_run', 'edit_dashboards', 'manage_watches', 'tags', 'send_email'],
+  admin: ['export', 'ai_ask', 'ai_run', 'edit_dashboards', 'manage_watches', 'tags', 'send_email', 'schedule', 'diffusion', 'mark_processed', 'share_dashboards'],
+  analyst: ['export', 'ai_ask', 'ai_run', 'edit_dashboards', 'manage_watches', 'tags', 'send_email', 'mark_processed', 'share_dashboards'],
   viewer: ['export', 'ai_ask', 'send_email'],
 }
 /** Le profil du compte ouvre-t-il ce module ? */

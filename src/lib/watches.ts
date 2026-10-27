@@ -20,6 +20,9 @@ export type Watch = {
   matchCount: number
   matches: WatchMatch[]
   notifiedCount: number
+  // Veille créée depuis « حفظ البحث » : requête booléenne et filtres de la recherche
+  query?: string
+  filters?: Record<string, string>
 }
 
 /** Zones prêtes à l'emploi : MMS suit la Tunisie (Mosaïque FM) et la Libye */
@@ -171,6 +174,7 @@ export const WATCH_TEXT = {
       TOO_MANY_RECIPIENTS: 'عشرة عناوين بريد على الأكثر.',
       BAD_EMAIL: 'أحد عناوين البريد غير صحيح.',
       TOO_MANY: 'تم بلوغ الحد الأقصى لعدد عمليات الرصد (100).',
+      BAD_QUERY: 'صيغة البحث غير صحيحة.',
       FAILED: 'تعذّرت العملية. أعد المحاولة.',
     } as Record<string, string>,
   },
@@ -221,6 +225,7 @@ export const WATCH_TEXT = {
       TOO_MANY_RECIPIENTS: 'Ten email addresses at most.',
       BAD_EMAIL: 'One of the email addresses is not valid.',
       TOO_MANY: 'Maximum number of watches reached (100).',
+      BAD_QUERY: 'The search syntax is not valid.',
       FAILED: 'The operation failed. Please try again.',
     } as Record<string, string>,
   },

@@ -10,10 +10,16 @@ import { Login } from './components/Login'
 import { AuthContext, type User, watchUnauthorized } from './lib/auth'
 import { applyTheme } from './lib/fx'
 import { installTracking } from './lib/track'
+import { setShareToken } from './lib/news'
+import { SharedBoard } from './components/Share'
+import { I18nContext, makeI18n } from './lib/i18n'
 
 // Console Super Admin : chargée seulement à l'adresse /superadmin, séparée de la plateforme
 const SuperAdmin = lazy(() => import('./superadmin/SuperAdmin'))
 const isSuperAdmin = location.pathname === '/superadmin' || location.pathname.startsWith('/superadmin/')
+// Lien de partage d'un tableau (/share/<jeton>) : page publique, sans connexion, données de ce tableau seulement
+const shareMatch = /^\/share\/([A-Za-z0-9_-]{43})\/?$/.exec(location.pathname)
+if (shareMatch) setShareToken(shareMatch[1])
 
 try {
   applyTheme(localStorage.getItem('mms-theme') === 'light' ? 'light' : 'dark')
@@ -98,13 +104,17 @@ function Gate() {
 }
 
 // Application installable (PWA) : uniquement sur la version publiée
-if (import.meta.env.PROD && 'serviceWorker' in navigator && !isSuperAdmin) {
+if (import.meta.env.PROD && 'serviceWorker' in navigator && !isSuperAdmin && !shareMatch) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}))
 }
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {isSuperAdmin ? (
+    {shareMatch ? (
+      <I18nContext.Provider value={makeI18n(/^en\b/.test(new URLSearchParams(location.search).get('lang') || '') ? 'en' : 'ar')}>
+        <SharedBoard token={shareMatch[1]} />
+      </I18nContext.Provider>
+    ) : isSuperAdmin ? (
       <Suspense fallback={null}>
         <SuperAdmin />
       </Suspense>

@@ -235,6 +235,12 @@ function WatchRow({ watch, onChange, onOpen }: { watch: Watch; onChange: () => v
         {watch.flux && ` · ${i.flux(watch.flux)}`}
         {themeNames.length > 0 && ` · ${themeNames.join('، ')}`}
       </p>
+      {(watch.query || watch.filters) && (
+        <p className="mms-watch__meta" dir="auto">
+          {watch.query && <code>{watch.query}</code>}
+          {watch.filters && ` ${Object.values(watch.filters).join(' · ')}`}
+        </p>
+      )}
       <p className="mms-watch__meta">
         {watch.recipients.length ? <span dir="ltr">{watch.recipients.join(', ')}</span> : w.noRecipients} · {w.results(watch.matchCount)}
       </p>

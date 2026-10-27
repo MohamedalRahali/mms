@@ -29,6 +29,7 @@ export const MODULES = [
   ['report', 'الاستعراض اليومي'],
   ['alerts', 'التنبيهات'],
   ['favorites', 'المفضلة'],
+  ['geo', 'الحضور في إجابات الذكاء الاصطناعي'],
 ]
 
 export const ACTIONS = [
@@ -41,7 +42,13 @@ export const ACTIONS = [
   ['send_email', 'إرسال التقارير بالبريد الإلكتروني'],
   ['schedule', 'جدولة التقرير التنفيذي وإرساله'],
   ['diffusion', 'إدارة مصادر البث (التلفزيون والإذاعات)'],
+  ['mark_processed', 'تحديد الأخبار كمُعالَجة'],
+  ['share_dashboards', 'مشاركة لوحات القيادة برابط للقراءة فقط'],
 ]
+
+// Actions ajoutées après la première version des réglages : accordées aux profils de base déjà enregistrés
+// selon leur rôle (comme les nouveaux modules), jamais aux profils créés par le Super Admin
+const LATER_ACTIONS = ['mark_processed', 'share_dashboards']
 
 const MODULE_KEYS = MODULES.map(([k]) => k)
 const ACTION_KEYS = ACTIONS.map(([k]) => k)
@@ -51,7 +58,7 @@ const ROLE_NAMES = { admin: 'مدير', analyst: 'محلل', viewer: 'قارئ' 
 // Mêmes droits qu'avant les permissions détaillées (minRole de server/index.js et diffusion.js)
 const DEFAULT_ACTIONS = {
   admin: ACTION_KEYS,
-  analyst: ['export', 'ai_ask', 'ai_run', 'edit_dashboards', 'manage_watches', 'tags', 'send_email'],
+  analyst: ['export', 'ai_ask', 'ai_run', 'edit_dashboards', 'manage_watches', 'tags', 'send_email', 'mark_processed', 'share_dashboards'],
   viewer: ['export', 'ai_ask', 'send_email'],
 }
 
@@ -82,8 +89,12 @@ export function initPermissions(dir) {
       // Modules apparus depuis l'enregistrement (absents de « known ») : ouverts aux profils de base, comme avant
       const added = base && Array.isArray(p.known) ? MODULE_KEYS.filter((k) => !p.known.includes(k)) : []
       const modules = [...(Array.isArray(p.modules) ? p.modules : MODULE_KEYS), ...added]
+      // Actions apparues depuis l'enregistrement : droits par défaut du rôle
+      const knownActions = Array.isArray(p.knownActions) ? p.knownActions : ACTION_KEYS.filter((k) => !LATER_ACTIONS.includes(k))
+      const newActions = base ? DEFAULT_ACTIONS[p.id].filter((k) => !knownActions.includes(k)) : []
+      const actions = [...(Array.isArray(p.actions) ? p.actions : []), ...newActions]
       // Nom des profils de base : celui du rôle, toujours
-      const row = clean({ ...p, ...(base ? { name: ROLE_NAMES[p.id] } : {}), modules }, base)
+      const row = clean({ ...p, ...(base ? { name: ROLE_NAMES[p.id] } : {}), modules, actions }, base)
       if (base) profiles[BASE_ROLES.indexOf(p.id)] = row
       else if (/^p_[a-z0-9]{6,16}$/.test(row.id)) profiles.push(row)
     }
@@ -95,7 +106,7 @@ export function initPermissions(dir) {
 function save() {
   fs.mkdirSync(path.dirname(file), { recursive: true })
   const tmp = `${file}.${process.pid}.tmp`
-  fs.writeFileSync(tmp, JSON.stringify({ savedAt: new Date().toISOString(), profiles: profiles.map((p) => ({ ...p, known: MODULE_KEYS })) }, null, 2), { mode: 0o600 })
+  fs.writeFileSync(tmp, JSON.stringify({ savedAt: new Date().toISOString(), profiles: profiles.map((p) => ({ ...p, known: MODULE_KEYS, knownActions: ACTION_KEYS })) }, null, 2), { mode: 0o600 })
   fs.renameSync(tmp, file)
 }
 
@@ -134,6 +145,10 @@ const MODULE_RULES = [
   [/^\/news\/export\.csv$/, ['news', 'media']],
   [/^\/briefing(\/|$)/, ['briefing']],
   [/^\/reports(\/|$)/, ['reports']],
+  [/^\/shares(\/|$)/, ['dashboard']],
+  [/^\/ai\/brief$/, ['news', 'media']],
+  [/^\/news\/processed$/, ['news', 'media']],
+  [/^\/geo(\/|$)/, ['geo']],
   [/^\/report$/, ['report']],
 ]
 
@@ -141,7 +156,10 @@ const MODULE_RULES = [
 function actionFor(method, p) {
   const write = method !== 'GET' && method !== 'HEAD'
   if (p === '/news/export.csv') return 'export'
-  if (write && /^\/ai\/(ask|agent|query|spike)$/.test(p)) return 'ai_ask'
+  if (write && /^\/ai\/(ask|agent|query|spike|brief)$/.test(p)) return 'ai_ask'
+  if (write && p === '/news/processed') return 'mark_processed'
+  if (p.startsWith('/shares')) return 'share_dashboards'
+  if (write && p.startsWith('/geo')) return 'ai_run'
   if (write && p === '/radar/explain') return 'ai_ask'
   if (write && (p === '/ai/analysis' || p === '/briefing/summary')) return 'ai_run'
   if (write && p.startsWith('/dashboards')) return 'edit_dashboards'

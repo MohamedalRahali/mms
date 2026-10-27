@@ -11,6 +11,9 @@ import { MediaSelect } from './MediaParts'
 import { PickPage } from './ReportPick'
 import { canDo, hasModule, useAuth } from '../lib/auth'
 import { SavedSearches } from './SavedSearches'
+import { type Overview, type ResultTab, ChartsTab, GroupHeader, ListToolbar, NetworkChips, PeopleTab, ResultTabs, SaveSearchButton, SourcesTab, groupLabel, useListText } from './Listing'
+import { countryName, flagOf, useListPrefs } from '../lib/listing'
+import { type Health } from '../lib/news'
 
 export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Flux | ''; initialWatch?: string; initialFilters?: Partial<Filters> }) {
   const i = useI18n()
@@ -29,20 +32,45 @@ export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Fl
   const [filters, setFilters] = useState<Filters>({ ...EMPTY_FILTERS, watch: initialWatch, ...initialFilters })
   const [exclude, setExclude] = useState(initialFilters?.exclude ?? '')
   const [page, setPage] = useState(1)
+  const l = useListText()
+  // Présentation (regroupement, tri, sens, vue, histoires repliées) : gardée par compte
+  const [prefs, setPrefs] = useListPrefs(auth?.user.email ?? '')
+  const [tab, setTab] = useState<ResultTab>('news')
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const facets = useFetch<Facets>('/api/news/facets').data
+  const health = useFetch<Health>('/api/health', 0).data
+  const briefs = Boolean(health?.ai) && canDo(auth?.user, 'ai_ask')
   const watches = useFetch<{ watches: WatchOption[] }>('/api/news/watches').data?.watches ?? []
 
-  useEffect(() => setPage(1), [flux])
+  useEffect(() => setPage(1), [flux, prefs.group, prefs.sort, prefs.dir, prefs.fold, prefs.view])
+  useEffect(() => setCollapsed(new Set()), [prefs.group])
 
-  // Mêmes filtres pour la liste et pour l'export CSV
+  // Mêmes filtres pour la liste, les onglets et l'export CSV
   const query = useMemo(() => {
     const params = new URLSearchParams()
-    for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value)
+    for (const [key, value] of Object.entries(filters)) if (value && key !== 'sort') params.set(key, value)
     if (flux) params.set('flux', flux)
     return params.toString()
   }, [filters, flux])
-  const url = `/api/news?page=${page}&size=20${query ? `&${query}` : ''}`
+  const columns = prefs.view === 'columns'
+  const group = prefs.group || (columns ? 'category' : '')
+  const present = new URLSearchParams({ page: String(page), size: group ? '60' : '20' })
+  const sort = prefs.sort || filters.sort
+  if (sort) present.set('sort', sort)
+  if (prefs.dir) present.set('dir', prefs.dir)
+  if (group) present.set('group', group)
+  if (prefs.fold) present.set('fold', '1')
+  const url = `/api/news?${present.toString()}${query ? `&${query}` : ''}`
   const { data, error, loading } = useFetch<NewsResponse>(url)
+  const overview = useFetch<Overview>(`/api/news/overview${query ? `?${query}` : ''}`).data
+  const stats = new Map((data?.groups ?? []).map((g) => [g.key, g]))
+  const toggleGroup = (key: string) =>
+    setCollapsed((c) => {
+      const next = new Set(c)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
 
   function update(patch: Partial<Filters>) {
     setFilters((f) => ({ ...f, ...patch }))
@@ -166,6 +194,22 @@ export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Fl
             ))}
           </select>
         )}
+        {!!facets?.countries?.length && (
+          <select className={filters.country ? 'is-on' : ''} value={filters.country} onChange={(e) => update({ country: e.target.value })} aria-label={l.country}>
+            <option value="">{l.allCountries}</option>
+            {filters.country && !facets.countries.some((c) => c.name === filters.country) && <option value={filters.country}>{countryName(filters.country, i.lang)}</option>}
+            {facets.countries.map((c) => (
+              <option key={c.name} value={c.name}>
+                {flagOf(c.name)} {countryName(c.name, i.lang)} ({i.num(c.count)})
+              </option>
+            ))}
+          </select>
+        )}
+        <select className={filters.processed ? 'is-on' : ''} value={filters.processed} onChange={(e) => update({ processed: e.target.value })} aria-label={l.status}>
+          <option value="">{l.allStatus}</option>
+          <option value="no">{l.unprocessed}</option>
+          <option value="yes">{l.onlyProcessed}</option>
+        </select>
         <input
           type="text"
           className="news-filters__exclude"
@@ -176,13 +220,6 @@ export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Fl
           aria-label={x.exclude}
           maxLength={200}
         />
-        <select value={filters.sort} onChange={(e) => update({ sort: e.target.value })} aria-label={p.sortLabel}>
-          {Object.entries(p.sorts).map(([value, label]) => (
-            <option key={value} value={value}>
-              {p.sortLabel}: {label}
-            </option>
-          ))}
-        </select>
         <label className="news-filters__check">
           <input type="checkbox" checked={filters.important === '1'} onChange={(e) => update({ important: e.target.checked ? '1' : '' })} />
           {x.important}
@@ -224,6 +261,10 @@ export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Fl
           }}
         />
       )}
+      <div className="mms-searchrow">
+        {canDo(auth?.user, 'manage_watches') && hasModule(auth?.user, 'watch') && <SaveSearchButton filters={filters} email={auth?.user.email ?? ''} />}
+        <NetworkChips value={filters.channel} counts={facets?.channels} onPick={(channel) => update({ channel })} />
+      </div>
       <SavedSearches
         filters={filters}
         email={auth?.user.email ?? ''}
@@ -236,6 +277,33 @@ export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Fl
         }}
       />
 
+      <ResultTabs tab={tab} onTab={setTab} total={data?.found ?? data?.total} overview={overview} />
+      {tab === 'sources' && (
+        <SourcesTab
+          data={overview}
+          onSource={(source) => {
+            update({ source })
+            setTab('news')
+          }}
+        />
+      )}
+      {tab === 'people' && (
+        <PeopleTab
+          data={overview}
+          onPerson={(name, kind) => {
+            const q = `"${name.replace(/"/g, '')}"`
+            if (kind === 'authors') {
+              setDraft(q)
+              update({ q })
+            } else update({ entity: name })
+            setTab('news')
+          }}
+        />
+      )}
+      {tab === 'charts' && <ChartsTab query={query} days={filters.days} />}
+      {tab === 'news' && (
+        <>
+      <ListToolbar prefs={prefs} onPrefs={setPrefs} />
       {error && (
         <p className="news-status news-status--error" role="alert">
           {t.loadError}
@@ -257,11 +325,37 @@ export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Fl
       )}
       {loading && !data && <p className="news-status">{t.loading}</p>}
 
-      <div className={loading && !data ? 'news-list is-loading' : 'news-list'}>
-        {data?.items.map((it) => (
-          <NewsCard key={it.id} item={it} />
-        ))}
-      </div>
+      {columns ? (
+        <div className={loading && !data ? 'mms-cols is-loading' : 'mms-cols'}>
+          {[...new Set((data?.items ?? []).map((it) => it.group ?? ''))].map((key) => {
+            const stat = stats.get(key)
+            const rows = (data?.items ?? []).filter((it) => (it.group ?? '') === key)
+            return (
+              <section key={key} className="mms-col">
+                {stat ? <GroupHeader group={group} stat={stat} collapsed={false} onToggle={() => {}} /> : <h3>{groupLabel(group, key, i, l.unknownGroup)}</h3>}
+                <div className="mms-col__list">
+                  {rows.map((it) => (
+                    <NewsCard key={it.id} item={it} variant="compact" brief={briefs} />
+                  ))}
+                </div>
+              </section>
+            )
+          })}
+        </div>
+      ) : (
+        <div className={loading && !data ? 'news-list is-loading' : 'news-list'}>
+          {data?.items.map((it, k) => {
+            const head = group && (k === 0 || data.items[k - 1].group !== it.group) ? stats.get(it.group ?? '') : undefined
+            const hidden = group && collapsed.has(it.group ?? '')
+            return (
+              <div key={it.id} className="news-list__row">
+                {head && <GroupHeader group={group} stat={head} collapsed={collapsed.has(head.key)} onToggle={() => toggleGroup(head.key)} />}
+                {!hidden && <NewsCard item={it} brief={briefs} />}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {data && data.pages > 1 && (
         <nav className="news-pager" aria-label="pages">
@@ -273,6 +367,8 @@ export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Fl
             {t.next}
           </button>
         </nav>
+      )}
+        </>
       )}
     </>
   )

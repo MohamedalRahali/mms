@@ -259,18 +259,19 @@ function similarity(a, b) {
   return inter / (Math.min(a.size, b.size) || 1) // recouvrement : les titres courts restent comparables
 }
 
-/**
- * Regroupe les fiches de la fenêtre qui parlent du même événement : recouvrement des mots du titre et de la
- * première phrase. Renvoie les histoires reprises par au moins 2 fiches, les plus reprises d'abord.
- */
-export function storyClusters(items, { hours = 48, now = Date.now(), limit = 20 } = {}) {
-  const pool = items
+/** Fiches de la fenêtre (hors commentaires), de la plus ancienne à la plus récente */
+function windowPool(items, hours, now, cap) {
+  return items
     .filter((it) => {
       const t = Date.parse(it.date)
       return t <= now && t >= now - Math.min(Math.max(hours, 1), 336) * HOUR && it.media !== 'comment'
     })
-    .slice(0, 4000)
+    .slice(0, cap)
     .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+/** Regroupement des fiches (triées de la plus ancienne à la plus récente) qui parlent du même événement */
+function clusterPool(pool) {
   const clusters = []
   const byWord = new Map() // racine → histoires dont le cœur ou la première fiche la contient
   const index = (c, words) => {
@@ -311,6 +312,27 @@ export function storyClusters(items, { hours = 48, now = Date.now(), limit = 20 
     }
   }
   return clusters
+}
+
+/**
+ * Index des histoires pour la liste des actualités (« +N منشورات أخرى ») : identifiant de fiche → identifiant de
+ * l'histoire (première fiche), pour les histoires reprises par au moins 2 fiches de la fenêtre.
+ */
+export function storyIndex(items, { hours = 168, now = Date.now() } = {}) {
+  const index = new Map()
+  for (const c of clusterPool(windowPool(items, hours, now, 6000))) {
+    if (c.items.length < 2) continue
+    for (const it of c.items) index.set(it.id, c.items[0].id)
+  }
+  return index
+}
+
+/**
+ * Regroupe les fiches de la fenêtre qui parlent du même événement : recouvrement des mots du titre et de la
+ * première phrase. Renvoie les histoires reprises par au moins 2 fiches, les plus reprises d'abord.
+ */
+export function storyClusters(items, { hours = 48, now = Date.now(), limit = 20 } = {}) {
+  return clusterPool(windowPool(items, hours, now, 4000))
     .filter((c) => c.items.length >= 2)
     .map((c) => {
       const first = c.items[0]

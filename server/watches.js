@@ -86,6 +86,43 @@ function matchText(watch, text) {
 }
 
 const itemText = (it) => normalize(`${it.title} ${it.summary} ${it.origin}`)
+
+/*
+ * Veilles créées depuis « حفظ البحث » de الأخبار : la requête booléenne de la recherche (query) et ses filtres
+ * (source, thème, canal, langue, tonalité, média, pays, mots exclus) au lieu de règles ET/OU, ou en plus.
+ * Les outils de recherche sont fournis par server/index.js (pas d'import croisé avec query.js).
+ */
+export const WATCH_FILTERS = ['source', 'category', 'channel', 'lang', 'tone', 'media', 'country', 'exclude']
+let tools = { compile: () => null, text: (it) => itemText(it), country: () => '', valid: () => true }
+export const setWatchTools = (t) => (tools = { ...tools, ...t })
+const queryCache = new Map()
+function queryMatch(watch, it) {
+  if (!watch.query) return true
+  if (!queryCache.has(watch.query)) {
+    if (queryCache.size > 500) queryCache.clear()
+    queryCache.set(watch.query, tools.compile(watch.query))
+  }
+  const fn = queryCache.get(watch.query)
+  return !fn || fn(tools.text(it))
+}
+function filterMatch(watch, it) {
+  const f = watch.filters
+  if (!f) return true
+  for (const k of WATCH_FILTERS) {
+    if (!f[k]) continue
+    if (k === 'source' && it.origin !== f.source) return false
+    if (k === 'country' && tools.country(it) !== f.country) return false
+    if (k === 'exclude' && f.exclude.split(/[,،]/).map((w) => w.trim().toLowerCase()).filter(Boolean).some((w) => `${it.title} ${it.summary} ${it.origin}`.toLowerCase().includes(w))) return false
+    if (!['source', 'country', 'exclude'].includes(k) && it[k] !== f[k]) return false
+  }
+  return true
+}
+/** Mots déclencheurs (règles), ou la requête elle-même, si la fiche correspond à la veille ; null sinon */
+function watchHits(watch, it, text) {
+  if (!filterMatch(watch, it) || !queryMatch(watch, it)) return null
+  if (watch.rules.length) return matchText(watch, text)
+  return watch.query ? [watch.query.slice(0, 80)] : ['✓']
+}
 const itemKey = (it) => `${dayOf(it.date)}|${normalize(it.title)}`
 
 export function statusOf(watch, now = today()) {
@@ -103,7 +140,7 @@ function inScope(watch, it) {
 export function itemsForWatch(id, items) {
   const watch = watches.find((w) => w.id === id)
   if (!watch) return null
-  return items.filter((it) => inScope(watch, it) && matchText(watch, itemText(it)))
+  return items.filter((it) => inScope(watch, it) && watchHits(watch, it, itemText(it)))
 }
 
 function load() {
@@ -134,7 +171,15 @@ function fail(code) {
 export function createWatch(body) {
   if (watches.length >= MAX_WATCHES) throw fail('TOO_MANY')
   const rules = (Array.isArray(body.rules) ? body.rules : []).map((r) => String(r).trim()).filter((r) => r && parseRule(r).length)
-  if (!rules.length) throw fail('NO_RULES')
+  const query = String(body.query || '').trim()
+  if (query.length > MAX_RULE_LEN || (query && !tools.valid(query))) throw fail('BAD_QUERY')
+  const filters = {}
+  for (const k of WATCH_FILTERS) {
+    const v = String(body.filters?.[k] || '').trim().slice(0, 200)
+    if (v) filters[k] = v
+  }
+  if (filters.country && !/^[A-Z]{2}$/.test(filters.country)) delete filters.country
+  if (!rules.length && !query && !Object.keys(filters).length) throw fail('NO_RULES')
   if (rules.length > MAX_RULES || rules.some((r) => r.length > MAX_RULE_LEN)) throw fail('RULES_TOO_LONG')
   const from = DAY_RE.test(body.from) ? body.from : today()
   const to = body.to ? String(body.to) : null
@@ -154,8 +199,10 @@ export function createWatch(body) {
     name:
       String(body.name || '')
         .trim()
-        .slice(0, 120) || rules[0].slice(0, 80),
+        .slice(0, 120) || (rules[0] || query || Object.values(filters).join(' · ')).slice(0, 80),
     rules,
+    ...(query ? { query } : {}),
+    ...(Object.keys(filters).length ? { filters } : {}),
     themes: Array.isArray(body.themes) ? body.themes.map(String).slice(0, 20) : [],
     scope: Array.isArray(body.scope) ? body.scope.map(String).slice(0, 50) : [],
     flux: ['mosaique', 'libye'].includes(body.flux) ? body.flux : '',
@@ -318,7 +365,7 @@ export async function runWatches() {
       const found = []
       for (const it of items) {
         if (!inScope(watch, it) || sent.has(itemKey(it))) continue
-        const hits = matchText(watch, texts.get(it.id))
+        const hits = watchHits(watch, it, texts.get(it.id))
         if (hits) found.push({ it, hits })
       }
       watch.lastRun = new Date().toISOString()

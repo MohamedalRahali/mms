@@ -111,6 +111,12 @@ export const AUDIT_LABEL: Record<string, string> = {
   profile_create: 'إنشاء ملف صلاحيات',
   profile_update: 'تعديل ملف صلاحيات',
   profile_delete: 'حذف ملف صلاحيات',
+  source_meta: 'بلد المصدر ومدى انتشاره',
+  brand: 'شعار العميل',
+  apikey_create: 'إنشاء مفتاح API',
+  apikey_revoke: 'إلغاء مفتاح API',
+  share_revoke: 'إلغاء رابط مشاركة',
+  geo_settings: 'إعدادات الحضور في إجابات الذكاء الاصطناعي',
 }
 
 export const ERROR_LABEL: Record<string, string> = {

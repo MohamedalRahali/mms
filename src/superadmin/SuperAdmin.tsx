@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import './superadmin.css'
 import { Permissions, PermsSummary, ProfileSelect, loadCatalog } from './Permissions'
 import { GeoGlobe } from './GeoGlobe'
+import { ApiKeysCard, BrandCard, SharesCard, SourceMetaCell } from './ClientSettings'
 import { ACTIVITY_LABEL, AUDIT_LABEL, ROLE_LABEL, SECURITY_LABEL, ago, api, errText, flag, fmtBytes, fmtDate, fmtDay, fmtMinutes, fmtNum, qs, setAuthLost } from './api'
 
 /** Console Super Admin (وحدة التحكم العليا) : /superadmin, séparée de la plateforme */
@@ -1320,13 +1321,13 @@ function Security() {
 
 type SourcesData = {
   lastUpdate: string | null
-  origins: { name: string; flux: string; url: string; total: number; week: number; last: string | null; channels: string[]; langs: string[]; topics: string[]; collector: string; enabled: boolean }[]
+  origins: { name: string; flux: string; url: string; total: number; week: number; last: string | null; channels: string[]; langs: string[]; topics: string[]; collector: string; enabled: boolean; country?: string; reach?: number; reachSet?: boolean }[]
   channels: { name: string; total: number; week: number; origins: number; enabled: boolean }[]
 }
 
 function Sources() {
   const { data: d, error, reload } = useLoad<SourcesData>('/sources')
-  const { msg, act } = useAct()
+  const { msg, act, setMsg } = useAct()
   const [q, setQ] = useState('')
   const set = async (kind: 'origin' | 'channel', name: string, enabled: boolean) => {
     if (await act(() => api('/sources', 'PUT', { kind, name, enabled }), enabled ? `تم تفعيل «${name}».` : `تم إيقاف «${name}»: أخباره لم تعد تظهر في المنصة.`)) reload()
@@ -1372,6 +1373,21 @@ function Sources() {
               ),
             ],
             ['القناة', (o) => <small dir="ltr">{o.channels.join(', ')}</small>],
+            [
+              'البلد · مدى الانتشار',
+              (o) => (
+                <SourceMetaCell
+                  name={o.name}
+                  country={o.country ?? ''}
+                  reach={o.reach ?? 0}
+                  reachSet={Boolean(o.reachSet)}
+                  onSaved={(m) => {
+                    setMsg(m)
+                    reload()
+                  }}
+                />
+              ),
+            ],
             ['اللغات', (o) => <small dir="ltr">{o.langs.join(', ') || '—'}</small>],
             ['المواضيع', (o) => <small>{o.topics.join('، ') || '—'}</small>],
             ['الأخبار', (o) => `${fmtNum(o.week)} / ${fmtNum(o.total)}`],
@@ -1395,7 +1411,7 @@ type SettingsData = {
 function Settings() {
   const { data, error, reload } = useLoad<SettingsData>('/settings')
   const [s, setS] = useState<SettingsData['settings'] | null>(null)
-  const { msg, act } = useAct()
+  const { msg, act, setMsg } = useAct()
   useEffect(() => {
     if (data) setS(data.settings)
   }, [data])
@@ -1427,6 +1443,7 @@ function Settings() {
         <textarea className="sa-input" rows={3} placeholder="رسالة الصيانة" value={s.maintenance.message} onChange={(e) => setS({ ...s, maintenance: { ...s.maintenance, message: e.target.value } })} />
         <p className="sa-muted">في وضع الصيانة يرى الجميع هذه الرسالة، وتبقى هذه اللوحة متاحة.</p>
       </Card>
+      <BrandCard onMsg={setMsg} />
       <Card title="التسجيل">
         <p className="sa-muted">لا يوجد تسجيل ذاتي في MMS: الحسابات تُنشأ فقط من قسم «المستخدمون» أو من لوحة الإدارة.</p>
       </Card>
@@ -1435,6 +1452,8 @@ function Settings() {
           حفظ الإعدادات
         </button>
       </div>
+      <ApiKeysCard onMsg={setMsg} />
+      <SharesCard onMsg={setMsg} />
       <Card title="سجل إجراءات الإدارة العليا" wide>
         <SimpleTable
           rows={data.audit}

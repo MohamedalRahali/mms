@@ -8,6 +8,8 @@ import { EngagementChips } from './Engagement'
 import { canDo, useAuth } from '../lib/auth'
 import { MediaBadge, MediaContext, MediaReactions, MediaTranscript } from './MediaParts'
 import { PickBox } from './ReportPick'
+import { BriefButton, CountryFlag, NetworkIcon, ProcessedToggle, SimilarFold } from './Listing'
+import { isNetwork } from '../lib/listing'
 
 export const HEART = 'M12 21s-7.5-4.6-9.6-9.3C1 8.4 3 5 6.4 5c2 0 3.3 1 4.1 2.2h3C14.3 6 15.6 5 17.6 5 21 5 23 8.4 21.6 11.7 19.5 16.4 12 21 12 21z'
 
@@ -81,8 +83,43 @@ function NewsMedia({ item }: { item: NewsItem }) {
   )
 }
 
-/** Carte d'actualité ; « board » reprend la grande carte NewsBoard (liseré rouge, titre en grand) */
-export function NewsCard({ item, variant = 'list' }: { item: NewsItem; variant?: 'list' | 'board' }) {
+/** Carte compacte de la vue en colonnes : source, drapeau, titre, date et tonalité */
+function CompactCard({ item, brief }: { item: NewsItem; brief: boolean }) {
+  const i = useI18n()
+  return (
+    <article className={item.processed ? 'news-mini is-done' : 'news-mini'}>
+      <p className="news-mini__src">
+        <CountryFlag cc={item.country} />
+        {isNetwork(item.channel) && <NetworkIcon name={item.channel} size={14} />}
+        <span dir="auto">{item.origin}</span>
+        <time>{i.dateTime(item.date)}</time>
+      </p>
+      <h4 dir="auto">
+        {item.url ? (
+          <a href={item.url} target="_blank" rel="noopener noreferrer">
+            {item.title}
+          </a>
+        ) : (
+          item.title
+        )}
+      </h4>
+      <p className="news-mini__meta">
+        <ToneBadge tone={item.tone} />
+        <ProcessedToggle item={item} />
+      </p>
+      {brief && item.lang !== 'ar' && <BriefButton item={item} />}
+      <SimilarFold items={item.similar} more={item.similarMore} />
+    </article>
+  )
+}
+
+/** Carte d'actualité ; « board » reprend la grande carte NewsBoard (liseré rouge, titre en grand), « compact » la vue en colonnes */
+export function NewsCard({ item, variant = 'list', brief = false }: { item: NewsItem; variant?: 'list' | 'board' | 'compact'; brief?: boolean }) {
+  if (variant === 'compact') return <CompactCard item={item} brief={brief} />
+  return <FullCard item={item} variant={variant} brief={brief} />
+}
+
+function FullCard({ item, variant, brief }: { item: NewsItem; variant: 'list' | 'board'; brief: boolean }) {
   const i = useI18n()
   const fav = useFavorites()
   const x = useIntel()
@@ -90,7 +127,7 @@ export function NewsCard({ item, variant = 'list' }: { item: NewsItem; variant?:
   const important = (item.importance ?? 1) >= 2
   const auth = useAuth()
   return (
-    <article className={`news-card news-card--${item.flux} news-card--${variant}`}>
+    <article className={`news-card news-card--${item.flux} news-card--${variant}${item.processed ? ' is-done' : ''}`}>
       <NewsMedia item={item} />
       <div className="news-card__body">
         <p className="news-card__source">
@@ -99,8 +136,11 @@ export function NewsCard({ item, variant = 'list' }: { item: NewsItem; variant?:
               <path d="M12 3a9 9 0 1 0 9 9" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
             </svg>
             <span dir="auto">{item.origin}</span>
+            <CountryFlag cc={item.country} />
+            {isNetwork(item.channel) && <NetworkIcon name={item.channel} size={15} />}
           </span>
           <span className="news-card__tools">
+            {variant === 'list' && <ProcessedToggle item={item} />}
             <PickBox item={item} />
             <button
               type="button"
@@ -131,6 +171,7 @@ export function NewsCard({ item, variant = 'list' }: { item: NewsItem; variant?:
             {item.summary}
           </p>
         )}
+        {brief && item.lang !== 'ar' && <BriefButton item={item} />}
         <p className="news-card__meta">
           <span>{i.dateTime(item.date)}</span>
           <span>{i.channel(item.channel)}</span>
@@ -147,6 +188,7 @@ export function NewsCard({ item, variant = 'list' }: { item: NewsItem; variant?:
         <EngagementChips value={item.engagement} />
         <MediaReactions item={item} />
         <EntityChips item={item} />
+        <SimilarFold items={item.similar} more={item.similarMore} />
         {variant === 'list' && canDo(auth?.user, 'tags') && <TagEditor item={item} />}
       </div>
     </article>

@@ -19,9 +19,17 @@ import { mountDiffusion } from './diffusion.js'
 import { mountMedia } from './media.js'
 import { mountReports } from './reports.js'
 import { AGENTS, ASK_SPEC, agentFacts, agentItems, agentStats, askPrompt, itemLines, sourceCard, specFor } from './around.js'
-import { emergingTopics, sentimentBarometer, smartAlerts, startRadarAlerts, storyClusters } from './radar.js'
+import { emergingTopics, sentimentBarometer, smartAlerts, startRadarAlerts, storyClusters, storyIndex } from './radar.js'
 import { startRadarWorker } from './radarWorker.js'
-import { createWatch, deleteWatch, enabledWatches, itemsForWatch, listWatches, sendMail, sendTelegram, setEnabled, startWatches, telegramReady } from './watches.js'
+import { createWatch, deleteWatch, enabledWatches, itemsForWatch, listWatches, sendMail, sendTelegram, setEnabled, setWatchTools, startWatches, telegramReady } from './watches.js'
+import { countryOf } from './sourceMeta.js'
+import { initProcessed, isProcessed, processedOf, setProcessed } from './processed.js'
+import { GROUPS, decorate, foldStories, groupNews, overview, sortNews } from './newsView.js'
+import { countView, createShare, initShares, listShares, publicShareQuery, revokeShare, shareFor } from './shares.js'
+import { apiItem, apiKeyFor, initApiKeys, keyFromRequest, takeCall } from './apiKeys.js'
+import { brandOf } from './clientAdmin.js'
+import { cachedBrief, initBrief, itemBrief } from './brief.js'
+import { mountGeo } from './geo.js'
 
 /** Serveur MMS : API de lecture des actualités + site compilé (dist/) en production */
 
@@ -75,6 +83,8 @@ function applyFilters(items, q) {
       (!q.entity || entitiesOf(it).includes(q.entity)) &&
       (!q.tag || tagsOf(it).includes(q.tag)) &&
       (!q.important || (it.importance || 1) >= 2) &&
+      (!q.country || countryOf(it) === q.country) &&
+      (!q.processed || (q.processed === 'yes') === isProcessed(itemKey(it))) &&
       (!since || Date.parse(it.date) >= since) &&
       (!match || match(searchText(it))) &&
       (!exclude.length || !exclude.some((w) => haystack(it).includes(w))),
@@ -82,6 +92,11 @@ function applyFilters(items, q) {
 }
 
 const withTags = (items) => items.map((it) => ({ ...it, key: itemKey(it), tags: tagsOf(it) }))
+/** Fiches de la liste des actualités : étiquettes, pays, portée, statut « تمت المعالجة » et histoires repliées */
+const forList = (items) => items.map((it) => decorate(it, { key: itemKey(it), tags: tagsOf(it), processed: processedOf(itemKey(it)), brief: cachedBrief(it)?.text }))
+
+// Veilles créées depuis une recherche : même moteur de requête et même pays que la liste
+setWatchTools({ compile: compileQuery, text: searchText, country: countryOf, valid: (q) => !queryError(q) })
 
 // Les commentaires ne sont listés que si on les demande (média « commentaires ») ; ailleurs ils sont
 // rattachés à leur publication
@@ -136,6 +151,96 @@ app.get('/api/auth/me', (req, res) => {
   if (!user) return res.status(401).json({ error: 'AUTH' })
   res.json({ user: { ...user, perms: permsOf(user) } })
 })
+
+/* -------- accès sans session : lien de partage d'un tableau de bord, API des clients, logo du client */
+initProcessed(path.join(root, 'data'))
+initShares(path.join(root, 'data'))
+initApiKeys(path.join(root, 'data', 'superadmin'))
+initBrief(path.join(root, 'data'))
+
+// Logo et nom du client (réglés dans la console Super Admin) : en tête des tableaux de bord, partagés compris
+app.get('/api/platform/brand', (_req, res) => res.json(brandOf()))
+
+// Limite par adresse IP pour les accès publics (liens partagés, API) : 300 appels par 5 minutes
+const publicHits = new Map()
+function publicLimit(req, res, next) {
+  const ip = String(req.ip || '')
+  const now = Date.now()
+  const list = (publicHits.get(ip) || []).filter((t) => now - t < 300_000)
+  if (list.length >= 300) return res.status(429).json({ error: 'RATE' })
+  list.push(now)
+  publicHits.set(ip, list)
+  if (publicHits.size > 5000) for (const [k, v] of publicHits) if (!v.some((t) => now - t < 300_000)) publicHits.delete(k)
+  next()
+}
+
+/** Tableaux enregistrés (data/dashboards.json), ou null */
+function readBoards() {
+  try {
+    const file = JSON.parse(fs.readFileSync(BOARDS_FILE, 'utf8'))
+    const boards = file.boards
+    if (!file.intel && Array.isArray(boards) && !boards.some((b) => b?.id === 'intel')) boards.push(INTEL_BOARD)
+    return cleanBoards(boards)
+  } catch {
+    return null
+  }
+}
+
+// Page publique d'un tableau partagé : jamais indexée, aucune adresse transmise aux sites ouverts depuis la page
+app.use('/share/', (_req, res, next) => {
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow')
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  next()
+})
+app.get('/api/public/share/:token', publicLimit, (req, res) => {
+  const share = shareFor(req.params.token)
+  const board = share && (readBoards() || []).find((b) => b.id === share.boardId)
+  if (!share || !board) return res.status(404).json({ error: 'NOT_FOUND' })
+  countView(share)
+  res.setHeader('X-Robots-Tag', 'noindex')
+  res.json({ board: { id: board.id, name: board.name || share.boardName, widgets: board.widgets }, expiresAt: share.expiresAt, brand: brandOf() })
+})
+// Données des widgets du tableau partagé : seulement les appels qu'un de ses widgets ferait, avec ses paramètres
+app.get(/^\/api\/public\/share\/([A-Za-z0-9_-]{43})\/(news\/stats|news|radar\/(?:emerging|stories|sentiment|alerts))$/, publicLimit, async (req, res) => {
+  const [token, route] = [req.params[0], req.params[1]]
+  const share = shareFor(token)
+  const board = share && (readBoards() || []).find((b) => b.id === share.boardId)
+  const query = board && publicShareQuery(board.widgets, route, req.query)
+  if (!query) return res.status(404).json({ error: 'NOT_FOUND' })
+  res.setHeader('X-Robots-Tag', 'noindex')
+  if (route === 'news/stats') return res.json(statsData(query))
+  if (route === 'news') {
+    const data = await newsData(query)
+    // Pas de commentaires ni d'étiquettes ou de statut d'équipe dans un lien public
+    return res.json({ ...data, items: data.items.map(({ reactions, tags, processed, key, ...it }) => it) })
+  }
+  res.json(radarData(`/${route.slice('radar/'.length)}`, query))
+})
+
+// API de lecture des clients : clé dans l'en-tête, limite de débit par clé (console Super Admin → مفاتيح API)
+app.get('/api/v1/news', publicLimit, (req, res) => {
+  const k = apiKeyFor(keyFromRequest(req))
+  if (!k) return res.status(401).json({ error: 'BAD_KEY' })
+  const limited = takeCall(k)
+  if (limited) return res.status(429).json({ error: limited })
+  const q = {}
+  for (const f of ['q', 'days', 'category', 'channel', 'media', 'lang', 'source', 'tone', 'country', 'exclude', 'important']) if (req.query[f]) q[f] = String(req.query[f]).slice(0, 500)
+  const { items, lastUpdate } = getItems()
+  const found = applyFilters(items, q)
+  sortNews(found, req.query.sort === 'reach' ? 'reach' : '', req.query.dir === 'asc' ? 'asc' : 'desc')
+  const size = Math.min(Math.max(Number(req.query.size) || 50, 1), 100)
+  const pages = Math.max(Math.ceil(found.length / size), 1)
+  const page = Math.min(Math.max(Number(req.query.page) || 1, 1), pages)
+  res.json({
+    total: found.length,
+    page,
+    pages,
+    items: found.slice((page - 1) * size, page * size).map((it) => ({ ...apiItem(it), country: countryOf(it), reach: decorate(it).reach })),
+    queryError: q.q ? queryError(q.q) : '',
+    lastUpdate,
+  })
+})
+
 app.use('/api', requireAuth)
 
 // Droits par profil : modules (pages) et actions (boutons) permis, réglés dans la console Super Admin.
@@ -194,29 +299,96 @@ app.get('/api/health', (_req, res) => {
   })
 })
 
-app.get('/api/news', async (req, res) => {
+// Histoires reprises par plusieurs fiches (radar), recalculées à chaque nouvelle version des données
+let storyMemo = { items: null, index: null }
+function storiesOf(items) {
+  if (storyMemo.items !== items) storyMemo = { items, index: storyIndex(items) }
+  return storyMemo.index
+}
+
+/**
+ * Liste des actualités : filtres, tri (date, portée, source, interactions, importance ; sens ↑/↓), histoires
+ * similaires repliées (fold=1), regroupement (group=category|source|channel|country|day) avec chiffres par groupe
+ */
+async function newsData(q) {
   const cache = getItems()
   const { lastUpdate, demo } = cache
-  const items = poolOf(cache, req.query)
+  const items = poolOf(cache, q)
   // Filtre « الرصد » : mêmes règles et même période que la veille
-  const watched = req.query.watch ? itemsForWatch(String(req.query.watch), items) : items
-  if (!watched) return res.status(404).json({ error: 'NO_WATCH' })
-  const found = applyFilters(watched, req.query)
-  // Tri : le plus récent (par défaut), le plus important, ou le plus d'interactions
-  if (req.query.sort === 'engagement') found.sort((a, b) => interactions(b) - interactions(a) || (b.engagement?.views || 0) - (a.engagement?.views || 0))
-  else if (req.query.sort === 'importance') found.sort((a, b) => (b.importance || 1) - (a.importance || 1) || b.date.localeCompare(a.date))
-  const size = Math.min(Math.max(Number(req.query.size) || 20, 1), 100)
-  const pages = Math.max(Math.ceil(found.length / size), 1)
-  const page = Math.min(Math.max(Number(req.query.page) || 1, 1), pages)
-  res.json({
-    total: found.length,
+  const watched = q.watch ? itemsForWatch(String(q.watch), items) : items
+  if (!watched) return null
+  const found = applyFilters(watched, q)
+  sortNews(found, String(q.sort || ''), q.dir === 'asc' || q.dir === 'desc' ? q.dir : '')
+  const folded = q.fold === '1' && q.media !== 'comment' ? foldStories(found, storiesOf(cache.items)) : found
+  const group = GROUPS.includes(q.group) ? q.group : ''
+  const { list, groups } = group ? groupNews(folded, group) : { list: folded, groups: [] }
+  const size = Math.min(Math.max(Number(q.size) || 20, 1), 100)
+  const pages = Math.max(Math.ceil(list.length / size), 1)
+  const page = Math.min(Math.max(Number(q.page) || 1, 1), pages)
+  return {
+    total: list.length,
+    found: found.length,
     page,
     pages,
-    items: withReactions(withTags(await withImages(found.slice((page - 1) * size, page * size)))),
-    queryError: req.query.q ? queryError(String(req.query.q)) : '',
+    groups,
+    items: withReactions(forList(await withImages(list.slice((page - 1) * size, page * size)))),
+    queryError: q.q ? queryError(String(q.q)) : '',
     lastUpdate,
     demo,
-  })
+  }
+}
+
+app.get('/api/news', async (req, res) => {
+  const data = await newsData(req.query)
+  if (!data) return res.status(404).json({ error: 'NO_WATCH' })
+  res.json(data)
+})
+
+// Onglets au-dessus des résultats : sources classées, personnalités ou comptes, pays (mêmes filtres que la liste)
+app.get('/api/news/overview', (req, res) => {
+  const items = poolOf(getItems(), req.query)
+  const watched = req.query.watch ? itemsForWatch(String(req.query.watch), items) : items
+  if (!watched) return res.status(404).json({ error: 'NO_WATCH' })
+  res.json(overview(applyFilters(watched, req.query)))
+})
+
+// Statut « تمت المعالجة », commun à l'équipe ; refusé au profil qui n'a pas l'action mark_processed
+app.put('/api/news/processed', express.json({ limit: '4kb' }), (req, res) => {
+  const key = String(req.body?.key || '').slice(0, 600)
+  if (!key) return res.status(400).json({ error: 'NO_KEY' })
+  res.json({ processed: setProcessed(key, Boolean(req.body?.done), req.user.name || req.user.email) })
+})
+
+// Résumé en deux lignes, en arabe, d'une actualité en langue étrangère (à la demande, gardé en cache)
+app.post('/api/ai/brief', express.json({ limit: '2kb' }), async (req, res) => {
+  if (!aiEnabled()) return res.status(400).json({ error: 'NO_KEY' })
+  const it = getItems().byId.get(String(req.body?.id || ''))
+  if (!it) return res.status(404).json({ error: 'NOT_FOUND' })
+  try {
+    res.json({ brief: await itemBrief(it) })
+  } catch (err) {
+    console.error('Résumé IA :', err.message)
+    res.status(err.status || 500).json({ error: err.code || 'FAILED' })
+  }
+})
+
+// Liens de partage des tableaux de bord (lecture seule, expiration, révocation)
+app.get('/api/shares', (_req, res) => res.json({ shares: listShares() }))
+app.post('/api/shares', express.json({ limit: '2kb' }), (req, res) => {
+  const board = (readBoards() || []).find((b) => b.id === String(req.body?.boardId || ''))
+  if (!board) return res.status(404).json({ error: 'NO_BOARD' })
+  try {
+    const { share, token } = createShare({ boardId: board.id, boardName: board.name || String(req.body?.boardName || ''), days: req.body?.days, by: req.user.email })
+    logSecurity('share_create', { ip: String(req.ip || '').replace(/^::ffff:/, ''), ua: String(req.headers['user-agent'] || ''), login: req.user.email, detail: `${board.id} ${share.expiresAt}` })
+    res.status(201).json({ share, token })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.code || 'FAILED' })
+  }
+})
+app.delete('/api/shares/:id', (req, res) => {
+  const share = revokeShare(String(req.params.id), req.user.email)
+  if (!share) return res.status(404).json({ error: 'NOT_FOUND' })
+  res.json({ share })
 })
 
 app.get('/api/news/latest', async (_req, res) => {
@@ -229,7 +401,8 @@ let facetsMemo = { items: null, comments: null, tagsAt: null, body: null }
 app.get('/api/news/facets', (_req, res) => {
   const { items, comments } = getItems()
   const tags = allTags()
-  const tagsAt = JSON.stringify(tags)
+  // Pays réglés dans la console Super Admin : facettes recalculées au plus toutes les 100 s même sans nouvelles données
+  const tagsAt = JSON.stringify(tags) + Math.floor(Date.now() / 100_000)
   if (facetsMemo.items === items && facetsMemo.comments === comments && facetsMemo.tagsAt === tagsAt) return res.json(facetsMemo.body)
   const body = {
     flux: counts(items, 'flux'),
@@ -242,6 +415,10 @@ app.get('/api/news/facets', (_req, res) => {
     channels: counts(items, 'channel'),
     languages: counts(items, 'lang'),
     sources: counts(items, 'origin').slice(0, 80),
+    countries: counts(
+      items.map((it) => ({ cc: countryOf(it) })).filter((x) => x.cc),
+      'cc',
+    ),
     tags,
   }
   facetsMemo = { items, comments, tagsAt, body }
@@ -283,13 +460,15 @@ function toneDays(items, perDay) {
   return rows
 }
 
-app.get('/api/news/stats', (req, res) => {
+app.get('/api/news/stats', (req, res) => res.json(statsData(req.query)))
+
+function statsData(q) {
   const cache = getItems()
   const { lastUpdate, demo } = cache
-  const items = poolOf(cache, req.query)
-  const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365)
-  const found = applyFilters(items, { ...req.query, days })
-  const foundComments = req.query.media === 'comment' ? found : applyFilters(cache.comments, { ...req.query, media: '', days })
+  const items = poolOf(cache, q)
+  const days = Math.min(Math.max(Number(q.days) || 30, 1), 365)
+  const found = applyFilters(items, { ...q, days })
+  const foundComments = q.media === 'comment' ? found : applyFilters(cache.comments, { ...q, media: '', days })
   const perDay = []
   for (let i = days - 1; i >= 0; i--) perDay.push({ date: toDay(new Date(Date.now() - i * 86_400_000).toISOString()), count: 0 })
   const index = new Map(perDay.map((d, i) => [d.date, i]))
@@ -297,7 +476,7 @@ app.get('/api/news/stats', (req, res) => {
     const i = index.get(toDay(it.date))
     if (i != null) perDay[i].count++
   }
-  res.json({
+  return {
     days,
     total: found.length,
     sourcesCount: new Set(found.map((it) => it.origin)).size,
@@ -319,10 +498,14 @@ app.get('/api/news/stats', (req, res) => {
     places: countList(found, 'places'),
     engagement: engagementTotals(found),
     topEngaged: withTags(topEngaged(found, 8)),
+    countries: counts(
+      found.map((it) => ({ cc: countryOf(it) })).filter((x) => x.cc),
+      'cc',
+    ),
     lastUpdate,
     demo,
-  })
-})
+  }
+}
 
 app.get('/api/report', (req, res) => {
   const { items, demo } = getItems()
@@ -591,27 +774,29 @@ app.post('/api/feedback', express.json({ limit: '20kb' }), (req, res) => {
 const radarCache = new Map()
 // Vues courantes du radar préparées en arrière-plan à chaque nouvelle version des données (server/radarWorker.js)
 const radarReady = startRadarWorker(getItems)
-function radarRoute(compute) {
-  return (req, res) => {
-    const cache = getItems()
-    const flux = req.query.flux === 'libye' || req.query.flux === 'mosaique' ? req.query.flux : ''
-    const hours = Math.min(Math.max(Number(req.query.hours) || 0, 0), 336)
-    const days = Math.min(Math.max(Number(req.query.days) || 0, 0), 90)
-    const key = `${req.path}|${flux}|${hours}|${days}|${cache.lastUpdate}`
-    const hit = radarCache.get(key)
-    if (hit && Date.now() - hit.at < 60_000) return res.json(hit.data)
-    const ready = flux ? null : radarReady(req.path.slice('/api/radar'.length), hours, days, cache.lastUpdate)
-    const items = flux && !ready ? cache.items.filter((it) => it.flux === flux) : cache.items
-    const data = { ...(ready || compute(items, { hours, days })), lastUpdate: cache.lastUpdate, demo: cache.demo }
-    if (radarCache.size > 200) radarCache.clear()
-    radarCache.set(key, { at: Date.now(), data })
-    res.json(data)
-  }
+const RADAR_VIEWS = {
+  '/emerging': (items, { hours }) => ({ topics: emergingTopics(items, { hours: hours || 24 }) }),
+  '/stories': (items, { hours }) => ({ stories: storyClusters(items, { hours: hours || 48 }) }),
+  '/sentiment': (items, { days }) => sentimentBarometer(items, { days: days || 14 }),
+  '/alerts': (items) => ({ alerts: smartAlerts(items) }),
 }
-app.get('/api/radar/emerging', radarRoute((items, { hours }) => ({ topics: emergingTopics(items, { hours: hours || 24 }) })))
-app.get('/api/radar/stories', radarRoute((items, { hours }) => ({ stories: storyClusters(items, { hours: hours || 48 }) })))
-app.get('/api/radar/sentiment', radarRoute((items, { days }) => sentimentBarometer(items, { days: days || 14 })))
-app.get('/api/radar/alerts', radarRoute((items) => ({ alerts: smartAlerts(items) })))
+/** Vue du radar (view : '/emerging', '/stories', '/sentiment', '/alerts'), servie aussi aux tableaux partagés */
+function radarData(view, q) {
+  const cache = getItems()
+  const flux = q.flux === 'libye' || q.flux === 'mosaique' ? q.flux : ''
+  const hours = Math.min(Math.max(Number(q.hours) || 0, 0), 336)
+  const days = Math.min(Math.max(Number(q.days) || 0, 0), 90)
+  const key = `${view}|${flux}|${hours}|${days}|${cache.lastUpdate}`
+  const hit = radarCache.get(key)
+  if (hit && Date.now() - hit.at < 60_000) return hit.data
+  const ready = flux ? null : radarReady(view, hours, days, cache.lastUpdate)
+  const items = flux && !ready ? cache.items.filter((it) => it.flux === flux) : cache.items
+  const data = { ...(ready || RADAR_VIEWS[view](items, { hours, days })), lastUpdate: cache.lastUpdate, demo: cache.demo }
+  if (radarCache.size > 200) radarCache.clear()
+  radarCache.set(key, { at: Date.now(), data })
+  return data
+}
+for (const view of Object.keys(RADAR_VIEWS)) app.get(`/api/radar${view}`, (req, res) => res.json(radarData(view, req.query)))
 
 // Résumé par l'IA d'une histoire ou d'un sujet émergent du radar (même moteur et même cache que les pics)
 let radarAiRunning = false
@@ -692,16 +877,7 @@ const INTEL_BOARD = {
   ],
 }
 
-app.get('/api/dashboards', (_req, res) => {
-  try {
-    const file = JSON.parse(fs.readFileSync(BOARDS_FILE, 'utf8'))
-    const boards = file.boards
-    if (!file.intel && Array.isArray(boards) && !boards.some((b) => b?.id === 'intel')) boards.push(INTEL_BOARD)
-    res.json({ boards: cleanBoards(boards) })
-  } catch {
-    res.json({ boards: null })
-  }
-})
+app.get('/api/dashboards', (_req, res) => res.json({ boards: readBoards() }))
 
 app.put('/api/dashboards', express.json({ limit: '300kb' }), (req, res) => {
   const boards = cleanBoards(req.body?.boards)
@@ -710,6 +886,9 @@ app.put('/api/dashboards', express.json({ limit: '300kb' }), (req, res) => {
   fs.writeFileSync(BOARDS_FILE, JSON.stringify({ savedAt: new Date().toISOString(), intel: true, boards }, null, 2))
   res.json({ boards })
 })
+
+// الحضور في إجابات الذكاء الاصطناعي : questions du client posées à l'IA configurée, réponses et mesures gardées
+mountGeo(app, path.join(root, 'data'), { aiEnabled, aiRun: aroundRun, getItems })
 
 const dist = path.join(root, 'dist')
 if (fs.existsSync(dist)) {

@@ -41,7 +41,19 @@ export type NewsItem = {
   comments?: number
   replies?: number
   reactions?: Reaction[]
+  // Liste enrichie : pays et portée de la source, statut « تمت المعالجة », histoire repliée, groupe, résumé IA
+  country?: string
+  reach?: number
+  processed?: { by: string; at: string } | null
+  similar?: SimilarItem[]
+  similarMore?: number
+  story?: string
+  group?: string
+  brief?: string
 }
+
+export type SimilarItem = { id: string; title: string; origin: string; date: string; url: string; country?: string; channel?: string }
+export type GroupStat = { key: string; count: number; rows: number; reach: number; tone: Record<Tone, number>; sentiment: number }
 
 export type MediaType = 'article' | 'broadcast' | 'podcast' | 'blog' | 'comment' | 'forum' | 'social'
 export const MEDIA_TYPES: MediaType[] = ['article', 'broadcast', 'podcast', 'blog', 'comment', 'forum', 'social']
@@ -65,6 +77,8 @@ export type NewsResponse = {
   queryError?: string
   lastUpdate: string | null
   demo: boolean
+  found?: number
+  groups?: GroupStat[]
 }
 
 export type Facets = {
@@ -76,6 +90,7 @@ export type Facets = {
   tags?: Count[]
   media?: Count[]
   subTypes?: Count[]
+  countries?: Count[]
 }
 
 export type Stats = {
@@ -97,6 +112,7 @@ export type Stats = {
   places?: Count[]
   engagement?: EngagementTotals
   topEngaged?: NewsItem[]
+  countries?: Count[]
   lastUpdate: string | null
   demo: boolean
 }
@@ -127,6 +143,8 @@ export type Filters = {
   exclude: string
   important: string
   sort: string
+  country: string
+  processed: string
 }
 export const EMPTY_FILTERS: Filters = {
   q: '',
@@ -144,6 +162,8 @@ export const EMPTY_FILTERS: Filters = {
   exclude: '',
   important: '',
   sort: '',
+  country: '',
+  processed: '',
 }
 
 /** Clic sur un graphique ou une entité : ouvre la liste des actualités avec ces filtres */
@@ -173,7 +193,16 @@ export type Health = {
   sources: { flux: Flux; dir?: string; found: boolean; count: number }[]
 }
 
-export function useFetch<T>(url: string, refreshMs = REFRESH_MS) {
+/**
+ * Page publique d'un tableau partagé (/share/<jeton>) : les appels de données des widgets passent par
+ * /api/public/share/<jeton>/…, qui ne répond qu'aux widgets de ce tableau
+ */
+let shareToken = ''
+export const setShareToken = (token: string) => (shareToken = token)
+export const apiUrl = (url: string) => (shareToken && url.startsWith('/api/') ? `/api/public/share/${shareToken}/${url.slice(5)}` : url)
+
+export function useFetch<T>(rawUrl: string, refreshMs = REFRESH_MS) {
+  const url = apiUrl(rawUrl)
   const bump = useContext(RefreshContext)
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState(false)
