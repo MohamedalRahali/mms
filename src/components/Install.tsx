@@ -1,4 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
+import { createPortal } from 'react-dom'
 import { installPrompt, isInstalled, isIOS, runInstall, subscribeInstall } from '../lib/install'
 
 const TEXT = {
@@ -56,41 +57,43 @@ export function InstallButton({ lang, className = 'mms-tool__btn mms-install' }:
         </svg>
         <span className="mms-install__label">{t.install}</span>
       </button>
-      {help && (
-        <div
-          className="mms-modal mms-install-help"
-          role="dialog"
-          aria-modal="true"
-          aria-label={help === 'ios' ? t.iosTitle : t.otherTitle}
-          dir={lang === 'ar' ? 'rtl' : 'ltr'}
-          onClick={(e) => e.target === e.currentTarget && setHelp(null)}
-        >
-          <div className="mms-modal__box mms-install-help__box">
-            <img src="/icons-cnsd/icon-192.png" alt="" width="64" height="64" />
-            <h3>{help === 'ios' ? t.iosTitle : t.otherTitle}</h3>
-            {help === 'ios' ? (
-              <ol>
-                <li>
-                  {t.ios[0]}{' '}
-                  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
-                    <path fill="currentColor" d={SHARE} />
-                  </svg>{' '}
-                  {t.ios[1]}
-                </li>
-                <li>{t.ios[2]}</li>
-                <li>{t.ios[3]}</li>
-              </ol>
-            ) : (
-              <p>{t.other}</p>
-            )}
-            <div className="mms-modal__actions">
-              <button type="button" className="news-btn" onClick={() => setHelp(null)} autoFocus>
-                {t.close}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {help &&
+        createPortal(
+            <div
+              className="mms-modal mms-install-help"
+              role="dialog"
+              aria-modal="true"
+              aria-label={help === 'ios' ? t.iosTitle : t.otherTitle}
+              dir={lang === 'ar' ? 'rtl' : 'ltr'}
+              onClick={(e) => e.target === e.currentTarget && setHelp(null)}
+            >
+              <div className="mms-modal__box mms-install-help__box">
+                <img src="/icons-cnsd/icon-192.png" alt="" width="64" height="64" />
+                <h3>{help === 'ios' ? t.iosTitle : t.otherTitle}</h3>
+                {help === 'ios' ? (
+                  <ol>
+                    <li>
+                      {t.ios[0]}{' '}
+                      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
+                        <path fill="currentColor" d={SHARE} />
+                      </svg>{' '}
+                      {t.ios[1]}
+                    </li>
+                    <li>{t.ios[2]}</li>
+                    <li>{t.ios[3]}</li>
+                  </ol>
+                ) : (
+                  <p>{t.other}</p>
+                )}
+                <div className="mms-modal__actions">
+                  <button type="button" className="news-btn" onClick={() => setHelp(null)} autoFocus>
+                    {t.close}
+                  </button>
+                </div>
+              </div>
+            </div>,
+          document.body,
+        )}
     </>
   )
 }

@@ -2110,8 +2110,22 @@ select option {
 /* Page de connexion : bouton visible avec son libellé (icône seule sur petit écran) */
 .mms-login__actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.6rem;
+}
+/* L'en-tête (logo, installer, langue) passe à la ligne au lieu de déborder sous la carte de connexion */
+.mms-login .mms-login__panel {
+  min-width: 0;
+}
+.mms-login .mms-login__top {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+@media (max-width: 420px) {
+  .mms-login .mms-login__logo img {
+    max-width: 100%;
+  }
 }
 .mms-login__install {
   display: inline-flex;
