@@ -15,6 +15,21 @@ import { fileURLToPath } from 'node:url'
  */
 
 const dataDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'data')
+
+// Chaînes et radios montrées sur le mur du direct seulement (ni enregistrées ni transcrites, donc sans coût).
+// Adresses vérifiées le 27/10/2026 depuis les annuaires envoyés par Around : flux HLS avec CORS, flux audio en https,
+// ou chaîne YouTube officielle. Une chaîne de la veille avec le même id garde ses propres réglages.
+const LIVE_ONLY = [
+  { id: 'tanasuh-tv', nom: 'قناة التناصح', canal: 'tv', flux: 'https://kilolink.pulsarstarsolutions.com/live/smil:tanasuhtv.smil/manifest.m3u8' },
+  { id: 'lebda-tv', nom: 'قناة لبدة', canal: 'tv', youtube: 'https://www.youtube.com/channel/UC8-s6p-YBOfjJxtiRBfIRLA' },
+  { id: 'libyas-channel-tv', nom: "Libya's Channel — قناة ليبيا", canal: 'tv', youtube: 'https://www.youtube.com/channel/UCK1zw5mQHT2VwJQdLUpQfWQ' },
+  { id: 'mostakbal-tv', nom: 'قناة ليبيا المستقبل', canal: 'tv', youtube: 'https://www.youtube.com/channel/UCB8semSzrUhNJic_jlMXGCg' },
+  { id: 'hala-sabratha-radio', nom: 'راديو هلا صبراتة', canal: 'radio', flux: 'https://stream.zeno.fm/1dy2395z3k8uv' },
+  { id: 'nour-aleman-radio', nom: 'إذاعة نور الإيمان 105.7', canal: 'radio', flux: 'https://stream.zeno.fm/r6eprdta6nhvv' },
+  { id: 'arts-tripoli-radio', nom: 'راديو فنون طرابلس', canal: 'radio', flux: 'https://stream.zeno.fm/z9wfrdpmgg0uv' },
+  { id: 'almunir-benghazi-radio', nom: 'إذاعة المنير — بنغازي', canal: 'radio', flux: 'https://live.munir.ly/proxy/almunir/stream' },
+  { id: 'almunir-tripoli-radio', nom: 'إذاعة المنير — طرابلس', canal: 'radio', flux: 'https://live.munir.ly/proxy/almunirtip/stream' },
+]
 const YT_TTL = 5 * 60_000
 const ytCache = new Map()
 
@@ -69,6 +84,7 @@ export function mountLive(app) {
     const pending = new Map((readJson(path.join(dataDir, 'libye-diffusion.json'), { sources: [] }).sources || []).map((s) => [s.id, s]))
     const list = (status.chaines || []).map((c) => ({ ...c, ...(pending.get(c.id) || {}) }))
     for (const s of pending.values()) if (s.ajout && !list.some((c) => c.id === s.id)) list.push(s)
+    for (const s of LIVE_ONLY) if (!list.some((c) => c.id === s.id)) list.push({ ...s, ...(pending.get(s.id) || {}) })
 
     const channels = await Promise.all(
       list
