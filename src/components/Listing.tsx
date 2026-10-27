@@ -1,4 +1,5 @@
 import { type FormEvent, type ReactNode, useContext, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { DataSince } from './DataSince'
 import { type Count, type Filters, type GroupStat, type NewsItem, type SimilarItem, type Stats, type Tone, DrillContext, TONES, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
@@ -429,17 +430,20 @@ export function BriefButton({ item }: { item: NewsItem }) {
 
 const WATCH_KEYS = ['source', 'category', 'channel', 'lang', 'tone', 'media', 'country', 'exclude'] as const
 
-export function SaveSearchButton({ filters, email }: { filters: Filters; email: string }) {
+// askKeyword : champ « mot-clé » dans la fenêtre (alerte créée depuis un graphique) ; compact : bouton icône seule
+export function SaveSearchButton({ filters, email, askKeyword = false, compact = false, context = '' }: { filters: Filters; email: string; askKeyword?: boolean; compact?: boolean; context?: string }) {
   const l = useListText()
   const i = useI18n()
   const x = useIntel()
   const [open, setOpen] = useState(false)
+  const [kw, setKw] = useState(filters.q)
   const [name, setName] = useState('')
   const [to, setTo] = useState(email)
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
   const picked = WATCH_KEYS.filter((k) => filters[k])
-  const has = Boolean(filters.q || picked.length)
+  const q = kw.trim()
+  const has = Boolean(q || picked.length)
   const label = (k: (typeof WATCH_KEYS)[number]) => {
     const v = filters[k]
     if (k === 'category') return i.category(v)
@@ -460,7 +464,7 @@ export function SaveSearchButton({ filters, email }: { filters: Filters; email: 
         fetch('/api/watches', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name.trim() || filters.q || picked.map(label).join(' · '), query: filters.q, filters: Object.fromEntries(picked.map((k) => [k, filters[k]])), recipients: to, force }),
+          body: JSON.stringify({ name: name.trim() || context || q || picked.map(label).join(' · '), query: q, filters: Object.fromEntries(picked.map((k) => [k, filters[k]])), recipients: to, force }),
         })
       let res = await send(false)
       let json = await res.json().catch(() => ({}))
@@ -483,28 +487,36 @@ export function SaveSearchButton({ filters, email }: { filters: Filters; email: 
     <>
       <button
         type="button"
-        className="news-btn news-btn--ghost mms-savewatch"
-        disabled={!has}
-        title={has ? l.saveTitle : l.needCriteria}
+        className={compact ? 'mms-wmenu__btn mms-noprint' : 'news-btn news-btn--ghost mms-savewatch'}
+        disabled={!has && !askKeyword}
+        title={has || askKeyword ? l.saveTitle : l.needCriteria}
+        aria-label={l.saveTitle}
         onClick={() => {
           setMsg('')
-          setName(filters.q)
+          setName(context || filters.q)
           setOpen(true)
         }}
       >
-        🔔 {l.saveSearch}
+        🔔{compact ? '' : ` ${l.saveSearch}`}
       </button>
-      {open && (
+      {open &&
+        // Fenêtre rendue au niveau de la page : un widget animé (transform) la couperait sinon
+        createPortal(
         <div className="mms-modal" role="dialog" aria-modal="true" aria-label={l.saveTitle} onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
           <form className="mms-modal__box" onSubmit={submit}>
             <h3>{l.saveTitle}</h3>
             <p className="news-status">{l.saveIntro}</p>
             <div className="mms-modal__criteria">
               <span>{l.criteria}:</span>
-              {filters.q && (
+              {q && !askKeyword && (
                 <code dir="auto" className="mms-chip">
-                  {filters.q}
+                  {q}
                 </code>
+              )}
+              {context && (
+                <span className="mms-chip" dir="auto">
+                  📊 {context}
+                </span>
               )}
               {picked.map((k) => (
                 <span key={k} className="mms-chip" dir="auto">
@@ -512,6 +524,12 @@ export function SaveSearchButton({ filters, email }: { filters: Filters; email: 
                 </span>
               ))}
             </div>
+            {askKeyword && (
+              <label>
+                <span>{i.lang === 'ar' ? 'كلمات مفتاحية (AND / OR / NOT)' : 'Keywords (AND / OR / NOT)'}</span>
+                <input value={kw} onChange={(e) => setKw(e.target.value)} maxLength={500} dir="auto" placeholder={i.lang === 'ar' ? 'مثال: (النفط OR الشرارة) AND إغلاق' : 'e.g. (oil OR Sharara) AND closure'} />
+              </label>
+            )}
             <label>
               <span>{l.watchName}</span>
               <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} dir="auto" />
@@ -534,8 +552,9 @@ export function SaveSearchButton({ filters, email }: { filters: Filters; email: 
               </button>
             </div>
           </form>
-        </div>
-      )}
+        </div>,
+          document.body,
+        )}
     </>
   )
 }

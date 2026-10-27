@@ -962,3 +962,10 @@
 .mms-itr .mms-brief small {
   color: var(--ink-soft);
 }
+
+/* Alerte depuis un graphique du tableau de bord */
+.mms-wtools {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}

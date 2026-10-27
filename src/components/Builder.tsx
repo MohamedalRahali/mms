@@ -6,6 +6,8 @@ import { useI18n } from '../lib/i18n'
 import { canDo, hasModule, useAuth } from '../lib/auth'
 import { ShareDialog, useBrand } from './Share'
 import { LoadState } from './LoadState'
+import { SaveSearchButton } from './Listing'
+import { EMPTY_FILTERS, type Filters } from '../lib/news'
 
 const RADAR_TYPES: string[] = ['emerging', 'stories', 'alerts', 'mood']
 import {
@@ -124,6 +126,9 @@ function GridWidget(props: {
   const b = BUILDER_TEXT[i.lang]
   const { path, title } = useWidgetTitles(conf)
   const [expanded, setExpanded] = useState(false)
+  // Alerte à partir du graphique (comme « créer une alerte depuis un tableau de bord ») : profils qui gèrent les veilles
+  const auth = useAuth()
+  const canAlert = canDo(auth?.user, 'manage_watches') && hasModule(auth?.user, 'watch')
   useEffect(() => {
     if (!expanded) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setExpanded(false)
@@ -153,7 +158,10 @@ function GridWidget(props: {
             </button>
           </div>
         ) : (
-          <ViewMenu expanded={expanded} onExpand={() => setExpanded(!expanded)} />
+          <span className="mms-wtools">
+            {canAlert && <SaveSearchButton filters={{ ...EMPTY_FILTERS, category: conf.category, flux: conf.flux } as Filters} email={auth?.user.email ?? ''} askKeyword compact context={title} />}
+            <ViewMenu expanded={expanded} onExpand={() => setExpanded(!expanded)} />
+          </span>
         )}
       </header>
       <div className="mms-widget__body mms-cell__body">
