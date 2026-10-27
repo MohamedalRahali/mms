@@ -2099,6 +2099,79 @@ select option {
 .mms-install {
   color: var(--green-deep) !important;
 }
+.mms-install__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+/* Page de connexion : bouton visible avec son libellé (icône seule sur petit écran) */
+.mms-login__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.mms-login__install {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid rgba(47, 203, 129, 0.55);
+  border-radius: 10px;
+  background: rgba(47, 203, 129, 0.12);
+  color: #2fcb81;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mms-login__install:hover {
+  background: rgba(47, 203, 129, 0.22);
+}
+.mms-login__install .mms-install__label {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+}
+@media (max-width: 560px) {
+  .mms-login__install {
+    padding: 0.45rem;
+  }
+  .mms-login__install .mms-install__label {
+    display: none;
+  }
+}
+.mms-install-help__box {
+  width: min(420px, 100%);
+  padding: 1.5rem;
+  text-align: center;
+}
+.mms-install-help__box img {
+  border-radius: 14px;
+}
+.mms-install-help__box h3 {
+  margin: 0.8rem 0;
+}
+.mms-install-help__box ol,
+.mms-install-help__box p {
+  margin: 0 0 1rem;
+  text-align: start;
+  line-height: 1.7;
+}
+.mms-install-help__box ol {
+  padding-inline-start: 1.3rem;
+}
+.mms-install-help__box li svg {
+  vertical-align: middle;
+  color: #0a84ff;
+}
+.mms-install-help .mms-modal__actions {
+  display: flex;
+  justify-content: center;
+}
 
 @media (max-width: 700px) {
   .mms-pairs li {

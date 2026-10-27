@@ -13,7 +13,8 @@ import { CommandHero } from './components/Hero'
 import { MediaIcon } from './components/MediaParts'
 import { type MediaIconName, type MediaPageType, MEDIA_PAGES, MEDIA_PAGE_TEXT, MEDIA_SUBS } from './lib/media'
 import { useFx, useTheme } from './lib/fx'
-import { ComparePeriods, ExecutiveBriefing, InstallButton, ShareOfVoice } from './components/Pro'
+import { ComparePeriods, ExecutiveBriefing, ShareOfVoice } from './components/Pro'
+import { InstallButton } from './components/Install'
 import { Radar, RadarBrief } from './components/Radar'
 import { radarText } from './lib/radar'
 import { PRO_TEXT } from './lib/pro'
@@ -403,7 +404,7 @@ export default function App() {
                       onRefresh={reload}
                       onLang={() => setLang(other)}
                     />
-                    <InstallButton />
+                    <InstallButton lang={lang} />
                     <button
                       type="button"
                       className="mms-tool__btn mms-theme-btn"

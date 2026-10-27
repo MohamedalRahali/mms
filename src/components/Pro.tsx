@@ -752,45 +752,6 @@ export function ExecutiveBriefing({ flux }: { flux: Flux | '' }) {
   )
 }
 
-/* ---------------------------------------------------------------- installation (PWA) */
-
-type InstallEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> }
-
-export function InstallButton() {
-  const p = usePro()
-  const [evt, setEvt] = useState<InstallEvent | null>(null)
-  useEffect(() => {
-    const on = (e: Event) => {
-      e.preventDefault()
-      setEvt(e as InstallEvent)
-    }
-    window.addEventListener('beforeinstallprompt', on)
-    const done = () => setEvt(null)
-    window.addEventListener('appinstalled', done)
-    return () => {
-      window.removeEventListener('beforeinstallprompt', on)
-      window.removeEventListener('appinstalled', done)
-    }
-  }, [])
-  if (!evt) return null
-  return (
-    <button
-      type="button"
-      className="mms-tool__btn mms-install"
-      title={p.install}
-      aria-label={p.install}
-      onClick={async () => {
-        await evt.prompt()
-        setEvt(null)
-      }}
-    >
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
-        <path fill="currentColor" d="M11 3h2v9l3.5-3.5 1.4 1.4L12 15.8 6.1 9.9l1.4-1.4L11 12V3zM5 18h14v2H5z" />
-      </svg>
-    </button>
-  )
-}
-
 /* ---------------------------------------------------------------- liste « les plus engageants » */
 
 export function TopEngaged({ flux, days = 7 }: { flux: Flux | ''; days?: number }) {

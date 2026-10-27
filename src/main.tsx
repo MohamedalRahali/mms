@@ -1,5 +1,6 @@
 import { lazy, StrictMode, Suspense, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import './lib/install'
 import './index.css'
 import './theme.css'
 import './brand.css'

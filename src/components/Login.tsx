@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { type User } from '../lib/auth'
 import { MfaCode } from './Mfa'
+import { InstallButton } from './Install'
 
 /** Page de connexion selon la charte MMS Radar : panneau de présentation, carte claire de connexion, logo du Centre */
 
@@ -120,13 +121,16 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
           <span className="mms-login__logo">
             <img src="/logo-cnsd/v2/logo-anime-fond-sombre.svg" alt="رئاسة مجلس الوزراء — المركز الوطني لدعم القرار" />
           </span>
-          <div className="mms-login__lang" role="group" aria-label="Language">
-            <button type="button" className={lang === 'ar' ? 'is-active' : ''} onClick={() => setLang('ar')}>
-              العربية
-            </button>
-            <button type="button" className={lang === 'en' ? 'is-active' : ''} onClick={() => setLang('en')}>
-              English
-            </button>
+          <div className="mms-login__actions">
+            <InstallButton lang={lang} className="mms-login__install" />
+            <div className="mms-login__lang" role="group" aria-label="Language">
+              <button type="button" className={lang === 'ar' ? 'is-active' : ''} onClick={() => setLang('ar')}>
+                العربية
+              </button>
+              <button type="button" className={lang === 'en' ? 'is-active' : ''} onClick={() => setLang('en')}>
+                English
+              </button>
+            </div>
           </div>
         </header>
 
