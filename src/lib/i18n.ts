@@ -51,6 +51,9 @@ const CHANNELS: Record<Lang, Record<string, string>> = {
     bluesky: 'بلوسكاي',
     reddit: 'ريديت',
     mastodon: 'ماستودون',
+    podcast: 'بودكاست',
+    forum: 'منتديات',
+    blog: 'مدونات',
   },
   en: {
     radio: 'Radio',
@@ -67,6 +70,9 @@ const CHANNELS: Record<Lang, Record<string, string>> = {
     bluesky: 'Bluesky',
     reddit: 'Reddit',
     mastodon: 'Mastodon',
+    podcast: 'Podcasts',
+    forum: 'Forums',
+    blog: 'Blogs',
   },
 }
 
@@ -463,8 +469,8 @@ export type Strings = (typeof STRINGS)['ar'] & (typeof EXTRA)['ar']
 
 export function makeI18n(lang: Lang) {
   const locale = lang === 'ar' ? 'ar-LY-u-nu-latn' : 'en-GB'
-  const dateTime = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Tunis' })
-  const timeOnly = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Tunis' })
+  const dateTime = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Tripoli' })
+  const timeOnly = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Tripoli' })
   const dayShort = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })
   const dayLong = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
   const capitalize = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s)

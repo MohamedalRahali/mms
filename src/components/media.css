@@ -1,0 +1,675 @@
+/* Sélecteur de médias à pictogrammes et icône du badge des cartes (MediaParts.tsx) */
+.mms-mi {
+  flex: none;
+  vertical-align: -0.15em;
+}
+.mms-media {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.mms-media--all,
+.mms-media--article {
+  --media-ink: var(--green-deep);
+}
+.mms-media--tv {
+  --media-ink: #c0392b;
+}
+.mms-media--radio {
+  --media-ink: light-dark(#b9770e, #f0b44c);
+}
+.mms-media--youtube {
+  --media-ink: light-dark(#d91c51, #ff5c8a);
+}
+
+.mms-msel {
+  position: relative;
+  flex: none;
+}
+.mms-msel__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 40px;
+  max-width: 100%;
+  padding: 0 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2, var(--surface));
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+.mms-msel__btn:hover {
+  border-color: var(--green);
+}
+.mms-msel__btn:focus-visible,
+.mms-msel__btn[aria-expanded='true'] {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px light-dark(rgba(29, 122, 78, 0.15), rgba(47, 203, 129, 0.2));
+}
+.mms-msel__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mms-msel__caret {
+  flex: none;
+  opacity: 0.7;
+  transition: transform 0.2s;
+}
+.mms-msel__btn[aria-expanded='true'] .mms-msel__caret {
+  transform: rotate(180deg);
+}
+.mms-msel__list {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 6px);
+  inset-inline-start: 0;
+  min-width: max(100%, 230px);
+  max-width: calc(100vw - 32px);
+  max-height: min(60vh, 380px);
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.3rem;
+  list-style: none;
+  background: var(--surface-solid);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg, 0 18px 40px rgba(0, 0, 0, 0.35));
+  animation: mms-msel-in 0.14s ease-out;
+}
+.mms-msel__list:focus {
+  outline: none;
+}
+@keyframes mms-msel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.mms-msel__opt {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 40px;
+  padding: 0.3rem 0.5rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  user-select: none;
+}
+.mms-msel__opt.is-active {
+  background: light-dark(rgba(29, 122, 78, 0.08), rgba(47, 203, 129, 0.12));
+}
+.mms-msel__opt.is-on {
+  font-weight: 700;
+  color: var(--green-deep);
+}
+.mms-msel__ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--media-ink, var(--ink));
+  background: color-mix(in srgb, var(--media-ink, var(--ink)) 14%, transparent);
+}
+.mms-msel__label {
+  flex: 1;
+  white-space: nowrap;
+}
+.mms-msel__count {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  opacity: 0.8;
+}
+@media (max-width: 700px) {
+  .mms-msel__opt {
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mms-msel__list {
+    animation: none;
+  }
+}
+
+
+/* Pages du menu « الوسائط » (MediaPages.tsx) */
+.mms-mpage__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.8rem 1rem;
+  margin-bottom: 1rem;
+}
+.mms-mpage__head > div {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.mms-mpage__head h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+.mms-mpage__head p {
+  margin: 0.2rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+.mms-mpage__ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  color: var(--media-ink, var(--green));
+  background: color-mix(in srgb, var(--media-ink, var(--green)) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--media-ink, var(--green)) 35%, transparent);
+}
+.mms-mpage__periods,
+.mms-mpage__tabs {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.mms-mpage__periods button,
+.mms-mpage__tabs button {
+  padding: 0.35rem 0.8rem;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.mms-mpage__periods button.is-on,
+.mms-mpage__tabs button.is-on {
+  background: var(--green);
+  color: var(--on-green, #fff);
+  font-weight: 700;
+}
+.mms-mpage__tabs {
+  margin-bottom: 0.7rem;
+}
+.mms-mpage__subs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+.mms-mpage__subs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.mms-mpage__subs button .mms-mi {
+  color: var(--media-ink);
+}
+.mms-mpage__subs button b {
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+.mms-mpage__subs button.is-on {
+  border-color: var(--media-ink);
+  background: color-mix(in srgb, var(--media-ink) 14%, transparent);
+  font-weight: 700;
+}
+.mms-mpage__tiles {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  margin-bottom: 0.5rem;
+}
+.mms-mpage__tiles .is-text strong {
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+.mms-mpage__empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.6rem 0;
+  padding: 0.9rem 1rem;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+.mms-mpage__empty .mms-mi {
+  color: var(--media-ink, var(--ink-soft));
+}
+.mms-mpage__duo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+.mms-mpage__duo h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+/* Volume par chaîne */
+.mms-chan {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mms-chan li {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) minmax(120px, 2fr) auto;
+  align-items: center;
+  gap: 0.2rem 0.8rem;
+}
+.mms-chan__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  overflow: hidden;
+  font-weight: 600;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mms-chan__name .mms-mi {
+  color: var(--media-ink);
+}
+.mms-chan__bars {
+  display: flex;
+  /* Les jours vont de gauche à droite, comme la courbe « الحجم اليومي » */
+  direction: ltr;
+  align-items: flex-end;
+  gap: 2px;
+  height: 28px;
+}
+.mms-chan__bars i {
+  flex: 1;
+  min-width: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--media-ink, var(--green));
+  opacity: 0.85;
+}
+.mms-chan li b {
+  font-variant-numeric: tabular-nums;
+}
+.mms-chan li small {
+  grid-column: 1 / -1;
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+}
+
+/* Tableau des podcasts */
+.mms-mpage__table {
+  overflow-x: auto;
+}
+.mms-mpage__table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.mms-mpage__table th,
+.mms-mpage__table td {
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  text-align: start;
+  white-space: nowrap;
+}
+.mms-mpage__table th {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.mms-mpage__table a {
+  color: var(--green-deep);
+}
+.mms-dot::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-inline-end: 0.35rem;
+  border-radius: 50%;
+  background: var(--ink-soft);
+}
+.mms-dot.is-on::before {
+  background: var(--green);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 25%, transparent);
+}
+
+/* Publications les plus commentées, fils de forum */
+.mms-mpage__groups {
+  display: grid;
+  gap: 0.5rem;
+}
+.mms-mpage__groups > details {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.mms-mpage__groups summary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+.mms-mpage__gtitle {
+  flex: 1;
+  min-width: 0;
+}
+.mms-mpage__gcount {
+  flex: none;
+  color: var(--media-ink, var(--green-deep));
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.mms-mpage__gmeta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+.mms-mpage__root {
+  margin: 0.6rem 0;
+  padding: 0.5rem 0.7rem;
+  border-inline-start: 3px solid var(--media-ink, var(--green));
+  background: var(--surface);
+  border-radius: 8px;
+}
+.mms-reactions__list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.mms-reactions__list li {
+  padding: 0.4rem 0.6rem;
+  border-inline-start: 2px solid var(--line);
+}
+
+/* Arbre forum › sujets */
+.mms-ftree,
+.mms-ftree ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mms-ftree > li + li {
+  margin-top: 0.4rem;
+}
+.mms-ftree summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mms-ftree summary .mms-mi {
+  color: var(--media-ink);
+}
+.mms-ftree summary span {
+  flex: 1;
+}
+.mms-ftree ul {
+  margin: 0.3rem 0 0;
+  padding-inline-start: 1.4rem;
+  border-inline-start: 1px dashed var(--line);
+}
+.mms-ftree ul li {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+  font-size: 0.85rem;
+}
+.mms-ftree ul li span {
+  flex: 1;
+  min-width: 0;
+}
+.mms-ftree a {
+  color: inherit;
+}
+.mms-ftree b {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
+/* Liste des fiches */
+.mms-mpage__feed {
+  margin-top: 1.2rem;
+}
+.mms-mpage__feedhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+  margin-bottom: 0.6rem;
+}
+.mms-mpage__feedhead h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0;
+}
+.mms-mpage__feedhead h3 small {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+.mms-mpage__feedhead .news-filters {
+  flex: 1 1 280px;
+  max-width: 480px;
+  margin: 0;
+}
+@media (max-width: 700px) {
+  .mms-mpage__tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .mms-mpage__head h2 {
+    font-size: 1.15rem;
+  }
+  .mms-mpage__periods {
+    width: 100%;
+  }
+  .mms-mpage__periods button {
+    flex: 1;
+  }
+  .mms-chan li {
+    grid-template-columns: 1fr auto;
+  }
+  .mms-chan__bars {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+/* Sous-entrées TV / راديو / يوتيوب sous « Broadcasts » dans le menu latéral */
+.mms-side__item--sub {
+  padding-block: 0.35rem;
+  padding-inline-start: 2.2rem;
+  font-size: 0.9rem;
+}
+.mms-side.is-collapsed .mms-side__item--sub {
+  padding-inline-start: 0.6rem;
+}
+
+/* Bouton « كل القنوات مباشرة » de la page Broadcasts */
+.mms-mpage__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.8rem;
+  border: 0;
+  border-radius: 999px;
+  background: #e5484d;
+  color: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Pied du menu latéral : logo et copyright Around Expressions (App.tsx) */
+.mms-side__foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  line-height: 1.4;
+}
+.mms-side__logo {
+  width: 96px;
+  height: auto;
+  padding: 6px 10px;
+  border-radius: 12px;
+}
+/* Le mot « AROUND » est bleu nuit : sur le thème sombre, le logo est posé sur une pastille claire */
+:root:not([data-theme='light']) .mms-side__logo {
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Copyright Around Expressions : pied du menu, page de connexion (App.tsx, Login.tsx) */
+.around-credit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 1.2rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  text-align: center;
+}
+.around-credit img {
+  width: 88px;
+  height: auto;
+  padding: 5px 9px;
+  border-radius: 12px;
+}
+:root:not([data-theme='light']) .around-credit img {
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* En-tête : logo du centre (NPDC), entrée animée, reflet périodique et léger relief au survol (App.tsx) */
+.mms-head__logo {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  padding: 5px 12px;
+  border-radius: 12px;
+  animation: npdc-in 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.mms-head__logo img {
+  display: block;
+  width: auto;
+  height: 40px;
+}
+/* Texte noir du logo : sur le thème sombre, posé sur une plaque claire */
+:root:not([data-theme='light']) .mms-head__logo {
+  background: linear-gradient(180deg, #ffffff, #eef3f0);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 6px 18px rgba(0, 0, 0, 0.25);
+}
+/* Reflet qui traverse le logo toutes les 8 secondes */
+.mms-head__logo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.75) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: npdc-sheen 8s ease-in-out 1.2s infinite;
+  pointer-events: none;
+}
+.mms-head__logo:hover {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    0 10px 26px rgba(47, 203, 129, 0.25);
+}
+.mms-head__product {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  animation: npdc-in 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s both;
+}
+.mms-head__product b {
+  color: var(--ink);
+  font-weight: 700;
+}
+.mms-head__product .mms-radar circle {
+  fill: var(--green);
+}
+.mms-head__product .mms-radar path {
+  stroke: var(--green);
+  animation: fx-wave 2.4s ease-in-out infinite;
+}
+@keyframes npdc-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+}
+@keyframes npdc-sheen {
+  0%,
+  70% {
+    transform: translateX(-120%);
+  }
+  85%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+@media (max-width: 700px) {
+  .mms-head__logo {
+    padding: 4px 9px;
+  }
+  .mms-head__logo img {
+    height: 32px;
+  }
+  .mms-head__product {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mms-head__logo,
+  .mms-head__product,
+  .mms-head__logo::after,
+  .mms-head__product .mms-radar path {
+    animation: none;
+  }
+  .mms-head__logo {
+    transition: none;
+  }
+}

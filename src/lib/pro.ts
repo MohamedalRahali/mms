@@ -5,7 +5,8 @@ import { useI18n } from './i18n'
 export const PRO_TEXT = {
   ar: {
     // menu
-    navAssistant: 'Around',
+    navAssistant: 'أراوند · مساعدك الذكي',
+    navAssistantShort: 'أراوند',
     navSov: 'حصة الحضور',
     navCompare: 'مقارنة الفترات',
     navBriefing: 'التقرير التنفيذي',
@@ -138,7 +139,8 @@ export const PRO_TEXT = {
     install: 'تثبيت التطبيق',
   },
   en: {
-    navAssistant: 'Around',
+    navAssistant: 'Around — your AI assistant',
+    navAssistantShort: 'Around',
     navSov: 'Share of voice',
     navCompare: 'Period comparison',
     navBriefing: 'Executive report',

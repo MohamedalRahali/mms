@@ -99,6 +99,25 @@ Les commentaires ne sont listés que quand on choisit « Commentaires » ; aille
 publication (« N تعليقات »). Les réponses de forum s'affichent en retrait sous leur message.
 `/api/news?media=blog` (et `&sub=tv` pour les émissions) filtre ; `/api/news/facets` donne les comptes par média.
 
+## Radar intelligent (الرادار الذكي)
+
+Page « الرادار الذكي » du menu, calculée en mémoire sur les fiches chargées, sans appel à une IA (instantané, gratuit) :
+
+- **Alertes intelligentes** classées par gravité (حرج / للمتابعة / معلومة) : pics d'activité, sujets nouveaux repris par au moins 3 sources, montée du négatif autour d'un acteur, histoire reprise par beaucoup de médias. Un clic ouvre les actualités correspondantes. Les alertes critiques s'affichent aussi en tête du tableau de bord.
+- **Sujets émergents** : mots, expressions et entités dont la fréquence explose sur 6 h, 24 h ou 3 jours par rapport aux 7 jours d'avant (au moins 3 fiches et 2 sources), avec courbe sur 8 jours et tonalité.
+- **Histoires multi-sources** : les fiches qui racontent le même événement sont regroupées ; on voit combien de médias l'ont reprise et qui l'a publiée en premier.
+- **Baromètre du sentiment** : indice net de −100 à +100, jour par jour, par acteur et par source. Quand la veille ne fournit pas la tonalité, elle est estimée par un lexique arabe / français / anglais (la part estimée est affichée).
+- **Envoi automatique** des alertes critiques par Telegram (TELEGRAM_*) et/ou e-mail (`MMS_RADAR_ALERTS_TO`, via SMTP_*), une seule fois chacune, vérifié toutes les 10 min : activer avec `MMS_RADAR_ALERTS=1`. Les exemples (MMS_DEMO) ne déclenchent rien.
+- **Widgets** « المواضيع الصاعدة », « أخبار متناقلة », « تنبيهات ذكية », « مؤشر المزاج » ajoutables aux tableaux de bord composés.
+
+API : `GET /api/radar/alerts`, `/api/radar/emerging?hours=24`, `/api/radar/stories?hours=48`, `/api/radar/sentiment?days=14` (paramètre `flux` facultatif), réservées aux personnes connectées, gardées 60 s en cache.
+
+**Recherche multilingue** : un mot trouve aussi ses équivalents arabes, anglais et français pour les villes, champs pétroliers, institutions et responsables libyens (Tripoli ↔ طرابلس, NOC ↔ المؤسسة الوطنية للنفط, Dbeibah ↔ الدبيبة, délestage ↔ طرح الأحمال…), et les formes arabes avec préfixe ou pluriel régulier (« طرابلس » trouve « وطرابلس »). Les sigles courts (NOC, GNU, CBL) doivent être des mots entiers ; une « expression entre guillemets » reste exacte. Liste : `SYNONYMS` dans `server/query.js`.
+
+Heures et jours sont affichés à l'heure de Tripoli (`Africa/Tripoli`).
+
+Tests : `node --test tests/*.test.js`.
+
 ## Photos des actualités
 
 Chaque carte affiche la photo de l'article, comme NewsRadar :

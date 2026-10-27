@@ -19,6 +19,8 @@ const HERO_TEXT = {
     kWeek: 'حجم الأسبوع',
     vsAvg: (p: string) => `${p} مقارنة بالمتوسط`,
     vsPrev: (p: string) => `${p} مقارنة بالأسبوع السابق`,
+    noBase: 'بيانات غير كافية للمقارنة',
+    over: 'أكثر من',
     ofTone: 'من الأخبار المصنّفة',
     latest: 'آخر الأخبار',
     mentions: 'إشارة',
@@ -32,6 +34,8 @@ const HERO_TEXT = {
     kWeek: 'Weekly volume',
     vsAvg: (p: string) => `${p} vs average`,
     vsPrev: (p: string) => `${p} vs previous week`,
+    noBase: 'Not enough data to compare',
+    over: 'over',
     ofTone: 'of rated news',
     latest: 'Latest',
     mentions: 'mentions',
@@ -76,6 +80,18 @@ const CITY: Record<string, [number, number, string]> = {
 }
 
 const pct = (n: number) => `${n > 0 ? '+' : ''}${Math.round(n)}%`
+
+/**
+ * Écart (en %) entre une valeur et la moyenne des jours de référence qui ont des données, ramenée à `scale` jours.
+ * null quand la comparaison n'a pas de sens : moins de 5 jours d'historique (collecte récente) ou base inférieure à 30 % de la valeur.
+ */
+function compare(current: number, base: number[], scale: number) {
+  const active = base.filter((n) => n > 0)
+  if (active.length < 5) return null
+  const ref = (active.reduce((a, b) => a + b, 0) / active.length) * scale
+  if (ref < current * 0.3) return null
+  return ((current - ref) / ref) * 100
+}
 
 function Spark({ values }: { values: number[] }) {
   if (values.length < 2) return null
@@ -418,8 +434,10 @@ export function CommandHero({ flux }: { flux: Flux | '' }) {
 
   const per = fortnight?.perDay.map((d) => d.count) ?? []
   const last7 = per.slice(-7).reduce((a, b) => a + b, 0)
-  const prev7 = per.slice(0, 7).reduce((a, b) => a + b, 0)
-  const avg = prev7 / 7 || 0
+  // 24 h comparées aux 7 jours complets d'avant (aujourd'hui exclu) ; la semaine aux 7 jours précédents
+  const vsAvg = compare(day?.total ?? 0, per.slice(-8, -1), 1)
+  const vsPrev = compare(last7, per.slice(-14, -7), 7)
+  const shown = (n: number) => (n > 300 ? `${x.over} +300%` : pct(n))
   const tones = day?.tones ?? []
   const rated = tones.reduce((a, b) => a + b.count, 0)
   const neg = tones.find((t) => t.name === 'negative')?.count ?? 0
@@ -434,8 +452,8 @@ export function CommandHero({ flux }: { flux: Flux | '' }) {
           label={x.k24}
           value={total24}
           spark={per}
-          trend={avg ? ((total24 - avg) / avg) * 100 : undefined}
-          note={avg ? x.vsAvg(pct(((total24 - avg) / avg) * 100)) : undefined}
+          trend={vsAvg ?? undefined}
+          note={!fortnight ? undefined : vsAvg == null ? x.noBase : x.vsAvg(shown(vsAvg))}
         />
         <Kpi index={1} label={x.kSources} value={day?.sourcesCount ?? 0} spark={week?.perDay.map((d) => d.count)} />
         <Kpi index={2} label={x.kNeg} value={negPct} suffix="%" note={rated ? `${i.num(rated)} ${x.ofTone}` : undefined} tone="neg" />
@@ -443,8 +461,8 @@ export function CommandHero({ flux }: { flux: Flux | '' }) {
           index={3}
           label={x.kWeek}
           value={last7}
-          trend={prev7 ? ((last7 - prev7) / prev7) * 100 : undefined}
-          note={prev7 ? x.vsPrev(pct(((last7 - prev7) / prev7) * 100)) : undefined}
+          trend={vsPrev ?? undefined}
+          note={!fortnight ? undefined : vsPrev == null ? x.noBase : x.vsPrev(shown(vsPrev))}
           tone="pos"
         />
       </div>

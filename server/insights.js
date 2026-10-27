@@ -8,7 +8,7 @@ import { countList, findSpikes } from './intel.js'
  */
 
 const DAY_MS = 86_400_000
-const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tunis', year: 'numeric', month: '2-digit', day: '2-digit' })
+const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tripoli', year: 'numeric', month: '2-digit', day: '2-digit' })
 export const toDay = (iso) => dayKey.format(new Date(iso))
 
 function counts(items, key, limit = 50) {

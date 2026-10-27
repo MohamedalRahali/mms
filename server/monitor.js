@@ -25,9 +25,9 @@ let geoDirty = false
 const geoQueue = []
 const geoQueued = new Set()
 
-const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tunis', year: 'numeric', month: '2-digit', day: '2-digit' })
+const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tripoli', year: 'numeric', month: '2-digit', day: '2-digit' })
 export const tunisDay = (t) => dayKey.format(new Date(t))
-const hourKey = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Tunis', hour: '2-digit', hourCycle: 'h23', weekday: 'short' })
+const hourKey = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Tripoli', hour: '2-digit', hourCycle: 'h23', weekday: 'short' })
 /** { wd: 0-6 (dimanche = 0), h: 0-23 } à l'heure de Tunis */
 export function tunisHour(t) {
   const parts = hourKey.formatToParts(new Date(t))

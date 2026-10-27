@@ -7,14 +7,21 @@ import { getItems, reactionsOf } from './store.js'
 import { aiEnabled, aiProvider, aiUsage, analyse, aroundRun, cached, explainSpike, initUsage, loadKey, writeQuery } from './ai.js'
 import { allTags, countList, entitiesOf, findSpikes, initTags, itemKey, setTags, spikeItems, tagsOf, toCsv } from './intel.js'
 import { keyStatus } from './keys.js'
-import { currentUser, deleteUser, hasRole, initAuth, listUsers, loginRoute, logoutRoute, requireAuth, saveUser } from './auth.js'
+import { currentUser, initAuth, loginRoute, logoutRoute, requireAuth } from './auth.js'
+import { initPermissions, permissionGate, permsOf } from './permissions.js'
+import { logSecurity } from './monitor.js'
 import { compileQuery, queryError, searchText } from './query.js'
 import { buildBriefing, comparePeriods, engagementTotals, interactions, retrieve, shareOfVoice, topEngaged } from './insights.js'
 import { briefingConf, briefingKey, briefingWithSummary, sendBriefing, setBriefingConf, startBriefing } from './briefing.js'
 import { imageRoute, initImages, withImages } from './images.js'
 import { mountSuperAdmin } from './superadmin.js'
+import { mountDiffusion } from './diffusion.js'
+import { mountMedia } from './media.js'
+import { mountReports } from './reports.js'
 import { AGENTS, ASK_SPEC, agentFacts, agentItems, agentStats, askPrompt, itemLines, sourceCard, specFor } from './around.js'
-import { createWatch, deleteWatch, enabledWatches, itemsForWatch, listWatches, setEnabled, startWatches, telegramReady } from './watches.js'
+import { emergingTopics, sentimentBarometer, smartAlerts, startRadarAlerts, storyClusters } from './radar.js'
+import { startRadarWorker } from './radarWorker.js'
+import { createWatch, deleteWatch, enabledWatches, itemsForWatch, listWatches, sendMail, sendTelegram, setEnabled, startWatches, telegramReady } from './watches.js'
 
 /** Serveur MMS : API de lecture des actualités + site compilé (dist/) en production */
 
@@ -24,9 +31,19 @@ process.env.LIBYE_DATA_DIR = path.resolve(root, process.env.LIBYE_DATA_DIR || '.
 const PORT = Number(process.env.MMS_PORT) || 8788
 loadKey(root)
 
-// Jour calendaire de diffusion, à l'heure de Tunis
-const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tunis', year: 'numeric', month: '2-digit', day: '2-digit' })
-const toDay = (iso) => dayKey.format(new Date(iso))
+// Jour calendaire de diffusion, à l'heure de Tripoli (clients libyens, UTC+2)
+const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tripoli', year: 'numeric', month: '2-digit', day: '2-digit' })
+// Le formatage Intl est coûteux (la moitié du temps des statistiques sur 20 000 fiches) : jour gardé par date
+const dayMemo = new Map()
+function toDay(iso) {
+  let d = dayMemo.get(iso)
+  if (d === undefined) {
+    if (dayMemo.size > 200_000) dayMemo.clear()
+    d = dayKey.format(new Date(iso))
+    dayMemo.set(iso, d)
+  }
+  return d
+}
 
 function counts(items, key) {
   const map = new Map()
@@ -83,7 +100,29 @@ function reactionTotals(found, comments) {
 const app = express()
 // Derrière nginx (VPS), pour que le cookie de session passe en « Secure » en HTTPS
 app.set('trust proxy', 1)
+app.disable('x-powered-by')
 
+// En-têtes de sécurité, envoyés par MMS lui-même (nginx n'en ajoute qu'une partie).
+// La politique stricte des scripts est d'abord en observation (Report-Only) : le rapport d'Around
+// imprimé depuis une page blob: utilise un script en ligne.
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()')
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
+  res.setHeader('Content-Security-Policy', "object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'")
+  res.setHeader(
+    'Content-Security-Policy-Report-Only',
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https:; frame-src https:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
+  )
+  if (req.secure) res.setHeader('Strict-Transport-Security', 'max-age=15552000')
+  if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store')
+  next()
+})
+
+// Permissions détaillées par profil (modules et boutons), réglées dans la console Super Admin
+initPermissions(path.join(root, 'data', 'superadmin'))
 // Console Super Admin (/superadmin) : blocages IP et pays, maintenance et journaux passent avant tout le reste
 mountSuperAdmin(app, root)
 
@@ -95,24 +134,42 @@ app.post('/api/auth/logout', logoutRoute)
 app.get('/api/auth/me', (req, res) => {
   const user = currentUser(req)
   if (!user) return res.status(401).json({ error: 'AUTH' })
-  res.json({ user })
+  res.json({ user: { ...user, perms: permsOf(user) } })
 })
 app.use('/api', requireAuth)
 
-// Droits par rôle : lecture pour tous ; création et modification pour les analystes ; équipe et envois programmés pour les administrateurs
-function minRole(req) {
-  const p = req.path
-  if (p.startsWith('/users') || p.startsWith('/briefing/schedule') || p === '/briefing/send') return req.method === 'GET' && !p.startsWith('/users') ? 'viewer' : 'admin'
-  if (req.method === 'GET') return 'viewer'
-  if (p.startsWith('/watches') || p.startsWith('/dashboards') || p.startsWith('/tags') || p === '/ai/analysis' || p === '/briefing/summary') return 'analyst'
-  return 'viewer'
-}
-app.use('/api', (req, res, next) => (hasRole(req.user, minRole(req)) ? next() : res.status(403).json({ error: 'FORBIDDEN' })))
+// Droits par profil : modules (pages) et actions (boutons) permis, réglés dans la console Super Admin.
+// Les profils de base reproduisent les anciens droits par rôle (lecture pour tous, création pour les analystes,
+// envois programmés et sources de diffusion pour les administrateurs). Chaque refus est journalisé.
+app.use(
+  '/api',
+  permissionGate((req, why) =>
+    logSecurity('perm_denied', { ip: String(req.ip || '').replace(/^::ffff:/, ''), ua: String(req.headers['user-agent'] || ''), login: req.user.email, detail: `${req.method} ${req.path} ${why}` }),
+  ),
+)
+
+// Quota d'appels à l'IA par compte (60 par heure) : un compte, même compromis, ne peut pas faire exploser la facture
+const AI_QUOTA = 60
+const aiCalls = new Map() // email → [dates]
+app.use('/api/ai', (req, res, next) => {
+  if (req.method !== 'POST') return next()
+  const now = Date.now()
+  const list = (aiCalls.get(req.user.email) || []).filter((t) => now - t < 3600_000)
+  if (list.length >= AI_QUOTA) return res.status(429).json({ error: 'BUSY', quota: AI_QUOTA })
+  list.push(now)
+  aiCalls.set(req.user.email, list)
+  next()
+})
 
 initImages(path.join(root, 'data'))
+mountDiffusion(app, path.join(root, 'data'))
+mountMedia(app)
+// Générateur de rapports (التقارير) : publications cochées seulement, rapports propres à chaque compte
+mountReports(app, path.join(root, 'data'), { getItems, aiEnabled, aiRun: aroundRun, sendMail })
 initUsage(path.join(root, 'data'))
 app.get('/api/img/:key', imageRoute)
 
+// État pour la barre d'outils ; chemins, clés et dépenses sont dans la console Super Admin (/api/superadmin/dashboard)
 app.get('/api/health', (_req, res) => {
   const { items, lastUpdate, demo } = getItems()
   const real = items.filter((it) => !it.demo)
@@ -122,18 +179,14 @@ app.get('/api/health', (_req, res) => {
     demo,
     ai: aiEnabled(),
     aiProvider: aiProvider(),
-    keys: keyStatus(root),
-    aiUsage: aiUsage(),
     sources: [
       process.env.MMS_MOSAIQUE === '1' && {
         flux: 'mosaique',
-        dir: process.env.MOSAIQUE_DATA_DIR,
         found: fs.existsSync(process.env.MOSAIQUE_DATA_DIR),
         count: real.filter((it) => it.flux === 'mosaique').length,
       },
       {
         flux: 'libye',
-        dir: process.env.LIBYE_DATA_DIR,
         found: fs.existsSync(process.env.LIBYE_DATA_DIR),
         count: real.filter((it) => it.flux === 'libye').length,
       },
@@ -171,9 +224,14 @@ app.get('/api/news/latest', async (_req, res) => {
   res.json({ items: await withImages(items.slice(0, 12)), lastUpdate, demo })
 })
 
+// Facettes recalculées seulement quand les données changent (20 000 fiches : ~14 ms par appel sinon)
+let facetsMemo = { items: null, comments: null, tagsAt: null, body: null }
 app.get('/api/news/facets', (_req, res) => {
   const { items, comments } = getItems()
-  res.json({
+  const tags = allTags()
+  const tagsAt = JSON.stringify(tags)
+  if (facetsMemo.items === items && facetsMemo.comments === comments && facetsMemo.tagsAt === tagsAt) return res.json(facetsMemo.body)
+  const body = {
     flux: counts(items, 'flux'),
     media: [...counts(items, 'media'), ...(comments.length ? [{ name: 'comment', count: comments.length }] : [])],
     subTypes: counts(
@@ -184,8 +242,10 @@ app.get('/api/news/facets', (_req, res) => {
     channels: counts(items, 'channel'),
     languages: counts(items, 'lang'),
     sources: counts(items, 'origin').slice(0, 80),
-    tags: allTags(),
-  })
+    tags,
+  }
+  facetsMemo = { items, comments, tagsAt, body }
+  res.json(body)
 })
 
 // Export CSV des fiches filtrées (5 000 au plus), avec les mêmes filtres que la liste
@@ -492,30 +552,7 @@ app.post('/api/briefing/send', async (_req, res) => {
   }
 })
 
-// Équipe : comptes et rôles (administrateurs)
-app.get('/api/users', (_req, res) => res.json({ users: listUsers() }))
-app.post('/api/users', express.json({ limit: '4kb' }), (req, res) => {
-  try {
-    res.status(201).json({ user: saveUser(req.body, true) })
-  } catch (err) {
-    res.status(err.status || 500).json({ error: err.code || 'FAILED' })
-  }
-})
-app.patch('/api/users/:email', express.json({ limit: '4kb' }), (req, res) => {
-  try {
-    res.json({ user: saveUser({ ...req.body, email: req.params.email }, false) })
-  } catch (err) {
-    res.status(err.status || 500).json({ error: err.code || 'FAILED' })
-  }
-})
-app.delete('/api/users/:email', (req, res) => {
-  try {
-    deleteUser(req.params.email, req.user.email)
-    res.json({ ok: true })
-  } catch (err) {
-    res.status(err.status || 500).json({ error: err.code || 'FAILED' })
-  }
-})
+// Comptes et rôles : console Super Admin seulement (/api/superadmin/users), plus de routes ici
 
 // Veille programmée (الرصد المبرمج)
 app.get('/api/news/watches', (_req, res) => res.json({ watches: enabledWatches() }))
@@ -549,9 +586,67 @@ app.post('/api/feedback', express.json({ limit: '20kb' }), (req, res) => {
   res.json({ ok: true })
 })
 
+// Radar intelligent : sujets émergents, histoires reprises, baromètre du sentiment, alertes classées.
+// Calculs en mémoire, gardés 60 s par combinaison de paramètres pour rester instantanés à plusieurs postes.
+const radarCache = new Map()
+// Vues courantes du radar préparées en arrière-plan à chaque nouvelle version des données (server/radarWorker.js)
+const radarReady = startRadarWorker(getItems)
+function radarRoute(compute) {
+  return (req, res) => {
+    const cache = getItems()
+    const flux = req.query.flux === 'libye' || req.query.flux === 'mosaique' ? req.query.flux : ''
+    const hours = Math.min(Math.max(Number(req.query.hours) || 0, 0), 336)
+    const days = Math.min(Math.max(Number(req.query.days) || 0, 0), 90)
+    const key = `${req.path}|${flux}|${hours}|${days}|${cache.lastUpdate}`
+    const hit = radarCache.get(key)
+    if (hit && Date.now() - hit.at < 60_000) return res.json(hit.data)
+    const ready = flux ? null : radarReady(req.path.slice('/api/radar'.length), hours, days, cache.lastUpdate)
+    const items = flux && !ready ? cache.items.filter((it) => it.flux === flux) : cache.items
+    const data = { ...(ready || compute(items, { hours, days })), lastUpdate: cache.lastUpdate, demo: cache.demo }
+    if (radarCache.size > 200) radarCache.clear()
+    radarCache.set(key, { at: Date.now(), data })
+    res.json(data)
+  }
+}
+app.get('/api/radar/emerging', radarRoute((items, { hours }) => ({ topics: emergingTopics(items, { hours: hours || 24 }) })))
+app.get('/api/radar/stories', radarRoute((items, { hours }) => ({ stories: storyClusters(items, { hours: hours || 48 }) })))
+app.get('/api/radar/sentiment', radarRoute((items, { days }) => sentimentBarometer(items, { days: days || 14 })))
+app.get('/api/radar/alerts', radarRoute((items) => ({ alerts: smartAlerts(items) })))
+
+// Résumé par l'IA d'une histoire ou d'un sujet émergent du radar (même moteur et même cache que les pics)
+let radarAiRunning = false
+app.post('/api/radar/explain', express.json({ limit: '2kb' }), async (req, res) => {
+  if (!aiEnabled()) return res.status(400).json({ error: 'NO_KEY' })
+  const cache = getItems()
+  const flux = req.body?.flux === 'libye' || req.body?.flux === 'mosaique' ? req.body.flux : ''
+  const items = flux ? cache.items.filter((it) => it.flux === flux) : cache.items
+  const hours = Math.min(Math.max(Number(req.body?.hours) || 48, 1), 336)
+  const key = String(req.body?.key || '').slice(0, 300)
+  let target = null
+  if (req.body?.kind === 'story') {
+    const story = storyClusters(items, { hours, limit: 40 }).find((s) => s.id === key)
+    if (story) target = { key: `radar|story|${story.id}|${story.size}`, label: story.title, count: story.size, avg: 0, ids: story.items.map((it) => it.id) }
+  } else if (req.body?.kind === 'topic') {
+    const topic = emergingTopics(items, { hours: Math.min(hours, 72), limit: 30 }).find((t) => t.key === key)
+    if (topic) target = { key: `radar|topic|${topic.key}|${topic.recent}`, label: topic.label, count: topic.recent, avg: topic.baseline, ids: topic.sample.map((it) => it.id) }
+  }
+  if (!target) return res.status(404).json({ error: 'NOT_FOUND' })
+  if (radarAiRunning) return res.status(429).json({ error: 'BUSY' })
+  radarAiRunning = true
+  try {
+    const found = target.ids.map((id) => cache.byId.get(id)).filter(Boolean)
+    res.json({ result: await explainSpike({ key: target.key, label: target.label, count: target.count, avg: target.avg, items: found }) })
+  } catch (err) {
+    console.error('Radar, résumé IA :', err.message)
+    res.status(500).json({ error: err.code || 'FAILED', message: err.message })
+  } finally {
+    radarAiRunning = false
+  }
+})
+
 // Tableaux de bord composés par les clients, communs à tous les postes : data/dashboards.json
 const BOARDS_FILE = path.join(root, 'data', 'dashboards.json')
-const TYPES = new Set(['news', 'bars', 'columns', 'pie', 'line', 'kpi', 'table', 'cloud', 'tone'])
+const TYPES = new Set(['news', 'bars', 'columns', 'pie', 'line', 'kpi', 'table', 'cloud', 'tone', 'emerging', 'stories', 'alerts', 'mood'])
 const DIMS = ['channels', 'categories', 'sources', 'flux', 'tones', 'people', 'orgs', 'places']
 const int = (v, min, max) => Math.min(Math.max(Math.round(Number(v) || 0), min), max)
 const str = (v, max) => String(v ?? '').slice(0, max)
@@ -622,8 +717,20 @@ if (fs.existsSync(dist)) {
   app.get(/^(?!\/api\/).*/, (_req, res) => res.sendFile(path.join(dist, 'index.html')))
 }
 
+// Route d'API inconnue : réponse JSON (pas de page d'erreur HTML d'Express)
+app.use('/api', (_req, res) => res.status(404).json({ error: 'NOT_FOUND' }))
+
+// Erreurs (JSON malformé, corps trop gros…) : réponse JSON courte, jamais de trace de pile
+app.use((err, req, res, _next) => {
+  const status = Number(err.status || err.statusCode) || 500
+  if (status >= 500) console.error(`${req.method} ${req.path} :`, err.message)
+  if (res.headersSent) return res.end()
+  res.status(status).json({ error: status === 413 ? 'TOO_LARGE' : status < 500 ? 'BAD_REQUEST' : 'FAILED' })
+})
+
 startWatches(path.join(root, 'data'))
 startBriefing(path.join(root, 'data'))
+startRadarAlerts(path.join(root, 'data'), getItems, { sendTelegram, telegramReady, sendMail })
 
 // Sur le VPS, MMS_HOST=127.0.0.1 : seul nginx (HTTPS) parle au serveur
 const HOST = process.env.MMS_HOST || undefined

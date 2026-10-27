@@ -1,0 +1,639 @@
+/*
+ * Radar intelligent : alertes classées, sujets émergents, histoires, baromètre du sentiment.
+ * Reprend la charte MMS Radar (brand.css) : panneaux opaques bordés, émeraude, or, corail pour le négatif.
+ */
+
+.radar {
+  display: grid;
+  gap: 1.2rem;
+}
+.radar-block h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+.radar-block h4 {
+  margin: 0 0 0.6rem;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.radar-block__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+  margin-bottom: 0.8rem;
+}
+.radar-block__head p {
+  margin: 0;
+  max-width: 60ch;
+  font-size: 0.84rem;
+  color: var(--ink-soft);
+}
+
+/* ---------------------------------------------------------------- alertes */
+.radar-alerts {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.7rem;
+}
+.radar-alert {
+  --lvl: var(--medium);
+  width: 100%;
+  height: 100%;
+  display: grid;
+  gap: 0.3rem;
+  align-content: start;
+  text-align: start;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-inline-start: 4px solid var(--lvl);
+  border-radius: var(--radius);
+  padding: 0.7rem 0.85rem;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    transform 0.2s;
+}
+.radar-alert:hover,
+.radar-alert:focus-visible {
+  border-color: var(--lvl);
+  transform: translateY(-1px);
+}
+.radar-alert--3 {
+  --lvl: var(--crit);
+}
+.radar-alert--2 {
+  --lvl: var(--high);
+}
+.radar-alert__top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+}
+.radar-alert__top b {
+  color: var(--lvl);
+  font-weight: 700;
+}
+.radar-alert__top small {
+  color: var(--ink-soft);
+}
+.radar-alert strong {
+  font-size: 0.98rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.radar-alert__line {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+/* ---------------------------------------------------------------- grille principale */
+.radar-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 1.2rem;
+  align-items: start;
+}
+
+/* ---------------------------------------------------------------- sujets émergents */
+.radar-topics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.radar-topics > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1.8rem;
+  align-items: center;
+}
+.radar-topics > li + li {
+  border-top: 1px solid var(--line);
+}
+.radar-topic__more {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+.radar-topic__more:hover,
+.radar-topic__more:focus-visible {
+  border-color: var(--green);
+  color: var(--green);
+}
+.radar-topic__detail {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+  padding: 0 0.4rem 0.7rem 2.3rem;
+  font-size: 0.84rem;
+}
+[dir='rtl'] .radar-topic__detail {
+  padding: 0 2.3rem 0.7rem 0.4rem;
+}
+.radar-topic__detail ul {
+  margin: 0;
+  padding-inline-start: 1rem;
+  display: grid;
+  gap: 0.25rem;
+}
+.radar-topic__detail small {
+  color: var(--ink-soft);
+}
+.radar-ai {
+  width: 100%;
+}
+.radar-topic {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr) auto 3.2rem;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0.2rem;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: var(--ink);
+  text-align: start;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.radar-topic:hover,
+.radar-topic:focus-visible {
+  background: var(--green-soft);
+}
+.radar-topic__rank {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  text-align: center;
+}
+.radar-topic__main {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.radar-topic__main strong {
+  font-size: 0.97rem;
+  overflow-wrap: anywhere;
+}
+.radar-topic__main small {
+  font-size: 0.76rem;
+  color: var(--ink-soft);
+}
+.radar-topic__growth {
+  font-weight: 700;
+  color: var(--gold);
+  text-align: end;
+  font-size: 0.9rem;
+}
+.radar-new {
+  margin-inline-start: 0.45rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--on-green);
+  background: var(--gold);
+  vertical-align: middle;
+}
+.radar-spark polyline {
+  fill: none;
+  stroke: var(--green);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.radar-spark circle {
+  fill: var(--gold);
+}
+.radar-tonebar {
+  display: flex;
+  width: 100%;
+  max-width: 180px;
+  height: 5px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.radar-tonebar i {
+  display: block;
+  height: 100%;
+}
+
+/* ---------------------------------------------------------------- baromètre */
+.radar-baro {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.8fr) minmax(0, 1.2fr);
+  gap: 0.9rem;
+}
+.radar-baro__gauge {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 0.2rem;
+  text-align: center;
+}
+.radar-baro__gauge > strong {
+  font-size: 1.9rem;
+  line-height: 1;
+}
+.radar-baro__gauge > span {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+.radar-baro__gauge > small {
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+.radar-baro__totals {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.3rem 0.8rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+.radar-baro__totals i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-inline-end: 0.3rem;
+}
+.radar-baro__totals b {
+  color: var(--ink);
+}
+.radar-gauge {
+  width: 150px;
+  height: auto;
+}
+.radar-gauge path {
+  fill: none;
+  stroke-width: 9;
+  stroke-linecap: round;
+}
+.radar-gauge__neg {
+  stroke: var(--coral);
+}
+.radar-gauge__neu {
+  stroke: #8a9e93;
+}
+.radar-gauge__pos {
+  stroke: var(--green);
+}
+.radar-gauge__needle {
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+.radar-gauge__hub {
+  fill: var(--gold);
+}
+.is-pos {
+  color: var(--green);
+}
+.is-neg {
+  color: var(--coral);
+}
+.is-neu {
+  color: var(--ink-soft);
+}
+.radar-days {
+  display: flex;
+  align-items: stretch;
+  gap: 3px;
+  height: 130px;
+  position: relative;
+}
+.radar-days::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  border-top: 1px solid var(--line);
+}
+.radar-days__col {
+  flex: 1;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+}
+.radar-days__pos {
+  display: block;
+  background: var(--green);
+  border-radius: 3px 3px 0 0;
+}
+.radar-days__neg {
+  display: block;
+  background: var(--coral);
+  border-radius: 0 0 3px 3px;
+}
+.radar-days__pos {
+  align-self: end;
+}
+.radar-days__neg {
+  align-self: start;
+}
+.radar-baro__tables {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin-top: 0.9rem;
+}
+.radar-table td {
+  vertical-align: middle;
+}
+.radar-table td .radar-tonebar {
+  margin-top: 0.25rem;
+  max-width: 90px;
+}
+.radar-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  text-align: start;
+  cursor: pointer;
+}
+.radar-link:hover,
+.radar-link:focus-visible {
+  color: var(--green);
+  text-decoration: underline;
+}
+.radar-baro__tables > .news-panel {
+  overflow-x: auto;
+}
+.radar-table {
+  width: 100%;
+}
+.radar-table th:last-child,
+.radar-table td:last-child {
+  width: 7.5rem;
+}
+.radar-net {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 7rem;
+}
+.radar-net__track {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+}
+.radar-net__track i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+  background: currentColor;
+}
+.radar-net b {
+  min-width: 2.2rem;
+  text-align: end;
+  font-size: 0.85rem;
+}
+
+/* ---------------------------------------------------------------- histoires */
+.radar-stories {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 0.9rem;
+}
+.radar-story {
+  display: grid;
+  grid-template-columns: 3.6rem minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: start;
+}
+.radar-story__badge {
+  display: grid;
+  justify-items: center;
+  padding: 0.5rem 0.2rem;
+  border-radius: var(--radius-sm);
+  background: var(--green-soft);
+  color: var(--green);
+}
+.radar-story__badge strong {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+.radar-story__badge small {
+  font-size: 0.68rem;
+}
+.radar-story__body {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.radar-story h4 {
+  margin: 0;
+  font-size: 0.98rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.radar-story__meta {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+.radar-story__sources {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.radar-story__sources span {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+.radar-story__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.radar-story__items {
+  list-style: none;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+}
+.radar-story__items li {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  column-gap: 0.5rem;
+}
+.radar-story__items i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 0.45rem;
+}
+.radar-story__items a {
+  color: var(--ink);
+}
+.radar-story__items small {
+  grid-column: 2;
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+}
+
+/* ---------------------------------------------------------------- bandeau de l'accueil */
+.radar-brief {
+  margin-bottom: 1.2rem;
+  padding: 0.9rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-inline-start: 5px solid var(--crit);
+  border-radius: var(--radius);
+}
+.radar-brief h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--crit);
+}
+.radar-brief ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.6rem;
+}
+.radar-brief li button {
+  width: 100%;
+  display: grid;
+  gap: 0.15rem;
+  text-align: start;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+}
+.radar-brief li button:hover,
+.radar-brief li button:focus-visible {
+  border-color: var(--crit);
+}
+.radar-brief small,
+.radar-brief li span {
+  font-size: 0.76rem;
+  color: var(--ink-soft);
+}
+.radar-brief__more {
+  margin-top: 0.6rem;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--green);
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------- mobile */
+@media (max-width: 1100px) {
+  .radar-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .radar-baro,
+  .radar-baro__tables {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .radar-stories {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .radar-topic {
+    grid-template-columns: 1.3rem minmax(0, 1fr) 2.8rem;
+  }
+  .radar-spark {
+    display: none;
+  }
+  .radar-table {
+    font-size: 0.82rem;
+  }
+}
+
+/* ---------------------------------------------------------------- widgets des tableaux de bord */
+.radar-widget {
+  height: 100%;
+  overflow: auto;
+}
+.radar-mini {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.radar-mini li + li {
+  border-top: 1px solid var(--line);
+}
+.radar-mini button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.2rem;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: var(--ink);
+  text-align: start;
+  cursor: pointer;
+}
+.radar-mini button:hover,
+.radar-mini button:focus-visible {
+  background: var(--green-soft);
+}
+.radar-mini b {
+  color: var(--gold);
+  text-align: center;
+  font-size: 0.85rem;
+}
+.radar-mini span {
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.radar-mini small {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+.radar-widget.radar-alerts {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  margin: 0;
+}

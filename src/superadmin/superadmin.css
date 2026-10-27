@@ -694,3 +694,196 @@ textarea.sa-input {
     padding: 0.75rem 1rem 2rem;
   }
 }
+
+/* Copyright Around Expressions en bas du menu de la console */
+.around-credit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.8rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  text-align: center;
+  opacity: 0.75;
+}
+.around-credit img {
+  width: 76px;
+  height: auto;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: #fff;
+}
+
+/* ---------------------------------------------------------------- الصلاحيات التفصيلية */
+.sa-perm-new {
+  flex-wrap: wrap;
+  margin: 0.6rem 0;
+}
+.sa-perm-new > .sa-input {
+  min-width: 16rem;
+  flex: 1;
+}
+.sa-perm-table th,
+.sa-perm-table td {
+  text-align: center;
+  white-space: nowrap;
+}
+.sa-perm-table th:first-child,
+.sa-perm-table td:first-child {
+  text-align: start;
+  white-space: normal;
+  min-width: 14rem;
+  position: sticky;
+  inset-inline-start: 0;
+  background: var(--surface-solid, var(--bg));
+  z-index: 1;
+}
+.sa-perm-table th {
+  vertical-align: top;
+}
+.sa-perm-table th small {
+  display: block;
+  font-weight: 400;
+  margin-top: 0.2rem;
+}
+.sa-perm-table th.is-dirty {
+  box-shadow: inset 0 -3px 0 var(--sa-warn);
+}
+.sa-perm-name {
+  width: 9rem;
+  font-weight: 600;
+  text-align: center;
+}
+.sa-perm-quick {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 0.3rem;
+  font-size: 12px;
+}
+.sa-link--bad {
+  color: var(--sa-bad);
+}
+.sa-perm-group td {
+  font-weight: 700;
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 7%, transparent);
+  text-align: start !important;
+}
+.sa-perm-table tbody tr:not(.sa-perm-group):hover td {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+.sa-perm-sum {
+  margin-top: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+}
+.sa-perm-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.4rem 0;
+}
+.sa-tag.is-off {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+.sa-role-help {
+  margin: 0 0 0.8rem;
+  padding-inline-start: 1.2rem;
+  line-height: 1.9;
+}
+
+/* ---------------------------------------------------------------- خريطة الزيارات (globe animé) */
+.sa-geo {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(220px, 1fr);
+  gap: 1rem;
+  align-items: center;
+}
+.sa-geo__stage {
+  position: relative;
+  min-width: 0;
+}
+.sa-geo__canvas {
+  display: block;
+  width: 100%;
+  height: 420px;
+  cursor: grab;
+  touch-action: none;
+}
+.sa-geo__canvas:active {
+  cursor: grabbing;
+}
+.sa-geo__tip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 14px));
+  display: grid;
+  gap: 2px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-md, 0 6px 18px rgba(0, 0, 0, 0.4));
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.sa-geo__hint {
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.sa-geo__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.sa-geo__list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2.6rem;
+  grid-template-areas: 'name pct' 'bar bar';
+  gap: 3px 8px;
+  font-size: 13px;
+}
+.sa-geo__list li span {
+  grid-area: name;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sa-geo__list li b {
+  grid-area: pct;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.sa-geo__list li i {
+  grid-area: bar;
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--green), #f0b43c);
+  animation: sa-geo-bar 0.9s ease-out both;
+  transform-origin: right;
+}
+@keyframes sa-geo-bar {
+  from {
+    transform: scaleX(0);
+  }
+}
+@media (max-width: 900px) {
+  .sa-geo {
+    grid-template-columns: 1fr;
+  }
+  .sa-geo__canvas {
+    height: 320px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sa-geo__list li i {
+    animation: none;
+  }
+}

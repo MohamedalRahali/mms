@@ -1,0 +1,147 @@
+/* Palette de commandes (Ctrl+K) : fenêtre en verre au-dessus de la page, entrée animée */
+
+.mms-cmdk {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  justify-items: center;
+  align-items: start;
+  padding: 12vh 16px 16px;
+  background: color-mix(in srgb, #000 45%, transparent);
+  backdrop-filter: blur(6px);
+  animation: mms-cmdk-fade 0.16s ease-out;
+}
+.mms-cmdk__box {
+  width: min(640px, 100%);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface-solid) 94%, transparent);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 0 1px color-mix(in srgb, var(--green) 18%, transparent);
+  color: var(--ink);
+  transform-origin: 50% 0;
+  animation: mms-cmdk-in 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+.mms-cmdk__field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+}
+.mms-cmdk .mms-cmdk__field input {
+  flex: 1;
+  height: auto;
+  padding: 4px 0;
+  box-shadow: none;
+  border-radius: 0;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+}
+.mms-cmdk kbd,
+.mms-cmdk-btn kbd {
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: 11px/1.4 ui-monospace, Consolas, monospace;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.mms-cmdk__list {
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+}
+.mms-cmdk__group {
+  margin: 8px 10px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green);
+}
+.mms-cmdk__item {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.mms-cmdk__item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mms-cmdk__item small {
+  flex: none;
+  color: var(--ink-soft);
+}
+.mms-cmdk__item.is-sel {
+  background: color-mix(in srgb, var(--green) 16%, transparent);
+  box-shadow: inset 3px 0 0 var(--green);
+}
+[dir='rtl'] .mms-cmdk__item.is-sel {
+  box-shadow: inset -3px 0 0 var(--green);
+}
+.mms-cmdk__none {
+  padding: 18px 12px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+.mms-cmdk__hint {
+  margin: 0;
+  padding: 8px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+/* Bouton de la barre : loupe + raccourci */
+.mms-head .mms-tool__btn.mms-cmdk-btn {
+  width: auto;
+  display: inline-flex;
+  gap: 6px;
+  padding: 0 10px;
+}
+@media (max-width: 900px) {
+  .mms-cmdk-btn kbd {
+    display: none;
+  }
+}
+
+@keyframes mms-cmdk-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes mms-cmdk-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mms-cmdk,
+  .mms-cmdk__box {
+    animation: none;
+  }
+}

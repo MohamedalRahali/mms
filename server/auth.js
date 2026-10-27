@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import { permsOf } from './permissions.js'
 
 /**
  * Connexion à MMS : comptes dans data/users.json (mots de passe hachés avec scrypt, jamais en clair),
@@ -12,11 +13,20 @@ const SHORT_MS = 12 * 3600_000
 const LONG_MS = 30 * 86_400_000
 const MAX_FAILS = 5
 const LOCK_MS = 15 * 60_000
+// Tous identifiants confondus : au-delà de 20 échecs en 15 min, l'adresse IP est bloquée (essais en rafale)
+const MAX_IP_FAILS = 20
 
 let usersFile = ''
 let sessionsFile = ''
 let sessions = new Map()
 const fails = new Map()
+const ipFails = new Map() // ip → { count, at }
+
+// Les compteurs d'échecs expirés sont oubliés : la mémoire ne grossit pas avec les essais
+setInterval(() => {
+  const now = Date.now()
+  for (const m of [fails, ipFails]) for (const [k, f] of m) if (now - f.at >= LOCK_MS) m.delete(k)
+}, 5 * 60_000).unref()
 
 // Console Super Admin : reçoit les connexions réussies ou non (journal de sécurité)
 let onAuthEvent = () => {}
@@ -35,16 +45,22 @@ export function readUsers() {
   }
 }
 
+/** Écriture atomique (fichier temporaire puis renommage) : un arrêt brutal ne laisse jamais un fichier à moitié écrit */
+function writeAtomic(file, text) {
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  const tmp = `${file}.${process.pid}.tmp`
+  fs.writeFileSync(tmp, text, { mode: 0o600 })
+  fs.renameSync(tmp, file)
+}
+
 export function writeUsers(users) {
-  fs.mkdirSync(path.dirname(usersFile), { recursive: true })
-  fs.writeFileSync(usersFile, JSON.stringify({ users }, null, 2))
+  writeAtomic(usersFile, JSON.stringify({ users }, null, 2))
 }
 
 function saveSessions() {
   const now = Date.now()
   for (const [k, s] of sessions) if (s.expires < now) sessions.delete(k)
-  fs.mkdirSync(path.dirname(sessionsFile), { recursive: true })
-  fs.writeFileSync(sessionsFile, JSON.stringify([...sessions.entries()]))
+  writeAtomic(sessionsFile, JSON.stringify([...sessions.entries()]))
 }
 
 export function initAuth(dataDir) {
@@ -86,7 +102,19 @@ function readCookie(req) {
 // Les comptes créés avant les rôles restent administrateurs.
 export const ROLES = ['viewer', 'analyst', 'admin']
 const roleOf = (u) => (ROLES.includes(u.role) ? u.role : 'admin')
-const publicUser = (u) => ({ email: u.email, name: u.name || u.username || u.email, role: roleOf(u) })
+// Nom affiché : celui du compte, sinon tiré de l'adresse (w.farhat@npdc.gov.ly → W. Farhat), jamais l'adresse entière
+export function displayName(u) {
+  const name = String(u.name || '').trim()
+  if (name && !name.includes('@')) return name
+  const local = String(u.username && !u.username.includes('@') ? u.username : u.email || '').split('@')[0]
+  const parts = local.split(/[._\-\s]+/).filter(Boolean)
+  if (!parts.length) return local
+  // Le nom seulement : « w.farhat » donne « Farhat » (les initiales seules sont laissées de côté)
+  const words = parts.some((w) => w.length > 1) ? parts.filter((w) => w.length > 1) : parts
+  return words.map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')
+}
+// profile : profil de permissions attribué par le Super Admin ('' = celui du rôle)
+const publicUser = (u) => ({ email: u.email, name: displayName(u), role: roleOf(u), profile: u.profile || '' })
 
 /** Session en cours, ou null */
 export function currentUser(req) {
@@ -105,11 +133,14 @@ function setCookie(res, token, maxAgeMs, secure) {
 
 export function loginRoute(req, res) {
   const { login, password, remember } = req.body || {}
+  // Identifiant et mot de passe : du texte seulement (pas de tableau ni d'objet JSON)
+  if (typeof login !== 'string' || typeof password !== 'string' || login.length > 200 || password.length > 1000) return res.status(400).json({ error: 'BAD_REQUEST' })
   const ip = req.ip || ''
-  const key = `${ip}|${String(login || '').toLowerCase()}`
+  const key = `${ip}|${login.toLowerCase()}`
   const f = fails.get(key)
+  const fi = ipFails.get(ip)
   const ua = String(req.headers['user-agent'] || '').slice(0, 200)
-  if (f && f.count >= MAX_FAILS && Date.now() - f.at < LOCK_MS) {
+  if ((f && f.count >= MAX_FAILS && Date.now() - f.at < LOCK_MS) || (fi && fi.count >= MAX_IP_FAILS && Date.now() - fi.at < LOCK_MS)) {
     onAuthEvent('locked', { ip, ua, login })
     return res.status(429).json({ error: 'LOCKED' })
   }
@@ -118,6 +149,7 @@ export function loginRoute(req, res) {
   const ok = user ? checkPassword(user, password) : (hashPassword(password || ''), false)
   if (!ok) {
     fails.set(key, { count: (f && Date.now() - f.at < LOCK_MS ? f.count : 0) + 1, at: Date.now() })
+    ipFails.set(ip, { count: (fi && Date.now() - fi.at < LOCK_MS ? fi.count : 0) + 1, at: Date.now() })
     onAuthEvent('login_fail', { ip, ua, login })
     return res.status(401).json({ error: 'BAD_CREDENTIALS' })
   }
@@ -133,7 +165,7 @@ export function loginRoute(req, res) {
   saveSessions()
   onAuthEvent('login_ok', { ip, ua, login: user.email })
   setCookie(res, token, ttl, req.secure)
-  res.json({ user: publicUser(user) })
+  res.json({ user: { ...publicUser(user), perms: permsOf(publicUser(user)) } })
 }
 
 export function logoutRoute(req, res) {

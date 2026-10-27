@@ -7,12 +7,17 @@ import { useI18n } from '../lib/i18n'
 import { WATCH_TEXT, type WatchOption } from '../lib/watches'
 import { usePro } from '../lib/pro'
 import { QueryAssistant } from './Pro'
+import { MediaSelect } from './MediaParts'
+import { PickPage } from './ReportPick'
+import { canDo, hasModule, useAuth } from '../lib/auth'
+import { SavedSearches } from './SavedSearches'
 
 export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Flux | ''; initialWatch?: string; initialFilters?: Partial<Filters> }) {
   const i = useI18n()
   const x = useIntel()
   const p = usePro()
   const m = useMedia()
+  const auth = useAuth()
   const { t } = i
   const PERIODS = [
     { value: '', label: t.allPeriods },
@@ -81,38 +86,27 @@ export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Fl
             </option>
           ))}
         </select>
-        <select
+        <MediaSelect
           className={filters.media ? 'news-filters__media is-on' : 'news-filters__media'}
           value={filters.media}
-          onChange={(e) => update({ media: e.target.value, sub: '' })}
-          aria-label={m.menu}
-        >
-          <option value="">
-            {m.menu}: {m.all}
-          </option>
-          {MEDIA_TYPES.map((type) => {
-            const n = facets?.media?.find((c) => c.name === type)?.count
-            return (
-              <option key={type} value={type}>
-                {m.types[type]}
-                {n ? ` (${i.num(n)})` : ''}
-              </option>
-            )
-          })}
-        </select>
+          onChange={(media) => update({ media, sub: '' })}
+          label={m.menu}
+          current={filters.media ? undefined : `${m.menu}: ${m.all}`}
+          options={[
+            { value: '', label: m.all, icon: 'all' },
+            ...MEDIA_TYPES.map((type) => ({ value: type, label: m.types[type], icon: type, count: facets?.media?.find((c) => c.name === type)?.count })),
+          ]}
+        />
         {filters.media === 'broadcast' && (
-          <select value={filters.sub} onChange={(e) => update({ sub: e.target.value })} aria-label={m.subAll}>
-            <option value="">{m.subAll}</option>
-            {['tv', 'radio', 'youtube'].map((sub) => {
-              const n = facets?.subTypes?.find((c) => c.name === sub)?.count
-              return (
-                <option key={sub} value={sub}>
-                  {m.subTypes[sub]}
-                  {n ? ` (${i.num(n)})` : ''}
-                </option>
-              )
-            })}
-          </select>
+          <MediaSelect
+            value={filters.sub}
+            onChange={(sub) => update({ sub })}
+            label={m.subAll}
+            options={[
+              { value: '', label: m.subAll, icon: 'broadcast' },
+              ...(['tv', 'radio', 'youtube'] as const).map((sub) => ({ value: sub, label: m.subTypes[sub], icon: sub, count: facets?.subTypes?.find((c) => c.name === sub)?.count })),
+            ]}
+          />
         )}
         <select value={filters.days} onChange={(e) => update({ days: e.target.value })} aria-label="Period">
           {PERIODS.map((p) => (
@@ -215,15 +209,30 @@ export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Fl
             {t.clear}
           </button>
         )}
-        <a className="news-btn news-btn--ghost news-filters__export" href={`/api/news/export.csv${query ? `?${query}` : ''}`} download>
-          {x.exportCsv}
-        </a>
+        {canDo(auth?.user, 'export') && (
+          <a className="news-btn news-btn--ghost news-filters__export" href={`/api/news/export.csv${query ? `?${query}` : ''}`} download>
+            {x.exportCsv}
+          </a>
+        )}
       </form>
-      <QueryAssistant
-        error={data?.queryError}
-        onUse={(q) => {
-          setDraft(q)
-          update({ q })
+      {canDo(auth?.user, 'ai_ask') && (
+        <QueryAssistant
+          error={data?.queryError}
+          onUse={(q) => {
+            setDraft(q)
+            update({ q })
+          }}
+        />
+      )}
+      <SavedSearches
+        filters={filters}
+        email={auth?.user.email ?? ''}
+        alerts={hasModule(auth?.user, 'alerts')}
+        onApply={(f) => {
+          setDraft(f.q)
+          setExclude(f.exclude)
+          setFilters(f)
+          setPage(1)
         }}
       />
 
@@ -233,15 +242,18 @@ export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Fl
         </p>
       )}
       {!error && data && (
-        <p className="news-status" role="status">
-          {data.total === 0 ? t.noMatch : t.countNews(i.num(data.total))}
-          {data.lastUpdate && (
-            <span>
-              {' '}
-              · {t.updated} : {i.dateTime(data.lastUpdate)}
-            </span>
-          )}
-        </p>
+        <div className="rpt-pickrow">
+          <p className="news-status" role="status">
+            {data.total === 0 ? t.noMatch : t.countNews(i.num(data.total))}
+            {data.lastUpdate && (
+              <span>
+                {' '}
+                · {t.updated} : {i.dateTime(data.lastUpdate)}
+              </span>
+            )}
+          </p>
+          <PickPage items={data.items} />
+        </div>
       )}
       {loading && !data && <p className="news-status">{t.loading}</p>}
 

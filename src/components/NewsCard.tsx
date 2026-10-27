@@ -5,8 +5,9 @@ import { useFavorites } from '../lib/prefs'
 import { useIntel } from '../lib/intel'
 import { EntityChips, TagEditor, ToneBadge } from './Intel'
 import { EngagementChips } from './Engagement'
-import { can, useAuth } from '../lib/auth'
+import { canDo, useAuth } from '../lib/auth'
 import { MediaBadge, MediaContext, MediaReactions, MediaTranscript } from './MediaParts'
+import { PickBox } from './ReportPick'
 
 export const HEART = 'M12 21s-7.5-4.6-9.6-9.3C1 8.4 3 5 6.4 5c2 0 3.3 1 4.1 2.2h3C14.3 6 15.6 5 17.6 5 21 5 23 8.4 21.6 11.7 19.5 16.4 12 21 12 21z'
 
@@ -100,6 +101,7 @@ export function NewsCard({ item, variant = 'list' }: { item: NewsItem; variant?:
             <span dir="auto">{item.origin}</span>
           </span>
           <span className="news-card__tools">
+            <PickBox item={item} />
             <button
               type="button"
               className={liked ? 'news-card__fav is-on' : 'news-card__fav'}
@@ -145,7 +147,7 @@ export function NewsCard({ item, variant = 'list' }: { item: NewsItem; variant?:
         <EngagementChips value={item.engagement} />
         <MediaReactions item={item} />
         <EntityChips item={item} />
-        {variant === 'list' && can(auth?.user, 'analyst') && <TagEditor item={item} />}
+        {variant === 'list' && canDo(auth?.user, 'tags') && <TagEditor item={item} />}
       </div>
     </article>
   )

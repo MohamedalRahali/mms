@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
 import { Builder } from './components/Builder'
 import { Watches } from './components/Watches'
 import { WATCH_TEXT } from './lib/watches'
@@ -6,18 +6,30 @@ import { NewsList } from './components/NewsList'
 import { StatsView } from './components/StatsView'
 import { DailyReport } from './components/DailyReport'
 import { Toolbar } from './components/Toolbar'
-import { Admin, AiAnalysis, Alerts, Favorites, Help, PageHead, Presentation, Survey, UpdateToast } from './components/Extras'
-import { type Facets, type Filters, type Flux, type NewsResponse, DrillContext, FLUX_KEYS, RefreshContext, ReloadContext, useFetch } from './lib/news'
+import { AiAnalysis, Alerts, Favorites, Help, PageHead, Presentation, Survey, UpdateToast } from './components/Extras'
+import { type Filters, type Flux, type NewsResponse, DrillContext, RefreshContext, ReloadContext, useFetch } from './lib/news'
 import { SpikeBanner } from './components/Intel'
 import { CommandHero } from './components/Hero'
+import { MediaIcon } from './components/MediaParts'
+import { type MediaIconName, type MediaPageType, MEDIA_PAGES, MEDIA_PAGE_TEXT, MEDIA_SUBS } from './lib/media'
 import { useFx, useTheme } from './lib/fx'
-import { ComparePeriods, ExecutiveBriefing, InstallButton, ShareOfVoice, Team } from './components/Pro'
-import { Around } from './components/Around'
+import { ComparePeriods, ExecutiveBriefing, InstallButton, ShareOfVoice } from './components/Pro'
+import { Radar, RadarBrief } from './components/Radar'
+import { radarText } from './lib/radar'
 import { PRO_TEXT } from './lib/pro'
 import { type I18n, type Lang, I18nContext, initialLang, makeI18n, saveLang } from './lib/i18n'
 import { useAlerts, useCollapsed, useFavorites } from './lib/prefs'
-import { can, onBusy, useAuth } from './lib/auth'
+import { type ModuleKey, type User, canDo, hasModule, onBusy, useAuth } from './lib/auth'
 import { track } from './lib/track'
+import { ReportTray } from './components/ReportPick'
+import { CommandPalette, type PaletteEntry } from './components/CommandPalette'
+
+// Générateur de rapports (éditeur, exports Word et PDF) : chargé seulement à l'ouverture de la page
+const Reports = lazy(() => import('./components/reports/Reports'))
+// Autres pages lourdes, chargées à la première ouverture : l'arrivée sur le tableau de bord est plus rapide
+const Around = lazy(() => import('./components/Around').then((m) => ({ default: m.Around })))
+const MediaPage = lazy(() => import('./components/MediaPages').then((m) => ({ default: m.MediaPage })))
+const LiveWall = lazy(() => import('./components/LiveWall').then((m) => ({ default: m.LiveWall })))
 
 type View =
   | 'dashboard'
@@ -30,12 +42,14 @@ type View =
   | 'alerts'
   | 'favorites'
   | 'help'
-  | 'admin'
   | 'assistant'
   | 'sov'
   | 'compare'
   | 'briefing'
-  | 'team'
+  | 'radar'
+  | 'reports'
+  | `media-${MediaPageType}`
+  | 'media-live'
 const VIEWS: View[] = [
   'dashboard',
   'news',
@@ -47,13 +61,27 @@ const VIEWS: View[] = [
   'alerts',
   'favorites',
   'help',
-  'admin',
   'assistant',
   'sov',
   'compare',
   'briefing',
-  'team',
+  'radar',
+  'reports',
+  ...MEDIA_PAGES.map((m) => `media-${m}` as const),
+  'media-live',
 ]
+
+/** Module de permissions dont dépend chaque page (null : toujours ouverte) */
+function moduleOf(v: View): ModuleKey | null {
+  if (v === 'help') return null
+  if (v === 'search') return 'news'
+  if (v.startsWith('media-')) return 'media'
+  return v as ModuleKey
+}
+const viewAllowed = (user: User | undefined | null, v: View) => {
+  const m = moduleOf(v)
+  return !m || hasModule(user, m)
+}
 
 function sinceLabel(i: I18n, iso: string | null) {
   if (!iso) return '—'
@@ -89,6 +117,7 @@ const ICONS: Record<string, string> = {
   watch:
     'M12 4.5C7 4.5 2.7 7.6 1 12c1.7 4.4 6 7.5 11 7.5s9.3-3.1 11-7.5c-1.7-4.4-6-7.5-11-7.5zm0 12.5a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
   report: 'M6 2h9l5 5v15H6V2zm8 1.5V8h4.5L14 3.5zM8 12h8v1.6H8zm0 3.5h8v1.6H8z',
+  reports: 'M4 3h10l4 4v5h-2V8h-3V5H6v14h6v2H4V3zm4 7h6v1.6H8zm0 3h4v1.6H8zm9 1l1.2 2.6 2.8.4-2 2 .5 2.8-2.5-1.3-2.5 1.3.5-2.8-2-2 2.8-.4z',
   alerts: 'M12 22a2.5 2.5 0 0 0 2.4-2h-4.8a2.5 2.5 0 0 0 2.4 2zm7-6V11a7 7 0 0 0-5.5-6.8V3a1.5 1.5 0 0 0-3 0v1.2A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2z',
   favorites: 'M12 21s-7.5-4.6-9.6-9.3C1 8.4 3 5 6.4 5c2 0 3.3 1 4.1 2.2h3C14.3 6 15.6 5 17.6 5 21 5 23 8.4 21.6 11.7 19.5 16.4 12 21 12 21z',
   help: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 17h-2v-2h2v2zm2.1-7.8l-.9.9c-.7.7-1.2 1.3-1.2 2.9h-2v-.5c0-1.1.4-2.1 1.2-2.8l1.2-1.3A2 2 0 1 0 10 9H8a4 4 0 1 1 7.1 2.2z',
@@ -99,6 +128,7 @@ const ICONS: Record<string, string> = {
   sov: 'M11 2v9H2a9 9 0 0 1 9-9zm2 0a9 9 0 1 1-9 11h9V2z',
   compare: 'M4 20V10h3v10H4zm5 0V4h3v16H9zm5 0v-8h3v8h-3zm5 0V8h3v12h-3z',
   briefing: 'M5 3h10l4 4v14H5V3zm9 1.5V8h3.5L14 4.5zM7 11h10v1.6H7zm0 3.5h10v1.6H7zm0 3.5h6v1.6H7z',
+  radar: 'M12 2a10 10 0 1 0 10 10h-2a8 8 0 1 1-8-8V2zm0 4a6 6 0 1 0 6 6h-2a4 4 0 1 1-4-4V6zm0 4a2 2 0 1 0 2 2h-2v-2zm1-8v10h2V4.1A8 8 0 0 1 19.9 9H22A10 10 0 0 0 13 2z',
   team: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm7 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM1 20c0-3.3 3.6-6 8-6s8 2.7 8 6v1H1v-1zm17.5 1v-1c0-1.9-.8-3.6-2.1-4.8 3.5.3 6.6 2.3 6.6 4.8v1h-4.5z',
 }
 
@@ -114,8 +144,16 @@ function TopProgress() {
 }
 
 /** Initiales affichées dans la pastille de l'utilisateur */
+const ROLE_LABEL = {
+  ar: { admin: 'مدير', analyst: 'محلل', viewer: 'قارئ' },
+  en: { admin: 'Administrator', analyst: 'Analyst', viewer: 'Viewer' },
+} as const
+
 function initials(name: string, email: string) {
-  const words = (name || email.split('@')[0]).split(/[\s._-]+/).filter(Boolean)
+  // Nom d'un seul mot tiré de l'adresse (« Farhat » pour w.farhat) : les initiales viennent de l'adresse (WF)
+  const fromName = name.split(/[\s._-]+/).filter(Boolean)
+  const fromEmail = email.split('@')[0].split(/[\s._-]+/).filter(Boolean)
+  const words = fromName.length > 1 || fromEmail.length < 2 ? (name ? fromName : fromEmail) : fromEmail
   return (words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? '?').slice(0, 2)).toUpperCase()
 }
 
@@ -138,11 +176,29 @@ export default function App() {
     const asked = new URLSearchParams(window.location.search).get('view') as View | null
     return newsWatch ? 'news' : asked && VIEWS.includes(asked) ? asked : 'dashboard'
   })
-  const [flux, setFlux] = useState<Flux | ''>('')
+  const auth = useAuth()
+  // Page fermée par le profil du compte (lien direct, ou droits changés par le Super Admin) : première page permise
+  const shown: View = viewAllowed(auth?.user, view) ? view : (VIEWS.find((v) => viewAllowed(auth?.user, v)) ?? 'help')
+  // Sous-type de la page Broadcasts (tv, radio, youtube) : choisi dans le menu latéral ou par ?sub=
+  const [mediaSub, setMediaSub] = useState(() => new URLSearchParams(window.location.search).get('sub') ?? '')
+  // Une seule veille (Libye) : plus de choix de source, toutes les pages couvrent toutes les sources
+  const flux: Flux | '' = ''
   const [bump, setBump] = useState(0)
   const [reportDay, setReportDay] = useState('')
   const [presenting, setPresenting] = useState(false)
-  const auth = useAuth()
+  // Palette de commandes : Ctrl+K (⌘K sur Mac) depuis n'importe quelle page
+  const [palette, setPalette] = useState(false)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPalette((p) => !p)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  const closePalette = useCallback(() => setPalette(false), [])
   const [collapsed, setCollapsed] = useCollapsed()
   const [alerts] = useAlerts()
   const fav = useFavorites()
@@ -161,7 +217,6 @@ export default function App() {
 
   {
     const status = useFetch<NewsResponse>('/api/news?size=1').data
-    const facets = useFetch<Facets>('/api/news/facets').data
 
     function setLang(next: Lang) {
       if (next !== lang) track('lang', next)
@@ -169,8 +224,10 @@ export default function App() {
       setLangState(next)
     }
     function go(next: View) {
+      if (!viewAllowed(auth?.user, next)) return
       track('view', next)
       if (next === 'report') setReportDay('')
+      if (next.startsWith('media-')) setMediaSub('')
       if (next === 'news') {
         setNewsWatch('')
         setDrill(null)
@@ -179,24 +236,31 @@ export default function App() {
     }
 
     const pro = PRO_TEXT[lang]
-    const TABS: { key: View; label: string }[] = [
+    const TABS = (
+      [
       { key: 'dashboard', label: t.navDashboard },
+      { key: 'radar', label: radarText(lang).nav },
       { key: 'news', label: t.navNews },
+      ...MEDIA_PAGES.map((m) => ({ key: `media-${m}` as View, label: MEDIA_PAGE_TEXT[lang].nav[m] })),
+      { key: 'media-live', label: MEDIA_PAGE_TEXT[lang].nav.live },
       { key: 'watch', label: WATCH_TEXT[lang].menu },
       { key: 'stats', label: t.navStats },
-      { key: 'assistant', label: pro.navAssistant },
+      { key: 'assistant', label: pro.navAssistantShort },
       { key: 'sov', label: pro.navSov },
       { key: 'compare', label: pro.navCompare },
       { key: 'briefing', label: pro.navBriefing },
       { key: 'ai', label: t.sideAi },
       { key: 'report', label: t.navReport },
+      { key: 'reports', label: lang === 'ar' ? 'التقارير' : 'Reports' },
       { key: 'alerts', label: t.sideAlerts },
-    ]
-    const MENU: { group: string; items: { key: View; label: string; count?: number }[] }[] = [
+      ] as { key: View; label: string }[]
+    ).filter((v) => viewAllowed(auth?.user, v.key))
+    const MENU: { group: string; items: { key: View; label: string; count?: number; sub?: string }[] }[] = [
       {
         group: t.sideMonitoring,
         items: [
           { key: 'dashboard', label: t.sideDashboards },
+          { key: 'radar', label: radarText(lang).nav },
           { key: 'news', label: t.sideNewsBoard },
           { key: 'watch', label: WATCH_TEXT[lang].title },
           { key: 'stats', label: t.sideAnalysis },
@@ -208,9 +272,18 @@ export default function App() {
         ],
       },
       {
+        group: MEDIA_PAGE_TEXT[lang].group,
+        items: MEDIA_PAGES.flatMap((m) => [
+          { key: `media-${m}` as View, label: MEDIA_PAGE_TEXT[lang].nav[m] },
+          ...(m === 'broadcast' ? MEDIA_SUBS.map((sub) => ({ key: 'media-broadcast' as View, sub, label: MEDIA_PAGE_TEXT[lang].subTypes[sub] })) : []),
+          ...(m === 'broadcast' ? [{ key: 'media-live' as View, label: MEDIA_PAGE_TEXT[lang].nav.live }] : []),
+        ]),
+      },
+      {
         group: t.sideReviews,
         items: [
           { key: 'briefing', label: pro.navBriefing },
+          { key: 'reports', label: lang === 'ar' ? 'التقارير' : 'Reports' },
           { key: 'report', label: t.sideReviews },
           { key: 'alerts', label: t.sideAlerts, count: alerts.length },
           { key: 'favorites', label: t.sideFavorites, count: fav.list.length },
@@ -220,13 +293,35 @@ export default function App() {
         group: t.sideHelp,
         items: [
           { key: 'help', label: t.sideHelp },
-          { key: 'admin', label: t.sideAdmin },
-          ...(can(auth?.user, 'admin') ? [{ key: 'team' as View, label: pro.navTeam }] : []),
         ],
       },
     ]
-    const fluxCount = (f: Flux) => facets?.flux.find((c) => c.name === f)?.count ?? 0
+    // Menu réduit aux pages permises par le profil ; un groupe vide disparaît
+    const menu = MENU.map((g) => ({ ...g, items: g.items.filter((v) => viewAllowed(auth?.user, v.key)) })).filter((g) => g.items.length)
     const other: Lang = lang === 'ar' ? 'en' : 'ar'
+    // Entrées de la palette : les pages permises du menu, puis le thème et la langue
+    const paletteEntries: PaletteEntry[] = [
+      ...menu.flatMap((g) =>
+        g.items.map((v) => ({
+          id: `v-${v.key}${v.sub ?? ''}`,
+          label: v.label,
+          group: g.group,
+          keywords: v.key,
+          run: () => {
+            go(v.key)
+            if (v.sub) setMediaSub(v.sub)
+          },
+        })),
+      ),
+      {
+        id: 'theme',
+        label: theme === 'dark' ? (lang === 'ar' ? 'الوضع الفاتح' : 'Light mode') : lang === 'ar' ? 'الوضع الداكن' : 'Dark mode',
+        group: lang === 'ar' ? 'الإعدادات' : 'Settings',
+        keywords: 'theme dark light',
+        run: () => setTheme(theme === 'dark' ? 'light' : 'dark'),
+      },
+      { id: 'lang', label: lang === 'ar' ? 'English' : 'العربية', group: lang === 'ar' ? 'الإعدادات' : 'Settings', keywords: 'language lang', run: () => setLang(other) },
+    ]
 
     return (
       <RefreshContext.Provider value={bump}>
@@ -238,25 +333,15 @@ export default function App() {
                 {/* Barre unique, en verre : marque, flux, outils, thème, langue, compte */}
                 <header className="mms-head">
                   <div className="mms-head__brand">
-                    <span className="mms-head__mark">
-                      <RadarMark size={30} />
+                    {/* Logo du client (رئاسة مجلس الوزراء — المركز الوطني لدعم القرار), le produit en petit à côté */}
+                    <span className="mms-head__logo">
+                      <img src="/logo-npdc.png" alt={lang === 'ar' ? 'المركز الوطني لدعم القرار' : 'National Decision Support Centre'} width={350} height={85} />
                     </span>
-                    <span className="mms-head__name">
-                      <strong>MMS Radar</strong>
-                      <small>{lang === 'ar' ? 'المركز الوطني لدعم القرار · طرابلس' : 'National Decision Support Centre · Tripoli'}</small>
+                    <span className="mms-head__product">
+                      <RadarMark size={18} />
+                      <b>MMS Radar</b>
                     </span>
                   </div>
-                  <label className="mms-head__flux" title={t.switchFlux}>
-                    <span className={`mms-flag mms-flag--${flux || 'all'}`} aria-hidden />
-                    <select value={flux} onChange={(e) => setFlux(e.target.value as Flux | '')} aria-label={t.switchFlux}>
-                      <option value="">{t.allSources}</option>
-                      {FLUX_KEYS.map((f) => (
-                        <option key={f} value={f}>
-                          {i18n.flux(f)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
                   <span className="mms-live">
                     <i aria-hidden />
                     <span>
@@ -265,13 +350,29 @@ export default function App() {
                   </span>
                   <div id="mms-appbar-slot" className="mms-appbar__slot" dir={i18n.dir} />
                   <div className="mms-head__tools" dir="ltr">
+                    <button
+                      type="button"
+                      className="mms-tool__btn mms-cmdk-btn"
+                      onClick={() => setPalette(true)}
+                      title={lang === 'ar' ? 'انتقال سريع وبحث (Ctrl+K)' : 'Quick jump and search (Ctrl+K)'}
+                      aria-label={lang === 'ar' ? 'انتقال سريع وبحث' : 'Quick jump and search'}
+                    >
+                      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
+                        <path fill="currentColor" d={ICONS.search} />
+                      </svg>
+                      <kbd>Ctrl K</kbd>
+                    </button>
                     <Toolbar
-                      onFavorites={() => go('favorites')}
+                      onFavorites={hasModule(auth?.user, 'favorites') ? () => go('favorites') : undefined}
                       onPresent={() => setPresenting(true)}
-                      onDay={(d) => {
-                        setReportDay(d)
-                        setView('report')
-                      }}
+                      onDay={
+                        hasModule(auth?.user, 'report')
+                          ? (d) => {
+                              setReportDay(d)
+                              setView('report')
+                            }
+                          : undefined
+                      }
                       onRefresh={reload}
                       onLang={() => setLang(other)}
                     />
@@ -303,7 +404,7 @@ export default function App() {
                       </span>
                       <span className="mms-user__id">
                         <strong>{auth.user.name || auth.user.email.split('@')[0]}</strong>
-                        <small dir="ltr">{auth.user.email}</small>
+                        <small>{ROLE_LABEL[lang === 'ar' ? 'ar' : 'en'][auth.user.role ?? 'admin']}</small>
                       </span>
                       <button
                         type="button"
@@ -325,7 +426,7 @@ export default function App() {
                 {/* Onglets : utilisés sur mobile, où le menu latéral est replié */}
                 <nav className="mms-tabs" aria-label="Navigation">
                   {TABS.map((v) => (
-                    <button key={v.key} type="button" className={view === v.key ? 'mms-tabs__btn is-active' : 'mms-tabs__btn'} onClick={() => go(v.key)}>
+                    <button key={v.key} type="button" className={shown === v.key ? 'mms-tabs__btn is-active' : 'mms-tabs__btn'} onClick={() => go(v.key)}>
                       {v.label}
                     </button>
                   ))}
@@ -344,64 +445,53 @@ export default function App() {
                       <span>{collapsed ? t.expand : t.collapse}</span>
                     </button>
                     <nav>
-                      {MENU.map((g) => (
+                      {menu.map((g) => (
                         <div key={g.group}>
                           <p className="mms-side__group">{g.group}</p>
                           {g.items.map((v) => (
                             <button
-                              key={v.key}
+                              key={`${v.key}${v.sub ?? ''}`}
                               type="button"
                               title={v.label}
-                              className={view === v.key ? 'mms-side__item is-active' : 'mms-side__item'}
-                              onClick={() => go(v.key)}
+                              className={`mms-side__item${v.sub ? ' mms-side__item--sub' : ''}${shown === v.key && (v.sub ?? '') === (v.key === 'media-broadcast' ? mediaSub : '') ? ' is-active' : ''}`}
+                              onClick={() => {
+                                go(v.key)
+                                if (v.sub) setMediaSub(v.sub)
+                              }}
                             >
-                              <Icon name={v.key} />
+                              {v.key.startsWith('media-') ? (
+                                <MediaIcon name={(v.sub ?? v.key.slice(6)) as MediaIconName} size={v.sub ? 18 : 22} />
+                              ) : (
+                                <Icon name={v.key} />
+                              )}
                               <span className="mms-side__label">{v.label}</span>
                               {!!v.count && <span className="mms-side__count">{i18n.num(v.count)}</span>}
                             </button>
                           ))}
                         </div>
                       ))}
-                      <p className="mms-side__group">{t.sideSources}</p>
-                      <button
-                        type="button"
-                        title={t.allSources}
-                        className={flux === '' ? 'mms-side__item is-active' : 'mms-side__item'}
-                        onClick={() => setFlux('')}
-                      >
-                        <span className="mms-flag mms-flag--all" aria-hidden />
-                        <span className="mms-side__label">{t.allSources}</span>
-                      </button>
-                      {FLUX_KEYS.map((f) => (
-                        <button
-                          key={f}
-                          type="button"
-                          title={i18n.flux(f)}
-                          className={flux === f ? 'mms-side__item is-active' : 'mms-side__item'}
-                          onClick={() => setFlux(f)}
-                        >
-                          <span className={`mms-flag mms-flag--${f}`} aria-hidden />
-                          <span className="mms-side__label">{i18n.flux(f)}</span>
-                          <span className="mms-side__count">{i18n.num(fluxCount(f))}</span>
-                        </button>
-                      ))}
                     </nav>
-                    <p className="mms-side__foot">© MMS · {new Date().getFullYear()}</p>
+                    <p className="mms-side__foot">
+                      <img className="mms-side__logo" src="/around-logo-footer.png" alt="Around Expressions" width={120} height={91} loading="lazy" />
+                      <span dir="ltr">© {new Date().getFullYear()} MMS — Copyright by Around Expressions</span>
+                    </p>
                   </aside>
 
                   <main className="mms-main">
-                    <div key={view} className="mms-view">
-                      {view === 'dashboard' && (
+                    <div key={shown} className="mms-view">
+                      <Suspense fallback={<p className="news-status">{t.loading}</p>}>
+                      {shown === 'dashboard' && (
                         <>
                           <CommandHero flux={flux} />
+                          {hasModule(auth?.user, 'radar') && <RadarBrief flux={flux} onOpen={() => go('radar')} />}
                           <SpikeBanner flux={flux} />
                           <Builder flux={flux} />
                         </>
                       )}
-                      {view === 'news' && (
+                      {shown === 'news' && (
                         <NewsList key={`${newsWatch}|${drill?.n ?? 0}`} flux={flux} initialWatch={newsWatch} initialFilters={drill?.filters} />
                       )}
-                      {view === 'watch' && (
+                      {shown === 'watch' && (
                         <Watches
                           onOpen={(id) => {
                             setNewsWatch(id)
@@ -409,30 +499,48 @@ export default function App() {
                           }}
                         />
                       )}
-                      {view === 'search' && (
+                      {shown === 'search' && (
                         <>
                           <PageHead title={t.searchTitle} />
                           <NewsList flux={flux} />
                         </>
                       )}
-                      {view === 'stats' && <StatsView flux={flux} />}
-                      {view === 'ai' && <AiAnalysis flux={flux} />}
-                      {view === 'report' && <DailyReport key={`${flux}|${reportDay}`} flux={flux} initialDay={reportDay} />}
-                      {view === 'alerts' && <Alerts flux={flux} />}
-                      {view === 'favorites' && <Favorites />}
-                      {view === 'help' && <Help />}
-                      {view === 'admin' && <Admin />}
-                      {view === 'assistant' && <Around flux={flux} />}
-                      {view === 'sov' && <ShareOfVoice flux={flux} />}
-                      {view === 'compare' && <ComparePeriods flux={flux} />}
-                      {view === 'briefing' && <ExecutiveBriefing flux={flux} />}
-                      {view === 'team' && can(auth?.user, 'admin') && <Team />}
+                      {shown === 'stats' && <StatsView flux={flux} />}
+                      {shown === 'ai' && <AiAnalysis flux={flux} />}
+                      {shown === 'report' && <DailyReport key={`${flux}|${reportDay}`} flux={flux} initialDay={reportDay} />}
+                      {shown === 'alerts' && <Alerts flux={flux} />}
+                      {shown === 'favorites' && <Favorites />}
+                      {shown === 'help' && <Help />}
+                      {shown === 'assistant' &&
+                        (canDo(auth?.user, 'ai_ask') ? (
+                          <Around flux={flux} />
+                        ) : (
+                          <p className="mms-note">{lang === 'ar' ? 'طرح الأسئلة على Around غير مفعّل في ملف صلاحياتك. تواصل مع المشرف.' : 'Asking Around is not enabled for your profile. Contact your administrator.'}</p>
+                        ))}
+                      {shown === 'sov' && <ShareOfVoice flux={flux} />}
+                      {shown === 'compare' && <ComparePeriods flux={flux} />}
+                      {shown === 'briefing' && <ExecutiveBriefing flux={flux} />}
+                      {shown === 'radar' && <Radar flux={flux} />}
+                      {shown.startsWith('media-') && shown !== 'media-live' && (
+                        <MediaPage key={shown} type={shown.slice(6) as MediaPageType} flux={flux} sub={mediaSub} onSub={setMediaSub} onLive={() => go('media-live')} />
+                      )}
+                      {shown === 'media-live' && <LiveWall />}
+                      {shown === 'reports' && <Reports onNews={() => go('news')} />}
+                      </Suspense>
                     </div>
                   </main>
                 </div>
 
                 <UpdateToast onReload={reload} />
+                <ReportTray hidden={shown === 'reports'} onGenerate={() => go('reports')} />
                 <Survey />
+                {palette && (
+                  <CommandPalette
+                    entries={paletteEntries}
+                    onClose={closePalette}
+                    onSearch={hasModule(auth?.user, 'news') ? (q) => drillTo({ q }) : null}
+                  />
+                )}
                 {presenting && <Presentation flux={flux} onClose={closePresent} />}
               </div>
             </DrillContext.Provider>

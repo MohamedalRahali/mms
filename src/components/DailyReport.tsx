@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { type Flux, type NewsItem, type Report, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
+import { canDo, useAuth } from '../lib/auth'
 
 /** Rapport d'une journée, classé par catégorie, prêt à imprimer ou à enregistrer en PDF */
 export function DailyReport({ flux, initialDay = '' }: { flux: Flux | ''; initialDay?: string }) {
   const i = useI18n()
   const { t } = i
+  const auth = useAuth()
   const [day, setDay] = useState(initialDay)
   const { data, error, loading } = useFetch<Report>(`/api/report?day=${day}${flux ? `&flux=${flux}` : ''}`)
 
@@ -23,7 +25,7 @@ export function DailyReport({ flux, initialDay = '' }: { flux: Flux | ''; initia
             </option>
           ))}
         </select>
-        <button type="button" className="news-btn" onClick={() => window.print()} disabled={!data?.items.length}>
+        <button type="button" className="news-btn" onClick={() => window.print()} disabled={!data?.items.length} hidden={!canDo(auth?.user, 'export')}>
           {t.print}
         </button>
       </div>

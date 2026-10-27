@@ -1,0 +1,280 @@
+/* Mur du direct « البث المباشر » (LiveWall.tsx) */
+.lw-onair {
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, #e5484d 16%, transparent);
+  color: light-dark(#c62a2f, #ff8a8d);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.lw-h {
+  margin: 1.2rem 0 0.6rem;
+  font-size: 1rem;
+}
+.lw-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 0.8rem;
+}
+.lw-tile {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #000;
+  aspect-ratio: 16 / 9;
+}
+.lw-tile.is-live {
+  border-color: color-mix(in srgb, #e5484d 45%, var(--line));
+}
+.lw-tile__screen,
+.lw-tile__screen video,
+.lw-tile__screen iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+}
+.lw-tile__poster {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 100%;
+  padding: 1rem;
+  background: radial-gradient(circle at 50% 40%, light-dark(#24463a, #12291f), light-dark(#0e2219, #050e0a));
+  color: #c9d8cf;
+  text-align: center;
+  font-size: 0.85rem;
+}
+.lw-tile__poster small {
+  opacity: 0.7;
+  font-size: 0.75rem;
+}
+/* Couche cliquable au-dessus de la vidéo ou de l'iframe : nom, badge, ouverture en grand */
+.lw-tile__hit {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.45rem;
+  padding: 0.6rem 0.7rem;
+  border: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.72), transparent 45%);
+  color: #fff;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.lw-tile__hit:hover,
+.lw-tile__hit:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 3px var(--green);
+}
+.lw-tile__name {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lw-tile__via {
+  margin-inline-start: auto;
+  font-size: 0.72rem;
+  opacity: 0.75;
+}
+.lw-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 5px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+.lw-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  animation: lw-blink 1.4s ease-in-out infinite;
+}
+@keyframes lw-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+.lw-note {
+  margin: 0.5rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+/* Radios */
+.lw-radios {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.6rem;
+}
+.lw-radio {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.25rem 0.6rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.lw-radio .mms-mi {
+  color: light-dark(#b9770e, #f0b44c);
+}
+.lw-radio small {
+  grid-column: 1 / -1;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+.lw-radio.is-off {
+  opacity: 0.65;
+}
+.lw-radio.is-on {
+  border-color: var(--green);
+}
+.lw-radio__name {
+  font-weight: 700;
+}
+.lw-eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+}
+.lw-eq i {
+  width: 3px;
+  height: 30%;
+  border-radius: 2px;
+  background: light-dark(#b9770e, #f0b44c);
+  animation: lw-eq 1s ease-in-out infinite alternate;
+}
+.lw-eq i:nth-child(2n) {
+  animation-duration: 0.7s;
+}
+.lw-eq i:nth-child(3n) {
+  animation-duration: 1.3s;
+}
+.lw-eq.is-big {
+  height: 70px;
+  gap: 5px;
+}
+.lw-eq.is-big i {
+  width: 8px;
+}
+@keyframes lw-eq {
+  to {
+    height: 100%;
+  }
+}
+
+/* Vue en grand avec le son */
+.lw-focus {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(2, 8, 5, 0.82);
+  backdrop-filter: blur(6px);
+}
+.lw-focus__box {
+  width: min(1100px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-solid);
+  color: var(--ink);
+  outline: none;
+}
+.lw-focus__box header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+.lw-focus__tools {
+  display: flex;
+  gap: 0.4rem;
+  margin-inline-start: auto;
+}
+.lw-focus__stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #000;
+  aspect-ratio: 16 / 9;
+}
+.lw-focus__stage.is-radio {
+  aspect-ratio: auto;
+  min-height: 220px;
+}
+.lw-focus__stage video,
+.lw-focus__stage iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.lw-focus__box:fullscreen {
+  width: 100%;
+  border-radius: 0;
+}
+.lw-focus__box:fullscreen .lw-focus__stage {
+  height: calc(100vh - 80px);
+  aspect-ratio: auto;
+}
+.lw-focus__radio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2rem;
+  min-height: 220px;
+  padding: 1rem;
+}
+.lw-focus__radio audio {
+  width: min(420px, 100%);
+}
+.lw-focus__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+  margin: 0.6rem 0 0;
+}
+.lw-focus__link {
+  display: inline-block;
+  color: var(--green-deep);
+  font-size: 0.85rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lw-badge::before,
+  .lw-eq i {
+    animation: none;
+  }
+  .lw-eq i {
+    height: 70%;
+  }
+}

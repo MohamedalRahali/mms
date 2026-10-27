@@ -5,6 +5,9 @@ import path from 'node:path'
 import express from 'express'
 import { closeSessions, currentUser, hashPassword, readUsers, ROLES, setAuthListener, userSessions, writeUsers } from './auth.js'
 import { getItems, setHidden } from './store.js'
+import { keyStatus } from './keys.js'
+import { aiUsage } from './ai.js'
+import { mountPermissionsAdmin, permsOf, profileExists } from './permissions.js'
 import {
   all,
   countryOf,
@@ -135,7 +138,8 @@ function deviceOf(ua = '') {
 
 function csv(rows, cols) {
   const cell = (v) => {
-    const s = String(v ?? '')
+    // Pas de formule Excel dans les exports (= + - @ en tête)
+    const s = String(v ?? '').replace(/^[=+\-@\t\r]/, "'$&")
     return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
   }
   return '﻿' + [cols.map((c) => c[0]).join(','), ...rows.map((r) => cols.map((c) => cell(c[1](r))).join(','))].join('\n')
@@ -170,6 +174,8 @@ function userRow(u, fails) {
     email: u.email,
     name: u.name || u.email,
     role: roleOf(u),
+    profile: u.profile || '',
+    profileName: permsOf({ role: roleOf(u), profile: u.profile }).profileName,
     disabled: Boolean(u.disabled),
     createdAt: u.createdAt || null,
     online: isOnline(u.email),
@@ -185,7 +191,8 @@ function userRow(u, fails) {
 /** Activité déduite des appels à l'API : recherche, filtres, rapports, analyses IA, exports */
 const FILTER_KEYS = ['flux', 'category', 'channel', 'lang', 'source', 'tone', 'entity', 'tag', 'watch', 'days', 'important']
 function deriveActivity(req, user, ip) {
-  const p = req.path
+  // Même normalisation qu'Express (casse, barre finale) : /api/AI/ask/ est bien journalisé
+  const p = req.path.toLowerCase().replace(/\/+$/, '') || '/'
   const q = req.query || {}
   if (req.method === 'GET' && p === '/api/news') {
     if (Number(q.page || 1) > 1) return
@@ -312,6 +319,19 @@ export function mountSuperAdmin(app, root) {
   })
   const audit = (req, action, target, detail) => logAudit(req.sa.u, ipOf(req), action, target, detail)
 
+  /* ---- الصلاحيات التفصيلية : profils de modules et de boutons */
+  mountPermissionsAdmin(sa, {
+    audit,
+    usersOf: (id) => readUsers().filter((u) => (u.profile || roleOf(u)) === id),
+    detach: (id) => {
+      const users = readUsers()
+      const mine = users.filter((u) => u.profile === id)
+      for (const u of mine) delete u.profile
+      if (mine.length) writeUsers(users)
+      return mine.length
+    },
+  })
+
   sa.get('/me', (req, res) => res.json({ user: req.sa.u, expires: iso(req.sa.exp), ip: ipOf(req), country: countryOf(ipOf(req)) }))
   sa.post('/logout', (req, res) => {
     revoked.set(req.sa.sid, req.sa.exp)
@@ -368,6 +388,7 @@ export function mountSuperAdmin(app, root) {
         saFails24: sec24.filter((e) => e.type === 'sa_login_fail' || e.type === 'sa_locked').length,
         suspicious: [...byIp.entries()].filter(([, n]) => n >= MAX_FAILS).length,
         blocked24: sec24.filter((e) => e.type.startsWith('blocked')).length,
+        denied24: sec24.filter((e) => e.type === 'perm_denied').length,
         recent: sec24.filter((e) => e.type !== 'login_ok' && e.type !== 'logout').slice(-8).reverse().map((e) => ({ ...e, t: iso(e.t), country: countryOf(e.ip) })),
       },
       countries: [...countries.values()].sort((a, b) => b.hits - a.hits).slice(0, 12).map((c) => ({ cc: c.cc, country: c.country, hits: c.hits, ips: c.ips.size })),
@@ -390,6 +411,9 @@ export function mountSuperAdmin(app, root) {
         last24: items.filter((it) => Date.parse(it.date) >= now - 24 * 3600_000).length,
         dirs: sources.map((d) => ({ dir: d, found: fs.existsSync(d) })),
       },
+      // Clés présentes ou absentes (jamais leur valeur) et dépense estimée de l'analyse intelligente
+      keys: keyStatus(root),
+      aiUsage: aiUsage(),
     })
   })
 
@@ -444,6 +468,7 @@ export function mountSuperAdmin(app, root) {
     const { byLogin } = failsSince(from)
     res.json({
       user: userRow(u, byLogin),
+      perms: permsOf({ role: roleOf(u), profile: u.profile }),
       noteAt: notes[email]?.at || null,
       sessions: userSessions(u.email).map((s) => ({ ...s, at: s.at ? iso(s.at) : null, expires: iso(s.expires), country: countryOf(s.ip), device: deviceOf(s.ua) })),
       ips: [...ips.values()].sort((a, b) => b.last - a.last).map((i) => ({ ...i, first: iso(i.first), last: iso(i.last), country: countryOf(i.ip), place: geoOf(i.ip)?.country || '' })),
@@ -464,8 +489,9 @@ export function mountSuperAdmin(app, root) {
     const users = readUsers()
     if (users.some((u) => lc(u.email) === email)) return fail(res, 409, 'EXISTS')
     const name = String(req.body?.name || '').trim().slice(0, 80) || email
-    writeUsers([...users, { email, username: email, name, role, createdAt: new Date().toISOString(), ...hashPassword(password) }])
-    audit(req, 'user_create', email, `role=${role}`)
+    const profile = req.body?.profile && profileExists(req.body.profile) && !ROLES.includes(req.body.profile) ? req.body.profile : ''
+    writeUsers([...users, { email, username: email, name, role, ...(profile ? { profile } : {}), createdAt: new Date().toISOString(), ...hashPassword(password) }])
+    audit(req, 'user_create', email, `role=${role}${profile ? ` profile=${profile}` : ''}`)
     res.status(201).json({ ok: true })
   })
 
@@ -480,6 +506,14 @@ export function mountSuperAdmin(app, root) {
       if (!ROLES.includes(req.body.role)) return fail(res, 400, 'BAD_ROLE')
       changes.push(`role ${roleOf(u)} → ${req.body.role}`)
       u.role = req.body.role
+    }
+    if (req.body?.profile !== undefined) {
+      // '' ou le rôle lui-même : le compte suit le profil de son rôle
+      const id = String(req.body.profile || '')
+      if (id && !profileExists(id)) return fail(res, 400, 'BAD_PROFILE')
+      if (!id || ROLES.includes(id)) delete u.profile
+      else u.profile = id
+      changes.push(`profile → ${id || 'role'}`)
     }
     if (req.body?.name !== undefined) {
       u.name = String(req.body.name).trim().slice(0, 80) || u.email
@@ -565,7 +599,7 @@ export function mountSuperAdmin(app, root) {
   })
 
   /* ---- التحليلات والدول */
-  sa.get('/analytics', (_req, res) => {
+  sa.get('/analytics', async (_req, res) => {
     const from = Date.now() - 30 * 86_400_000
     const ips = new Map()
     const countries = new Map()
@@ -603,6 +637,8 @@ export function mountSuperAdmin(app, root) {
       countries: [...countries.values()].sort((a, b) => b.hits - a.hits).map((c) => ({ cc: c.cc, country: c.country, hits: c.hits, bytes: c.bytes, ips: c.ips.size, users: c.users.size })),
       heat,
       days,
+      // Position du serveur, cible des arcs du globe animé
+      server: await serverGeo().catch(() => null),
     })
   })
 

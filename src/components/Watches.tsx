@@ -2,12 +2,12 @@ import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { PageHead } from './Extras'
 import { type Flux, FLUX_KEYS } from '../lib/news'
 import { useI18n } from '../lib/i18n'
-import { can, useAuth } from '../lib/auth'
+import { canDo, useAuth } from '../lib/auth'
 import { THEMES, type Watch, WATCH_TEXT, ZONES, themesToRules } from '../lib/watches'
 
 /** Écran « الرصد المبرمج » : zone surveillée, thèmes à cocher, période, destinataires, puis liste des veilles */
 
-const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tunis', year: 'numeric', month: '2-digit', day: '2-digit' })
+const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tripoli', year: 'numeric', month: '2-digit', day: '2-digit' })
 const today = () => dayKey.format(new Date())
 const tomorrow = () => dayKey.format(new Date(Date.now() + 86_400_000))
 
@@ -205,6 +205,8 @@ function WatchForm({ onCreated }: { onCreated: () => void }) {
 
 function WatchRow({ watch, onChange, onOpen }: { watch: Watch; onChange: () => void; onOpen: (id: string) => void }) {
   const i = useI18n()
+  // Activer, désactiver, supprimer : action « manage_watches » du profil
+  const mayEdit = canDo(useAuth()?.user, 'manage_watches')
   const w = WATCH_TEXT[i.lang]
   async function toggle() {
     await fetch(`/api/watches/${watch.id}`, {
@@ -256,12 +258,16 @@ function WatchRow({ watch, onChange, onOpen }: { watch: Watch; onChange: () => v
         <button type="button" className="news-btn" onClick={() => onOpen(watch.id)}>
           {w.showNews}
         </button>
-        <button type="button" className="news-btn news-btn--ghost" onClick={toggle}>
-          {watch.enabled ? w.disable : w.enable}
-        </button>
-        <button type="button" className="news-btn news-btn--ghost" onClick={remove}>
-          {w.remove}
-        </button>
+        {mayEdit && (
+          <>
+            <button type="button" className="news-btn news-btn--ghost" onClick={toggle}>
+              {watch.enabled ? w.disable : w.enable}
+            </button>
+            <button type="button" className="news-btn news-btn--ghost" onClick={remove}>
+              {w.remove}
+            </button>
+          </>
+        )}
       </div>
     </article>
   )
@@ -299,7 +305,7 @@ export function Watches({ onOpen }: { onOpen: (id: string) => void }) {
       <PageHead title={w.title} intro={w.intro} />
       {!smtp && <p className="mms-note">{w.smtpMissing}</p>}
       <div className="mms-watchpage">
-        {can(auth?.user, 'analyst') && <WatchForm onCreated={reload} />}
+        {canDo(auth?.user, 'manage_watches') && <WatchForm onCreated={reload} />}
         <section className="mms-widget">
           <header className="mms-widget__head mms-widget__head--plain">
             <div>

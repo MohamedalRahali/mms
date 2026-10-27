@@ -14,10 +14,10 @@ const EMAIL_RE = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/
 let file = ''
 let conf = { enabled: false, weekday: 0, hour: 8, days: 7, recipients: [], telegram: true, lastSent: '', lastError: '' }
 
-const tunis = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Tunis', weekday: 'short', hour: 'numeric', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit' })
+const local = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Tripoli', weekday: 'short', hour: 'numeric', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit' })
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 function nowTunis() {
-  const p = Object.fromEntries(tunis.formatToParts(new Date()).map((x) => [x.type, x.value]))
+  const p = Object.fromEntries(local.formatToParts(new Date()).map((x) => [x.type, x.value]))
   return { weekday: WEEKDAYS.indexOf(p.weekday), hour: Number(p.hour), day: `${p.year}-${p.month}-${p.day}` }
 }
 
@@ -63,7 +63,7 @@ export async function briefingWithSummary(items, days, lastUpdate) {
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 const TONE = { positive: 'إيجابي', neutral: 'محايد', negative: 'سلبي' }
-const dateAr = new Intl.DateTimeFormat('ar-LY', { timeZone: 'Africa/Tunis', day: 'numeric', month: 'long', year: 'numeric' })
+const dateAr = new Intl.DateTimeFormat('ar-LY', { timeZone: 'Africa/Tripoli', day: 'numeric', month: 'long', year: 'numeric' })
 const delta = (a, b) => (b ? `${a >= b ? '▲' : '▼'} ${Math.abs(Math.round(((a - b) / b) * 100))}%` : '')
 
 export function briefingEmail({ b, summary }) {

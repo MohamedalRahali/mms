@@ -7,3 +7,4 @@ data/feedback.jsonl
 data/images.json
 data/ai-usage.json
 data/
+tsconfig.tsbuildinfo

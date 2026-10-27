@@ -1,0 +1,168 @@
+/* Chaînes TV et radios : écoute en direct et administration des sources (Diffusion.tsx) */
+.dif {
+  margin: 0 0 1rem;
+  padding: 0.8rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.dif-live {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.dif-live h3 {
+  margin: 0;
+  margin-inline-end: 0.5rem;
+  font-size: 1rem;
+}
+.dif-chip {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.dif-chip.is-on {
+  border-color: var(--green);
+  background: var(--green-soft);
+  color: var(--green-deep);
+  font-weight: 700;
+}
+.dif-toggle {
+  margin-inline-start: auto;
+  height: 34px;
+}
+.dif-player {
+  margin-top: 0.8rem;
+}
+.dif-player__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.dif-player video {
+  width: 100%;
+  max-height: 360px;
+  background: #000;
+  border-radius: 8px;
+}
+.dif-player audio {
+  width: 100%;
+}
+.dif-note {
+  margin: 0.4rem 0;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+.dif-admin {
+  margin-top: 0.8rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.6rem;
+}
+.dif-table {
+  overflow-x: auto;
+}
+.dif-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+/* Une carte par chaîne : les colonnes passent à la ligne sur un écran étroit */
+.dif-table table,
+.dif-table tbody {
+  display: block;
+}
+.dif-table tr {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.4rem 0.8rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.dif-table td {
+  display: block;
+  padding: 0;
+}
+.dif-table td small {
+  display: block;
+  color: var(--ink-soft);
+  margin-top: 0.15rem;
+  overflow-wrap: anywhere;
+}
+.dif-table tr.is-off {
+  opacity: 0.6;
+}
+.dif-state {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--bg);
+}
+.dif-state--ok {
+  background: var(--green-soft);
+  color: var(--green-deep);
+}
+.dif-state--error {
+  color: var(--coral);
+}
+.dif-state--waiting {
+  color: var(--gold);
+}
+.dif-table .dif-warn,
+.dif-warn {
+  color: var(--coral);
+}
+.dif-table .dif-ok {
+  color: var(--green-deep);
+}
+.dif-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+.dif-edit {
+  grid-column: 1 / -1;
+}
+.dif-edit input,
+.dif-add input,
+.dif-add select {
+  width: 100%;
+  margin-bottom: 0.3rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.82rem;
+}
+.dif-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.dif-actions .news-btn {
+  height: 32px;
+  padding: 0 0.7rem;
+  font-size: 0.8rem;
+}
+.dif-add {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.4rem;
+  margin-top: 0.8rem;
+  align-items: start;
+}
+.dif-add .news-btn {
+  height: 34px;
+}

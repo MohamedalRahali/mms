@@ -206,6 +206,10 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
             {t.secure}
           </p>
         </form>
+        <p className="around-credit">
+          <img src="/around-logo-footer.png" alt="Around Expressions" width={120} height={91} loading="lazy" />
+          <span dir="ltr">© {new Date().getFullYear()} MMS — Copyright by Around Expressions</span>
+        </p>
       </main>
     </div>
   )

@@ -1,0 +1,86 @@
+/* Recherches enregistrées : rangée de pastilles sous les filtres de الأخبار */
+.mms-saved {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+.mms-saved__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.mms-saved__chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    transform 0.15s;
+  animation: mms-saved-in 0.2s ease-out;
+}
+.mms-saved__chip:hover {
+  border-color: var(--green);
+  transform: translateY(-1px);
+}
+.mms-saved__chip.is-on {
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+.mms-saved__chip button {
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 4px 4px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 22ch;
+}
+[dir='rtl'] .mms-saved__chip button {
+  padding: 4px 10px 4px 4px;
+}
+.mms-saved__chip .mms-saved__bell {
+  padding: 4px 2px;
+  opacity: 0.55;
+}
+.mms-saved__chip .mms-saved__bell.is-on {
+  opacity: 1;
+}
+.mms-saved__chip .mms-saved__x {
+  padding: 4px 10px;
+  color: var(--ink-soft);
+}
+.mms-saved__chip .mms-saved__x:hover {
+  color: var(--ink);
+}
+.mms-saved__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mms-saved__form input {
+  min-width: 0;
+  width: 16rem;
+  max-width: 100%;
+}
+@keyframes mms-saved-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mms-saved__chip {
+    animation: none;
+    transition: none;
+  }
+}

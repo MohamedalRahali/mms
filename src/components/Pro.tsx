@@ -3,7 +3,7 @@ import { type Count, type EngagementTotals, type Flux, type NewsItem, type Spike
 import { useI18n } from '../lib/i18n'
 import { TONE_COLORS, useIntel } from '../lib/intel'
 import { compact, usePro } from '../lib/pro'
-import { type Role, can, useAuth } from '../lib/auth'
+import { canDo, useAuth } from '../lib/auth'
 import { useCountUp } from '../lib/motion'
 import { NewsCard } from './NewsCard'
 import { EngagementChips } from './Engagement'
@@ -606,7 +606,7 @@ export function ExecutiveBriefing({ flux }: { flux: Flux | '' }) {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-    timeZone: 'Africa/Tunis',
+    timeZone: 'Africa/Tripoli',
   })
   return (
     <div className="mms-brief">
@@ -614,14 +614,16 @@ export function ExecutiveBriefing({ flux }: { flux: Flux | '' }) {
       <div className="mms-toolbar mms-noprint">
         <Seg value={days} options={[7, 14, 30].map((d) => [d, p.brPeriod[d]] as [number, string])} onChange={setDays} />
         <div className="mms-toolbar__end">
-          {data?.ai && can(auth?.user, 'analyst') && (
+          {data?.ai && canDo(auth?.user, 'ai_run') && (
             <button type="button" className="news-btn" onClick={write} disabled={state === 'loading' || !!shown}>
               {state === 'loading' ? p.working : shown ? `✓ ${p.brRewrite}` : `✨ ${p.brWrite}`}
             </button>
           )}
-          <button type="button" className="news-btn news-btn--ghost" onClick={() => window.print()}>
-            {p.brPrint}
-          </button>
+          {canDo(auth?.user, 'export') && (
+            <button type="button" className="news-btn news-btn--ghost" onClick={() => window.print()}>
+              {p.brPrint}
+            </button>
+          )}
         </div>
       </div>
       {state === 'error' && <p className="news-status news-status--error">{p.aiError}</p>}
@@ -736,168 +738,8 @@ export function ExecutiveBriefing({ flux }: { flux: Flux | '' }) {
           </ol>
         </article>
       )}
-      {can(auth?.user, 'admin') && <ScheduleForm />}
+      {canDo(auth?.user, 'schedule') && <ScheduleForm />}
     </div>
-  )
-}
-
-/* ---------------------------------------------------------------- équipe */
-
-type Member = { email: string; name: string; role: Role; createdAt: string | null }
-
-export function Team() {
-  const p = usePro()
-  const auth = useAuth()
-  const [bump, setBump] = useState(0)
-  const { data } = useFetch<{ users: Member[] }>(`/api/users?b=${bump}`, 0)
-  const [form, setForm] = useState({ email: '', name: '', role: 'viewer' as Role, password: '' })
-  const [error, setError] = useState('')
-  const [reset, setReset] = useState<{ email: string; password: string } | null>(null)
-  const users = useMemo(() => [...(data?.users ?? [])].sort((a, b) => a.email.localeCompare(b.email)), [data])
-
-  async function act(fn: () => Promise<unknown>) {
-    setError('')
-    try {
-      await fn()
-      setBump((n) => n + 1)
-      return true
-    } catch (err) {
-      setError(p.tmErrors[(err as { code?: string }).code ?? ''] ?? p.aiError)
-      return false
-    }
-  }
-
-  return (
-    <>
-      <PageHead title={p.tmTitle} intro={p.tmIntro} />
-      <div className="mms-pro-grid">
-        <section className="mms-panel mms-panel--wide">
-          <table className="mms-team">
-            <thead>
-              <tr>
-                <th>{p.tmEmail}</th>
-                <th>{p.tmName}</th>
-                <th>{p.tmRole}</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => {
-                const me = u.email.toLowerCase() === auth?.user.email.toLowerCase()
-                return (
-                  <tr key={u.email}>
-                    <td dir="ltr">
-                      {u.email} {me && <em className="mms-team__you">{p.tmYou}</em>}
-                    </td>
-                    <td dir="auto">{u.name}</td>
-                    <td>
-                      <select
-                        value={u.role}
-                        onChange={(e) => act(() => postJson(`/api/users/${encodeURIComponent(u.email)}`, { role: e.target.value }, 'PATCH'))}
-                      >
-                        {(['admin', 'analyst', 'viewer'] as const).map((r) => (
-                          <option key={r} value={r}>
-                            {p.tmRoles[r]}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="mms-team__tools">
-                      <button type="button" className="news-btn news-btn--ghost" onClick={() => setReset({ email: u.email, password: '' })}>
-                        {p.tmReset}
-                      </button>
-                      {!me && (
-                        <button
-                          type="button"
-                          className="news-btn news-btn--ghost mms-danger"
-                          onClick={() => act(() => postJson(`/api/users/${encodeURIComponent(u.email)}`, undefined, 'DELETE'))}
-                        >
-                          {p.tmRemove}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          {reset && (
-            <form
-              className="mms-team__reset"
-              onSubmit={async (e) => {
-                e.preventDefault()
-                if (await act(() => postJson(`/api/users/${encodeURIComponent(reset.email)}`, { password: reset.password }, 'PATCH'))) setReset(null)
-              }}
-            >
-              <span dir="ltr">{reset.email}</span>
-              <input
-                type="password"
-                autoComplete="new-password"
-                value={reset.password}
-                onChange={(e) => setReset({ ...reset, password: e.target.value })}
-                placeholder={p.tmPassword}
-                minLength={8}
-              />
-              <button type="submit" className="news-btn">
-                {p.brSave}
-              </button>
-              <button type="button" className="news-btn news-btn--ghost" onClick={() => setReset(null)}>
-                ×
-              </button>
-            </form>
-          )}
-          {error && <p className="news-status news-status--error">{error}</p>}
-        </section>
-        <form
-          className="mms-panel mms-team__add"
-          onSubmit={async (e) => {
-            e.preventDefault()
-            if (await act(() => postJson('/api/users', form))) setForm({ email: '', name: '', role: 'viewer', password: '' })
-          }}
-        >
-          <h3>{p.tmAdd}</h3>
-          <label>
-            <span>{p.tmEmail}</span>
-            <input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} dir="ltr" autoComplete="off" />
-          </label>
-          <label>
-            <span>{p.tmName}</span>
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} dir="auto" />
-          </label>
-          <label>
-            <span>{p.tmRole}</span>
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
-              {(['viewer', 'analyst', 'admin'] as const).map((r) => (
-                <option key={r} value={r}>
-                  {p.tmRoles[r]} — {p.tmRoleHelp[r]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>{p.tmPassword}</span>
-            <input
-              type="password"
-              required
-              minLength={8}
-              autoComplete="new-password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-            />
-          </label>
-          <button type="submit" className="news-btn">
-            + {p.tmAdd}
-          </button>
-          <ul className="mms-team__roles">
-            {(['admin', 'analyst', 'viewer'] as const).map((r) => (
-              <li key={r}>
-                <b>{p.tmRoles[r]}</b> : {p.tmRoleHelp[r]}
-              </li>
-            ))}
-          </ul>
-        </form>
-      </div>
-    </>
   )
 }
 

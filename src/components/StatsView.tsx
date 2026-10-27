@@ -5,6 +5,7 @@ import { useCountUp } from '../lib/motion'
 import { TopEngaged } from './Pro'
 import { useMedia } from '../lib/media'
 import { type MediaType } from '../lib/news'
+import { Delta, EntityPanel, MoodPanel } from './Trends'
 
 function CountUp({ value, num }: { value: number; num: (n: number) => string }) {
   return <>{num(useCountUp(value))}</>
@@ -81,6 +82,9 @@ export function StatsView({ flux }: { flux: Flux | '' }) {
   const m = useMedia()
   const [days, setDays] = useState('30')
   const { data, error, loading } = useFetch<Stats>(`/api/news/stats?days=${days}${flux ? `&flux=${flux}` : ''}`)
+  // Période double : la différence donne la période précédente, pour les variations des chiffres clés
+  const wide = useFetch<Stats>(`/api/news/stats?days=${Number(days) * 2}${flux ? `&flux=${flux}` : ''}`).data
+  const prev = wide && data && wide.days === data.days * 2 ? { total: wide.total - data.total, broadcasts: wide.broadcasts - data.broadcasts } : null
 
   return (
     <>
@@ -107,12 +111,14 @@ export function StatsView({ flux }: { flux: Flux | '' }) {
               <strong>
                 <CountUp value={data.total} num={num} />
               </strong>
+              <Delta now={data.total} before={prev?.total ?? null} />
             </div>
             <div className="news-tile">
               <span>{t.tileBroadcasts}</span>
               <strong>
                 <CountUp value={data.broadcasts} num={num} />
               </strong>
+              <Delta now={data.broadcasts} before={prev?.broadcasts ?? null} />
             </div>
             <div className="news-tile">
               <span>{t.tileSources}</span>
@@ -152,6 +158,8 @@ export function StatsView({ flux }: { flux: Flux | '' }) {
             </details>
           </section>
 
+          <MoodPanel stats={data} />
+
           <section className="news-panel">
             <h3>{t.categories}</h3>
             <HBars rows={data.categories} label={i.category} />
@@ -187,6 +195,8 @@ export function StatsView({ flux }: { flux: Flux | '' }) {
               />
             </section>
           )}
+
+          <EntityPanel stats={data} days={data.days} />
 
           <section className="news-panel">
             <h3>{t.fluxes}</h3>

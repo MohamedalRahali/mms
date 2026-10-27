@@ -170,7 +170,7 @@ export type Health = {
   aiProvider?: '' | 'claude' | 'gemini' | 'openai'
   keys?: { mms: KeyState[]; libye: KeyState[] | null }
   aiUsage?: { month: string; current: Record<string, UsageRow>; total: Record<string, UsageRow> }
-  sources: { flux: Flux; dir: string; found: boolean; count: number }[]
+  sources: { flux: Flux; dir?: string; found: boolean; count: number }[]
 }
 
 export function useFetch<T>(url: string, refreshMs = REFRESH_MS) {

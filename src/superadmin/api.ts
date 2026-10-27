@@ -29,8 +29,8 @@ export const qs = (o: Record<string, string | number | undefined>) =>
 
 /* ---------------------------------------------------------------- mise en forme */
 
-const dt = new Intl.DateTimeFormat('ar-LY-u-nu-latn', { timeZone: 'Africa/Tunis', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
-const dShort = new Intl.DateTimeFormat('ar-LY-u-nu-latn', { timeZone: 'Africa/Tunis', day: 'numeric', month: 'short' })
+const dt = new Intl.DateTimeFormat('ar-LY-u-nu-latn', { timeZone: 'Africa/Tripoli', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+const dShort = new Intl.DateTimeFormat('ar-LY-u-nu-latn', { timeZone: 'Africa/Tripoli', day: 'numeric', month: 'short' })
 export const fmtDate = (iso?: string | null) => (iso ? dt.format(new Date(iso)) : '—')
 export const fmtDay = (day: string) => dShort.format(new Date(`${day}T12:00:00Z`))
 export const fmtNum = (n: number) => (n || 0).toLocaleString('en-US')
@@ -88,6 +88,7 @@ export const SECURITY_LABEL: Record<string, string> = {
   sa_locked: 'حظر مؤقت للوحة العليا',
   blocked_ip: 'طلب من عنوان محظور',
   blocked_country: 'طلب من دولة محظورة',
+  perm_denied: 'طلب خارج الصلاحيات',
 }
 
 export const AUDIT_LABEL: Record<string, string> = {
@@ -107,6 +108,9 @@ export const AUDIT_LABEL: Record<string, string> = {
   announcement: 'شريط الإعلان',
   maintenance: 'وضع الصيانة',
   export_csv: 'تصدير CSV',
+  profile_create: 'إنشاء ملف صلاحيات',
+  profile_update: 'تعديل ملف صلاحيات',
+  profile_delete: 'حذف ملف صلاحيات',
 }
 
 export const ERROR_LABEL: Record<string, string> = {
@@ -120,6 +124,9 @@ export const ERROR_LABEL: Record<string, string> = {
   SELF_COUNTRY: 'لا يمكنك حظر دولتك الحالية.',
   BAD_IP: 'عنوان IP غير صالح.',
   BAD_COUNTRY: 'رمز الدولة من حرفين (مثل LY).',
+  BAD_PROFILE: 'ملف الصلاحيات غير موجود.',
+  BUILTIN: 'لا يمكن حذف ملفات الأدوار الأساسية.',
+  TOO_MANY: 'عدد ملفات الصلاحيات بلغ الحد الأقصى (40).',
   FAILED: 'تعذّر الاتصال بالخادم.',
 }
 export const errText = (e: unknown) => ERROR_LABEL[(e as Error)?.message] || ERROR_LABEL.FAILED

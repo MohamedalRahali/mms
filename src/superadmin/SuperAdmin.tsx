@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import './superadmin.css'
+import { Permissions, PermsSummary, ProfileSelect, loadCatalog } from './Permissions'
+import { GeoGlobe } from './GeoGlobe'
 import { ACTIVITY_LABEL, AUDIT_LABEL, ROLE_LABEL, SECURITY_LABEL, ago, api, errText, flag, fmtBytes, fmtDate, fmtDay, fmtMinutes, fmtNum, qs, setAuthLost } from './api'
 
 /** Console Super Admin (وحدة التحكم العليا) : /superadmin, séparée de la plateforme */
 
-type Section = 'dash' | 'users' | 'access' | 'analytics' | 'activity' | 'security' | 'sources' | 'settings'
+type Section = 'dash' | 'users' | 'team' | 'perms' | 'access' | 'analytics' | 'activity' | 'security' | 'sources' | 'settings'
 const SECTIONS: [Section, string, string][] = [
   ['dash', 'لوحة المراقبة', '◉'],
   ['users', 'المستخدمون', '👥'],
+  ['team', 'الفريق والصلاحيات', '🔑'],
+  ['perms', 'الصلاحيات التفصيلية', '🧩'],
   ['access', 'سجل الوصول', '⇄'],
   ['analytics', 'التحليلات والدول', '◔'],
   ['activity', 'سجل النشاط', '☰'],
@@ -105,6 +109,10 @@ export default function SuperAdmin() {
           <button type="button" className="sa-btn sa-btn--ghost" onClick={logout}>
             تسجيل الخروج
           </button>
+          <p className="around-credit">
+            <img src="/around-logo-footer.png" alt="Around Expressions" width={120} height={91} loading="lazy" />
+            <span dir="ltr">© {new Date().getFullYear()} MMS — Copyright by Around Expressions</span>
+          </p>
         </div>
       </aside>
       <main className="sa-main">
@@ -116,6 +124,8 @@ export default function SuperAdmin() {
         </header>
         {section === 'dash' && <Dashboard onUser={setOpenUser} />}
         {section === 'users' && <Users onUser={setOpenUser} />}
+        {section === 'team' && <Team onUser={setOpenUser} />}
+        {section === 'perms' && <Permissions />}
         {section === 'access' && <Access />}
         {section === 'analytics' && <Analytics />}
         {section === 'activity' && <Activity />}
@@ -286,7 +296,7 @@ type Dash = {
   counts: { users: number; admins: number; disabled: number; hits24: number }
   activity24: { t: string; hits: number; users: number }[]
   topUsers: { email: string; name: string; minutes: number }[]
-  alerts: { fails24: number; saFails24: number; suspicious: number; blocked24: number; recent: { t: string; type: string; ip: string; login: string; country: string }[] }
+  alerts: { fails24: number; saFails24: number; suspicious: number; blocked24: number; denied24?: number; recent: { t: string; type: string; ip: string; login: string; country: string }[] }
   countries: { cc: string; country: string; hits: number; ips: number }[]
   server: {
     hostname: string
@@ -301,9 +311,13 @@ type Dash = {
     geo: { ip: string; country: string; cc: string; city: string; isp: string } | null
   }
   sync: { lastUpdate: string | null; minutesAgo: number | null; total: number; last24: number; dirs: { dir: string; found: boolean }[] }
+  keys?: { mms: KeyRow[]; libye: KeyRow[] | null }
+  aiUsage?: { month: string; current: Record<string, UsageRow>; total: Record<string, UsageRow> }
 }
+type KeyRow = { name: string; set: boolean; budget?: number }
+type UsageRow = { runs: number; input: number; output: number; cost: number }
 
-const hourFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Tunis', hour: '2-digit', hourCycle: 'h23' })
+const hourFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Tripoli', hour: '2-digit', hourCycle: 'h23' })
 const duration = (s: number) => (s > 86400 ? `${Math.floor(s / 86400)} يوم` : `${Math.floor(s / 3600)} س ${Math.floor((s % 3600) / 60)} د`)
 
 function Dashboard({ onUser }: { onUser: (e: string) => void }) {
@@ -365,6 +379,7 @@ function Dashboard({ onUser }: { onUser: (e: string) => void }) {
           <span>فشل اللوحة العليا: {a.saFails24}</span>
           <span>عناوين مشبوهة: {a.suspicious}</span>
           <span>طلبات محظورة: {a.blocked24}</span>
+          <span>طلبات خارج الصلاحيات: {a.denied24 ?? 0}</span>
         </div>
         {a.recent.length ? (
           <ul className="sa-list">
@@ -449,13 +464,14 @@ function Dashboard({ onUser }: { onUser: (e: string) => void }) {
           ))}
         </dl>
       </Card>
+
     </div>
   )
 }
 
 /* ---------------------------------------------------------------- المستخدمون */
 
-type UserRow = { email: string; name: string; role: string; disabled: boolean; createdAt: string | null; online: boolean; lastSeen: string | null; lastIp: string; country: string; sessions: number; fails: number; note: string }
+type UserRow = { email: string; name: string; role: string; profile?: string; profileName?: string; disabled: boolean; createdAt: string | null; online: boolean; lastSeen: string | null; lastIp: string; country: string; sessions: number; fails: number; note: string }
 const FILTERS: [string, string][] = [
   ['all', 'الكل'],
   ['online', 'متصل'],
@@ -539,8 +555,162 @@ function Users({ onUser }: { onUser: (e: string) => void }) {
   )
 }
 
+/* ---------------------------------------------------------------- الفريق والصلاحيات */
+
+const ROLES_ORDER = ['admin', 'analyst', 'viewer'] as const
+const ROLE_HELP: Record<string, string> = {
+  admin: 'كل شيء في المنصة، بما فيه الإرسال التلقائي للتقارير ومصادر البث',
+  analyst: 'ينشئ الرصد واللوحات والوسوم ويشغّل التحليل الذكي',
+  viewer: 'قراءة وأسئلة Around وتصدير',
+}
+function Team({ onUser }: { onUser: (e: string) => void }) {
+  const { data, error, reload } = useLoad<{ users: UserRow[] }>('/users', 30_000)
+  const [creating, setCreating] = useState(false)
+  const [reset, setReset] = useState<{ email: string; password: string } | null>(null)
+  const { msg, act } = useAct()
+  const users = [...(data?.users ?? [])].sort((a, b) => ROLES_ORDER.indexOf(a.role as never) - ROLES_ORDER.indexOf(b.role as never) || a.email.localeCompare(b.email))
+  const run = async (fn: () => Promise<unknown>, ok: string) => (await act(fn, ok)) && reload()
+  const path = (email: string) => `/users/${encodeURIComponent(email)}`
+
+  return (
+    <div className="sa-grid">
+      <Card
+        title="الفريق والصلاحيات"
+        wide
+        actions={
+          <button type="button" className="sa-btn" onClick={() => setCreating(true)}>
+            + عضو جديد
+          </button>
+        }
+      >
+        <p className="sa-muted">أنشئ حسابات الفريق وحدّد صلاحية كل عضو. كل تغيير يُسجَّل في سجل الإعدادات.</p>
+        {error && <p className="sa-error">{error}</p>}
+        {msg && <p className="sa-note">{msg}</p>}
+        <div className="sa-table-wrap">
+          <table className="sa-table">
+            <thead>
+              <tr>
+                <th>البريد الإلكتروني</th>
+                <th>الاسم</th>
+                <th>الدور</th>
+                <th>ملف الصلاحيات</th>
+                <th>الحالة</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.email}>
+                  <td dir="ltr">
+                    <button type="button" className="sa-link" onClick={() => onUser(u.email)}>
+                      {u.email}
+                    </button>
+                  </td>
+                  <td dir="auto">{u.name}</td>
+                  <td>
+                    <select className="sa-input" value={u.role} onChange={(e) => run(() => api(path(u.email), 'PATCH', { role: e.target.value }), 'تم تغيير الدور.')}>
+                      {ROLES_ORDER.map((r) => (
+                        <option key={r} value={r}>
+                          {ROLE_LABEL[r]}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <ProfileSelect
+                      value={u.profile || ''}
+                      onChange={(id) => run(() => api(path(u.email), 'PATCH', { profile: id }).then(() => loadCatalog(true)), id ? 'تم إسناد ملف الصلاحيات.' : 'عاد الحساب إلى صلاحيات دوره.')}
+                    />
+                  </td>
+                  <td>{u.disabled ? <span className="sa-tag is-bad">معطّل</span> : u.online ? <span className="sa-tag is-ok">متصل</span> : <span className="sa-tag">مفعّل</span>}</td>
+                  <td>
+                    <div className="sa-row">
+                      <button type="button" className="sa-btn sa-btn--ghost" onClick={() => setReset({ email: u.email, password: '' })}>
+                        كلمة مرور جديدة
+                      </button>
+                      <button
+                        type="button"
+                        className={u.disabled ? 'sa-btn' : 'sa-btn sa-btn--warn'}
+                        onClick={() => run(() => api(path(u.email), 'PATCH', { disabled: !u.disabled }), u.disabled ? 'تم تفعيل الحساب.' : 'تم تعطيل الحساب وإغلاق كل جلساته.')}
+                      >
+                        {u.disabled ? 'تفعيل' : 'تعطيل'}
+                      </button>
+                      <button
+                        type="button"
+                        className="sa-btn sa-btn--bad"
+                        onClick={() => confirm(`حذف الحساب ${u.email} ؟`) && run(() => api(path(u.email), 'DELETE'), 'تم حذف الحساب.')}
+                      >
+                        حذف
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {reset && (
+          <form
+            className="sa-row"
+            onSubmit={async (e) => {
+              e.preventDefault()
+              if (await act(() => api(path(reset.email), 'PATCH', { password: reset.password }), 'تم تغيير كلمة المرور وإغلاق الجلسات.')) setReset(null)
+            }}
+          >
+            <span dir="ltr">{reset.email}</span>
+            <input
+              className="sa-input"
+              type="text"
+              dir="ltr"
+              required
+              minLength={8}
+              autoComplete="new-password"
+              placeholder="8 أحرف على الأقل"
+              value={reset.password}
+              onChange={(e) => setReset({ ...reset, password: e.target.value })}
+            />
+            <button type="submit" className="sa-btn">
+              حفظ
+            </button>
+            <button type="button" className="sa-btn sa-btn--ghost" onClick={() => setReset(null)}>
+              إلغاء
+            </button>
+          </form>
+        )}
+      </Card>
+
+      <Card title="ماذا يستطيع كل دور ؟" wide>
+        <ul className="sa-role-help">
+          {ROLES_ORDER.map((r) => (
+            <li key={r}>
+              <b>{ROLE_LABEL[r]}</b> — {ROLE_HELP[r]}
+            </li>
+          ))}
+        </ul>
+        <p className="sa-muted">
+          الصلاحيات الفعلية لكل دور ولكل ملف مخصّص (الوحدات والأزرار) تُضبط في «الصلاحيات التفصيلية»، وتُطبَّق في الواجهة وعلى الخادم معًا.
+        </p>
+        <a className="sa-btn" href="#perms">
+          فتح الصلاحيات التفصيلية
+        </a>
+        <p className="sa-muted">إدارة الحسابات والصلاحيات تتم من هذه الوحدة فقط، ولا يملكها أي دور داخل المنصة.</p>
+      </Card>
+
+      {creating && (
+        <CreateUser
+          onClose={() => setCreating(false)}
+          onDone={() => {
+            setCreating(false)
+            reload()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
 function CreateUser({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [form, setForm] = useState({ email: '', name: '', role: 'viewer', password: '' })
+  const [form, setForm] = useState({ email: '', name: '', role: 'viewer', profile: '', password: '' })
   const { msg, act } = useAct()
   return (
     <div className="sa-modal" role="dialog" aria-modal="true" onClick={onClose}>
@@ -570,6 +740,10 @@ function CreateUser({ onClose, onDone }: { onClose: () => void; onDone: () => vo
           </select>
         </label>
         <label>
+          ملف الصلاحيات
+          <ProfileSelect value={form.profile} onChange={(profile) => setForm({ ...form, profile })} />
+        </label>
+        <label>
           كلمة المرور المؤقتة (8 أحرف على الأقل)
           <input className="sa-input" type="text" dir="ltr" required minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} autoComplete="new-password" />
         </label>
@@ -589,6 +763,7 @@ function CreateUser({ onClose, onDone }: { onClose: () => void; onDone: () => vo
 
 type UserDetail = {
   user: UserRow
+  perms?: { profileName: string; modules: string[]; actions: string[] }
   noteAt: string | null
   sessions: { at: string | null; expires: string; ip: string; country: string; device: string }[]
   ips: { ip: string; hits: number; first: string; last: string; country: string; place: string }[]
@@ -642,6 +817,10 @@ function UserSheet({ email, onClose }: { email: string; onClose: () => void }) {
                   <option value="admin">مدير</option>
                 </select>
               </label>
+              <label>
+                ملف الصلاحيات
+                <ProfileSelect value={u.profile || ''} onChange={(id) => run(() => api(path, 'PATCH', { profile: id }).then(() => loadCatalog(true)), 'تم تغيير ملف الصلاحيات.')} />
+              </label>
               <button type="button" className={u.disabled ? 'sa-btn' : 'sa-btn sa-btn--warn'} onClick={() => run(() => api(path, 'PATCH', { disabled: !u.disabled }), u.disabled ? 'تم تفعيل الحساب.' : 'تم تعطيل الحساب وإغلاق كل جلساته.')}>
                 {u.disabled ? 'تفعيل الحساب' : 'تعطيل الحساب'}
               </button>
@@ -649,6 +828,7 @@ function UserSheet({ email, onClose }: { email: string; onClose: () => void }) {
                 إغلاق الجلسات
               </button>
             </div>
+            {data.perms && <PermsSummary perms={data.perms} />}
 
             <form
               className="sa-row"
@@ -849,6 +1029,7 @@ type Analytics = {
   countries: { cc: string; country: string; hits: number; bytes: number; ips: number; users: number }[]
   heat: number[][]
   days: { day: string; hits: number }[]
+  server?: { cc: string; country: string } | null
 }
 const WEEKDAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
 
@@ -867,6 +1048,9 @@ function Analytics() {
   ]
   return (
     <div className="sa-grid">
+      <Card title="خريطة الزيارات حسب الدول (30 يومًا)" wide>
+        <GeoGlobe rows={d.countries} server={d.server} />
+      </Card>
       <Card title="الطلبات يوميًا (30 يومًا)" wide>
         <Columns rows={d.days} value={(r) => r.hits} label={(r) => r.day.slice(8)} title={(r) => `${fmtDay(r.day)} · ${fmtNum(r.hits)}`} />
       </Card>

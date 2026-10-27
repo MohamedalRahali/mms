@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { NewsCard } from './NewsCard'
-import { type Flux, type Health, type KeyState, type NewsItem, type UsageRow, type NewsResponse, useFetch } from '../lib/news'
+import { type Flux, type NewsItem, type NewsResponse, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { useAlerts, useFavorites } from '../lib/prefs'
+import { canDo, useAuth } from '../lib/auth'
 
 /** Bandeau orange « mises à jour disponibles », avec compte à rebours, comme NewsRadar */
 export function UpdateToast({ onReload }: { onReload: () => void }) {
@@ -205,6 +206,8 @@ export function AiAnalysis({ flux }: { flux: Flux | '' }) {
   const [days, setDays] = useState('7')
   const query = `days=${days}${flux ? `&flux=${flux}` : ''}`
   const state = useFetch<AnalysisState>(`/api/ai/analysis?${query}`).data
+  // Bouton « تشغيل » : action « ai_run » du profil ; sans elle, lecture du dernier résultat seulement
+  const mayRun = canDo(useAuth()?.user, 'ai_run')
   const [result, setResult] = useState<Analysis | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -239,9 +242,11 @@ export function AiAnalysis({ flux }: { flux: Flux | '' }) {
           <option value="7">{t.last7}</option>
           <option value="30">{t.last30}</option>
         </select>
-        <button type="button" className="news-btn" onClick={run} disabled={busy || state?.enabled === false || state?.count === 0}>
-          {shown ? t.aiRerun : t.aiRun}
-        </button>
+        {mayRun && (
+          <button type="button" className="news-btn" onClick={run} disabled={busy || state?.enabled === false || state?.count === 0}>
+            {shown ? t.aiRerun : t.aiRun}
+          </button>
+        )}
         {state && <span className="news-status">{t.aiCount(state.count)}</span>}
       </div>
       {state?.enabled === false && <p className="mms-note">{t.aiNoKey}</p>}
@@ -313,147 +318,7 @@ export function Help() {
   )
 }
 
-export function Admin() {
-  const i = useI18n()
-  const { t } = i
-  const { data } = useFetch<Health>('/api/health')
-  if (!data) return <p className="news-status">{t.loading}</p>
-  return (
-    <>
-      <PageHead title={t.adminTitle} />
-      <div className="mms-admin">
-        {data.sources.map((s) => (
-          <article key={s.flux} className="mms-widget">
-            <div className="mms-widget__body">
-              <h3>
-                <span className={`mms-flag mms-flag--${s.flux}`} /> {i.flux(s.flux)}
-              </h3>
-              <p>
-                {t.adminFolder} : <code dir="ltr">{s.dir}</code> — <b className={s.found ? 'is-ok' : 'is-bad'}>{s.found ? t.adminFound : t.adminMissing}</b>
-              </p>
-              <p>
-                {t.adminReal} : <b>{i.num(s.count)}</b>
-              </p>
-            </div>
-          </article>
-        ))}
-        <article className="mms-widget">
-          <div className="mms-widget__body">
-            <p>
-              {t.adminAi} : <b className={data.ai ? 'is-ok' : 'is-bad'}>{data.ai ? t.on : t.off}</b>
-              {data.aiProvider ? <> · {PROVIDERS[data.aiProvider]}</> : null}
-            </p>
-            <p>
-              {t.adminDemo} : <b>{data.demo ? t.on : t.off}</b>
-            </p>
-            <p>
-              {t.updated} : <b>{data.lastUpdate ? i.dateTime(data.lastUpdate) : '—'}</b>
-            </p>
-          </div>
-        </article>
-        {data.aiUsage ? <Usage usage={data.aiUsage} /> : null}
-        {data.keys ? (
-          <>
-            <KeyList title={t.adminKeysMms} keys={data.keys.mms} />
-            {data.keys.libye ? (
-              <KeyList title={t.adminKeysLibye} keys={data.keys.libye} libye />
-            ) : (
-              <article className="mms-widget">
-                <div className="mms-widget__body">
-                  <h3>{t.adminKeysLibye}</h3>
-                  <p>{t.adminKeysNone}</p>
-                </div>
-              </article>
-            )}
-          </>
-        ) : null}
-      </div>
-    </>
-  )
-}
 
-const PROVIDERS: Record<string, string> = { claude: 'Claude', gemini: 'Gemini', openai: 'OpenAI' }
-
-/** Dépense de l'analyse intelligente, calculée par MMS à partir des jetons consommés */
-function Usage({ usage }: { usage: NonNullable<Health['aiUsage']> }) {
-  const i = useI18n()
-  const { t } = i
-  const money = (n: number) => `$${n < 1 ? n.toFixed(3) : n.toFixed(2)}`
-  const table = (title: string, rows: Record<string, UsageRow>) => {
-    const list = Object.entries(rows)
-    const sum = list.reduce((a, [, r]) => a + r.cost, 0)
-    return (
-      <>
-        <h4>
-          {title} <b>{money(sum)}</b>
-        </h4>
-        {list.length ? (
-          <table>
-            <thead>
-              <tr>
-                <th />
-                <th>{t.usageRuns}</th>
-                <th>{t.usageTokens}</th>
-                <th>{t.usageCost}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map(([p, r]) => (
-                <tr key={p}>
-                  <td>{PROVIDERS[p] || p}</td>
-                  <td>{i.num(r.runs)}</td>
-                  <td dir="ltr">
-                    {i.num(r.input)} / {i.num(r.output)}
-                  </td>
-                  <td dir="ltr">{money(r.cost)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p>{t.usageNone}</p>
-        )}
-      </>
-    )
-  }
-  return (
-    <article className="mms-widget mms-keys mms-usage">
-      <div className="mms-widget__body">
-        <h3>{t.usageTitle}</h3>
-        {table(`${t.usageMonth} (${usage.month})`, usage.current)}
-        {Object.keys(usage.total).length ? table(t.usageTotal, usage.total) : null}
-        <p className="mms-keys__note">{t.usageNote}</p>
-      </div>
-    </article>
-  )
-}
-
-/** Clés présentes ou absentes (la valeur n'est jamais envoyée au navigateur) */
-function KeyList({ title, keys, libye = false }: { title: string; keys: KeyState[]; libye?: boolean }) {
-  const { t } = useI18n()
-  return (
-    <article className="mms-widget mms-keys">
-      <div className="mms-widget__body">
-        <h3>{title}</h3>
-        <ul>
-          {keys.map((k) => (
-            <li key={k.name}>
-              <b className={k.set ? 'is-ok' : 'is-bad'}>{k.set ? t.keySet : t.keyMissing}</b>
-              <code dir="ltr">{k.name}</code>
-              <span>
-                {(libye && t.keyLabelsLibye[k.name]) || t.keyLabels[k.name] || ''}
-                {k.budget ? <b className="mms-keys__budget">{t.keyBudget.replace('{n}', String(k.budget))}</b> : null}
-              </span>
-            </li>
-          ))}
-        </ul>
-        <p className="mms-keys__note">{t.adminKeysNote}</p>
-      </div>
-    </article>
-  )
-}
-
-/** Onglet « استطلاع » sur le bord de l'écran, comme le sondage de NewsRadar */
 export function Survey() {
   const { t, dir } = useI18n()
   const [open, setOpen] = useState(false)

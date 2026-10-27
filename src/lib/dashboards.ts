@@ -2,7 +2,7 @@ import { type Flux } from './news'
 
 /** Tableaux de bord composés par le client : widgets placés sur une grille de 12 colonnes */
 
-export type WidgetType = 'news' | 'bars' | 'columns' | 'pie' | 'line' | 'kpi' | 'table' | 'cloud' | 'tone'
+export type WidgetType = 'news' | 'bars' | 'columns' | 'pie' | 'line' | 'kpi' | 'table' | 'cloud' | 'tone' | 'emerging' | 'stories' | 'alerts' | 'mood'
 export type Dim = 'channels' | 'categories' | 'sources' | 'flux' | 'tones' | 'people' | 'orgs' | 'places'
 export type Metric = 'total' | 'broadcasts' | 'sources' | 'average'
 
@@ -27,7 +27,7 @@ export const COLS = 12
 export const ROW_PX = 40
 export const GAP_PX = 16
 
-export const WIDGET_TYPES: WidgetType[] = ['news', 'bars', 'columns', 'pie', 'line', 'tone', 'kpi', 'table', 'cloud']
+export const WIDGET_TYPES: WidgetType[] = ['news', 'bars', 'columns', 'pie', 'line', 'tone', 'kpi', 'table', 'cloud', 'emerging', 'stories', 'alerts', 'mood']
 export const DIMS: Dim[] = ['channels', 'categories', 'sources', 'tones', 'people', 'orgs', 'places', 'flux']
 export const METRICS: Metric[] = ['total', 'broadcasts', 'sources', 'average']
 export const PERIODS = [1, 7, 30, 90]
@@ -43,6 +43,10 @@ export const DEFAULT_SIZE: Record<WidgetType, [number, number]> = {
   table: [4, 8],
   cloud: [6, 6],
   tone: [8, 8],
+  emerging: [6, 10],
+  stories: [6, 10],
+  alerts: [12, 5],
+  mood: [4, 7],
 }
 
 export const newId = () => Math.random().toString(36).slice(2, 10)
@@ -162,6 +166,10 @@ export const BUILDER_TEXT = {
       table: 'جدول',
       cloud: 'سحابة كلمات',
       tone: 'تطور النبرة',
+      emerging: 'المواضيع الصاعدة',
+      stories: 'أخبار متناقلة',
+      alerts: 'تنبيهات ذكية',
+      mood: 'مؤشر المزاج',
     },
     dims: {
       channels: 'القنوات',
@@ -216,6 +224,10 @@ export const BUILDER_TEXT = {
       table: 'Table',
       cloud: 'Word cloud',
       tone: 'Tone over time',
+      emerging: 'Rising topics',
+      stories: 'Shared stories',
+      alerts: 'Smart alerts',
+      mood: 'Mood gauge',
     },
     dims: {
       channels: 'Channels',

@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import net from 'node:net'
+import dns from 'node:dns/promises'
 import { normalize } from './watches.js'
 
 /**
@@ -75,6 +76,51 @@ function publicUrl(raw) {
   return u
 }
 
+// Plages non publiques (boucle locale, réseaux privés, CGNAT, lien local, métadonnées du cloud, multicast…)
+const PRIVATE = new net.BlockList()
+for (const [a, n] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['224.0.0.0', 3]])
+  PRIVATE.addSubnet(a, n, 'ipv4')
+for (const [a, n] of [['::', 127], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8], ['64:ff9b::', 96], ['2001:db8::', 32]]) PRIVATE.addSubnet(a, n, 'ipv6')
+
+function privateIp(addr) {
+  if (net.isIPv4(addr)) return PRIVATE.check(addr, 'ipv4')
+  const v6 = addr.toLowerCase()
+  // Adresse IPv4 écrite en IPv6 (::ffff:127.0.0.1 ou ::ffff:7f00:1)
+  const mapped = /^::ffff:(?:0:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(v6)
+  if (mapped) return privateIp([parseInt(mapped[1], 16) >> 8, parseInt(mapped[1], 16) & 255, parseInt(mapped[2], 16) >> 8, parseInt(mapped[2], 16) & 255].join('.'))
+  const dotted = /^::ffff:(?:0:)?(\d+\.\d+\.\d+\.\d+)$/.exec(v6)
+  if (dotted) return privateIp(dotted[1])
+  return PRIVATE.check(v6, 'ipv6')
+}
+
+/** L'adresse mène-t-elle à un serveur public ? Le nom est résolu : toutes ses adresses doivent être publiques */
+export async function isPublicTarget(raw) {
+  const u = publicUrl(raw)
+  if (!u) return false
+  const host = u.hostname.replace(/^\[|\]$/g, '')
+  if (net.isIP(host)) return !privateIp(host)
+  try {
+    const addrs = await dns.lookup(host, { all: true, verbatim: true })
+    return addrs.length > 0 && addrs.every((a) => !privateIp(a.address))
+  } catch {
+    return false
+  }
+}
+
+/** fetch qui vérifie chaque étape des redirections (au plus 5) avant de s'y rendre */
+async function safeFetch(url, init) {
+  let current = url
+  for (let hop = 0; hop <= 5; hop++) {
+    if (!(await isPublicTarget(current))) throw new Error('adresse non publique refusée')
+    const res = await fetch(current, { ...init, redirect: 'manual' })
+    const loc = res.status >= 300 && res.status < 400 && res.headers.get('location')
+    if (!loc) return Object.defineProperty(res, 'finalUrl', { value: current })
+    res.body?.cancel().catch(() => {})
+    current = new URL(loc, current).href
+  }
+  throw new Error('trop de redirections')
+}
+
 const keyOf = (url) => crypto.createHash('sha1').update(url).digest('hex').slice(0, 20)
 
 /** Adresse servie au navigateur pour une image trouvée */
@@ -85,13 +131,11 @@ function proxied(image) {
 }
 
 async function fetchText(url) {
-  const res = await fetch(url, {
+  const res = await safeFetch(url, {
     headers: { 'user-agent': UA, accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' },
-    redirect: 'follow',
     signal: AbortSignal.timeout(10_000),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  if (res.url && !publicUrl(res.url)) throw new Error('redirection refusée')
   const reader = res.body.getReader()
   const chunks = []
   let size = 0
@@ -102,7 +146,7 @@ async function fetchText(url) {
     size += value.length
   }
   reader.cancel().catch(() => {})
-  return { html: Buffer.concat(chunks).toString('utf8'), base: res.url || url }
+  return { html: Buffer.concat(chunks).toString('utf8'), base: res.finalUrl || url }
 }
 
 const decode = (s) =>
@@ -313,12 +357,27 @@ export async function imageRoute(req, res) {
   const url = known.get(String(req.params.key))
   if (!url || !publicUrl(url)) return res.status(404).end()
   try {
-    const up = await fetch(url, { headers: { 'user-agent': UA, accept: 'image/*' }, redirect: 'follow', signal: AbortSignal.timeout(15_000) })
+    const up = await safeFetch(url, { headers: { 'user-agent': UA, accept: 'image/*' }, signal: AbortSignal.timeout(15_000) })
     const type = up.headers.get('content-type') || ''
-    if (up.url && !publicUrl(up.url)) return res.status(404).end()
-    if (!up.ok || !type.startsWith('image/') || type.includes('svg')) return res.status(404).end()
-    const buf = Buffer.from(await up.arrayBuffer())
-    if (buf.length > MAX_IMG) return res.status(404).end()
+    if (!up.ok || !type.startsWith('image/') || type.includes('svg') || Number(up.headers.get('content-length')) > MAX_IMG) {
+      up.body?.cancel().catch(() => {})
+      return res.status(404).end()
+    }
+    // Lecture plafonnée : une image annoncée petite mais sans fin ne remplit pas la mémoire
+    const reader = up.body.getReader()
+    const chunks = []
+    let size = 0
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      size += value.length
+      if (size > MAX_IMG) {
+        reader.cancel().catch(() => {})
+        return res.status(404).end()
+      }
+      chunks.push(value)
+    }
+    const buf = Buffer.concat(chunks)
     res.set({ 'content-type': type, 'cache-control': 'private, max-age=86400', 'x-content-type-options': 'nosniff' })
     res.end(buf)
   } catch {

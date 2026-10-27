@@ -96,16 +96,25 @@ echo "== 6/7 nginx et pare-feu"
 # IPv6 seulement si la machine l'a (OVH : oui)
 LISTEN6=""
 [ -s /proc/net/if_inet6 ] && LISTEN6="listen [::]:80 default_server;"
+# Configuration déjà passée en HTTPS par certbot : on la garde telle quelle. La réécrire en HTTP seul à chaque
+# mise à jour coupait le HTTPS jusqu'au passage de certbot, et pour de bon si certbot échouait.
+HTTPS_OK=0
+if grep -q "managed by Certbot" /etc/nginx/sites-available/mms 2>/dev/null && [ -s "/etc/letsencrypt/live/$HOSTNAME_VPS/fullchain.pem" ]; then
+  HTTPS_OK=1
+  # En-têtes désormais envoyés par MMS lui-même : on retire les doublons des anciennes installations
+  sed -i '/add_header \(X-Content-Type-Options\|Referrer-Policy\|X-Frame-Options\) /d' /etc/nginx/sites-available/mms
+  # Rapports envoyés par e-mail avec leur PDF (plusieurs Mo) : chaque route de MMS garde sa propre limite
+  sed -i 's/client_max_body_size 2m;/client_max_body_size 20m;/' /etc/nginx/sites-available/mms
+else
 cat > /etc/nginx/sites-available/mms <<NGINX
 server {
     listen 80 default_server;
     $LISTEN6
     server_name $HOSTNAME_VPS _;
-    client_max_body_size 2m;
+    client_max_body_size 20m;
     server_tokens off;
-    add_header X-Content-Type-Options nosniff always;
-    add_header Referrer-Policy strict-origin-when-cross-origin always;
-    add_header X-Frame-Options SAMEORIGIN always;
+    # En-têtes de sécurité (nosniff, X-Frame-Options, Referrer-Policy, CSP, HSTS…) envoyés par MMS lui-même :
+    # les répéter ici les doublerait
 
     location / {
         proxy_pass http://127.0.0.1:$PORT;
@@ -118,6 +127,7 @@ server {
     }
 }
 NGINX
+fi
 ln -sf /etc/nginx/sites-available/mms /etc/nginx/sites-enabled/mms
 rm -f /etc/nginx/sites-enabled/default
 nginx -t -q
@@ -132,12 +142,16 @@ echo "== 7/7 Certificat HTTPS (Let's Encrypt)"
 # www.<domaine> est ajouté au certificat seulement s'il pointe déjà vers ce serveur
 MY_IP=$(curl -4 -fs --max-time 5 https://api.ipify.org || hostname -I | awk '{print $1}')
 NAMES=(-d "$HOSTNAME_VPS")
-if [[ "$HOSTNAME_VPS" != www.* ]] && getent ahostsv4 "www.$HOSTNAME_VPS" | awk '{print $1}' | grep -qx "$MY_IP"; then
+if [ "$HTTPS_OK" = 0 ] && [[ "$HOSTNAME_VPS" != www.* ]] && getent ahostsv4 "www.$HOSTNAME_VPS" | awk '{print $1}' | grep -qx "$MY_IP"; then
   NAMES+=(-d "www.$HOSTNAME_VPS")
   sed -i "s/server_name $HOSTNAME_VPS _;/server_name $HOSTNAME_VPS www.$HOSTNAME_VPS _;/" /etc/nginx/sites-available/mms
   systemctl reload nginx
 fi
-if ! getent ahostsv4 "$HOSTNAME_VPS" | awk '{print $1}' | grep -qx "$MY_IP"; then
+if [ "$HTTPS_OK" = 1 ]; then
+  # Certificat en place (renouvelé par le minuteur certbot) : rien à refaire
+  echo "HTTPS déjà actif pour $HOSTNAME_VPS."
+  setenv PUBLIC_URL "https://$HOSTNAME_VPS"
+elif ! getent ahostsv4 "$HOSTNAME_VPS" | awk '{print $1}' | grep -qx "$MY_IP"; then
   echo "Le nom $HOSTNAME_VPS ne pointe pas encore vers ce serveur ($MY_IP) : vérifiez l'enregistrement A de la zone DNS, puis relancez."
   setenv PUBLIC_URL "http://$MY_IP"
 elif certbot --nginx "${NAMES[@]}" --cert-name "$HOSTNAME_VPS" --expand --non-interactive --agree-tos --register-unsafely-without-email --redirect >/dev/null 2>&1; then

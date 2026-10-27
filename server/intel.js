@@ -106,7 +106,8 @@ export function spikeItems(items, dim, name, now = Date.now()) {
 
 const TONE_AR = { positive: 'إيجابي', neutral: 'محايد', negative: 'سلبي' }
 const cell = (v) => {
-  const s = String(v ?? '')
+  // Une cellule qui commence par = + - @ serait exécutée comme formule par Excel : on la préfixe d'une apostrophe
+  const s = String(v ?? '').replace(/^[=+\-@\t\r]/, "'$&")
   return /[",\n\r;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 

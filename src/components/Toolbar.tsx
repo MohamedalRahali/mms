@@ -3,6 +3,7 @@ import { type Health, type NewsItem, type NewsResponse, type Stats, useFetch } f
 import { useI18n } from '../lib/i18n'
 import { useFavorites, useLastSeen } from '../lib/prefs'
 import { HEART } from './NewsCard'
+import { canDo, useAuth } from '../lib/auth'
 
 /** Icônes de la barre noire, comme NewsBoard : notifications, favoris, présentation, historique, menu, annonces */
 
@@ -53,8 +54,10 @@ function Drop({ icon, label, badge, children }: { icon: keyof typeof PATHS; labe
   )
 }
 
-export function Toolbar(props: { onFavorites: () => void; onPresent: () => void; onDay: (day: string) => void; onRefresh: () => void; onLang: () => void }) {
+// onFavorites / onDay absents : favoris ou revue du jour fermés par le profil du compte, leurs boutons sont masqués
+export function Toolbar(props: { onFavorites?: () => void; onPresent: () => void; onDay?: (day: string) => void; onRefresh: () => void; onLang: () => void }) {
   const i = useI18n()
+  const mayPrint = canDo(useAuth()?.user, 'export')
   const { t } = i
   const fav = useFavorites()
   const [seen, setSeen] = useLastSeen()
@@ -100,13 +103,16 @@ export function Toolbar(props: { onFavorites: () => void; onPresent: () => void;
           </>
         )}
       </Drop>
-      <button type="button" className="mms-tool__btn" title={t.toolFavorites} aria-label={t.toolFavorites} onClick={props.onFavorites}>
-        <ToolIcon name="heart" />
-        {fav.list.length > 0 && <span className="mms-tool__badge mms-tool__badge--soft">{fav.list.length}</span>}
-      </button>
+      {props.onFavorites && (
+        <button type="button" className="mms-tool__btn" title={t.toolFavorites} aria-label={t.toolFavorites} onClick={props.onFavorites}>
+          <ToolIcon name="heart" />
+          {fav.list.length > 0 && <span className="mms-tool__badge mms-tool__badge--soft">{fav.list.length}</span>}
+        </button>
+      )}
       <button type="button" className="mms-tool__btn" title={t.toolPresent} aria-label={t.toolPresent} onClick={props.onPresent}>
         <ToolIcon name="screen" />
       </button>
+      {props.onDay && (
       <Drop icon="clock" label={t.toolHistory}>
         {(close) => (
           <>
@@ -118,7 +124,7 @@ export function Toolbar(props: { onFavorites: () => void; onPresent: () => void;
                   <button
                     type="button"
                     onClick={() => {
-                      props.onDay(d.date)
+                      props.onDay?.(d.date)
                       close()
                     }}
                   >
@@ -131,12 +137,13 @@ export function Toolbar(props: { onFavorites: () => void; onPresent: () => void;
           </>
         )}
       </Drop>
+      )}
       <Drop icon="dots" label={t.toolMenu}>
         {(close) => (
           <ul className="mms-pop__list mms-pop__list--links">
             {[
               [t.menuRefresh, props.onRefresh],
-              [t.menuPrint, () => window.print()],
+              ...(mayPrint ? [[t.menuPrint, () => window.print()]] : []),
               [t.menuFullscreen, () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {})],
               [t.translatePage, props.onLang],
             ].map(([label, run]) => (

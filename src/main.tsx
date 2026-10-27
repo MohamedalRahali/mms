@@ -4,6 +4,7 @@ import './index.css'
 import './theme.css'
 import './brand.css'
 import './around.css'
+import './radar.css'
 import App from './App.tsx'
 import { Login } from './components/Login'
 import { AuthContext, type User, watchUnauthorized } from './lib/auth'
@@ -40,6 +41,19 @@ function Gate() {
   }, [])
 
   useEffect(() => (user ? installTracking() : undefined), [user])
+
+  // Droits changés par le Super Admin (profil, modules, boutons) : relus chaque minute, sans recharger la page
+  const signedIn = Boolean(user)
+  useEffect(() => {
+    if (!signedIn) return
+    const id = setInterval(() => {
+      fetch('/api/auth/me')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => json?.user && setUser((u) => (JSON.stringify(u) === JSON.stringify(json.user) ? u : json.user)))
+        .catch(() => {})
+    }, 60_000)
+    return () => clearInterval(id)
+  }, [signedIn])
 
   useEffect(() => {
     fetch('/api/auth/me')

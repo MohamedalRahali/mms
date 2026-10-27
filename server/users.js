@@ -1,13 +1,13 @@
 import path from 'node:path'
 import readline from 'node:readline'
 import { fileURLToPath } from 'node:url'
-import { hashPassword, initAuth, writeUsers } from './auth.js'
+import { ROLES, hashPassword, initAuth, writeUsers } from './auth.js'
 import fs from 'node:fs'
 
 /**
  * Gestion des comptes MMS en ligne de commande (le mot de passe est demandé, jamais passé en argument) :
  *   node server/users.js list
- *   node server/users.js add <email> [nom affiché]
+ *   node server/users.js add <email> [nom affiché] [--role=viewer|analyst|admin]
  *   node server/users.js remove <email>
  */
 
@@ -23,13 +23,18 @@ function ask(question) {
 }
 
 if (cmd === 'list') {
-  for (const u of users) console.log(`${u.email}\t${u.name || ''}`)
+  for (const u of users) console.log(`${u.email}\t${u.name || ''}\t${u.role || 'admin'}`)
 } else if (cmd === 'add' && email) {
+  // --role=… : rôle du compte (sans option : administrateur, comme les comptes créés avant les rôles)
+  const roleArg = rest.find((a) => a.startsWith('--role='))
+  const role = roleArg ? roleArg.slice(7) : ''
+  if (role && !ROLES.includes(role)) throw new Error(`Rôle inconnu : ${role} (${ROLES.join(', ')})`)
+  const name = rest.filter((a) => !a.startsWith('--')).join(' ')
   const password = await ask('Mot de passe : ')
   if (password.length < 8) throw new Error('Mot de passe trop court (8 caractères minimum)')
   const others = users.filter((u) => u.email.toLowerCase() !== email.toLowerCase())
-  writeUsers([...others, { email, username: email, name: rest.join(' ') || email, ...hashPassword(password) }])
-  console.log(`Compte enregistré : ${email}`)
+  writeUsers([...others, { email, username: email, name: name || email, ...(role ? { role } : {}), createdAt: new Date().toISOString(), ...hashPassword(password) }])
+  console.log(`Compte enregistré : ${email}${role ? ` (${role})` : ''}`)
 } else if (cmd === 'remove' && email) {
   writeUsers(users.filter((u) => u.email.toLowerCase() !== email.toLowerCase()))
   console.log(`Compte supprimé : ${email}`)

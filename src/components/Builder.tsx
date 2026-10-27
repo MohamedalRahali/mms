@@ -3,7 +3,9 @@ import { createPortal } from 'react-dom'
 import { WidgetBody, useWidgetTitles } from './Charts'
 import { type Facets, type Flux, FLUX_KEYS, ReloadContext, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
-import { can, useAuth } from '../lib/auth'
+import { canDo, hasModule, useAuth } from '../lib/auth'
+
+const RADAR_TYPES: string[] = ['emerging', 'stories', 'alerts', 'mood']
 import {
   type Board,
   type WidgetConf,
@@ -47,6 +49,10 @@ const TYPE_ICON: Record<WidgetType, string> = {
   table: 'M3 4h18v16H3zm2 2v3h6V6H5zm8 0v3h6V6h-6zm-8 5v3h6v-3H5zm8 0v3h6v-3h-6zm-8 5v2h6v-2H5zm8 0v2h6v-2h-6z',
   cloud: 'M4 9h7v3H4zm9 0h7v2h-7zM6 14h5v2H6zm7 0h4v4h-4zM3 18h8v2H3z',
   tone: 'M3 19h18v2H3zM3 13l5-4 4 3 5-6 4 3v3l-4-3-5 6-4-3-5 4z',
+  emerging: 'M3 20l6-7 4 3 7-9V3h-5l1.8 1.8L13 11l-4-3-7.5 8.6z',
+  stories: 'M4 4h10v4H4zm0 6h16v4H4zm0 6h12v4H4zm12-12h4v4h-4z',
+  alerts: 'M12 2L1 21h22L12 2zm1 15h-2v-2h2v2zm0-4h-2V9h2v4z',
+  mood: 'M12 4a10 10 0 0 0-10 10h3a7 7 0 0 1 14 0h3A10 10 0 0 0 12 4zm-1 10l4-5-1 6a1.6 1.6 0 1 1-3-1z',
 }
 
 function Svg({ d, size = 22 }: { d: string; size?: number }) {
@@ -163,7 +169,9 @@ function WidgetEditor({ initial, onApply, onClose }: { initial: WidgetConf; onAp
   const [conf, setConf] = useState(initial)
   const facets = useFetch<Facets>('/api/news/facets').data
   const set = (patch: Partial<WidgetConf>) => setConf((c) => ({ ...c, ...patch }))
-  const usesDim = !['news', 'line', 'kpi', 'tone'].includes(conf.type)
+  const usesDim = !['news', 'line', 'kpi', 'tone', 'emerging', 'stories', 'alerts', 'mood'].includes(conf.type)
+  // Widgets du radar proposés seulement si le module « الرادار الذكي » est ouvert au profil
+  const mayRadar = hasModule(useAuth()?.user, 'radar')
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     document.addEventListener('keydown', onKey)
@@ -176,7 +184,7 @@ function WidgetEditor({ initial, onApply, onClose }: { initial: WidgetConf; onAp
           <div className="mms-editor__form">
             <p className="mms-editor__label">{b.type}</p>
             <div className="mms-editor__types">
-              {WIDGET_TYPES.map((type) => (
+              {WIDGET_TYPES.filter((type) => mayRadar || !RADAR_TYPES.includes(type)).map((type) => (
                 <button
                   key={type}
                   type="button"
@@ -395,7 +403,7 @@ export function Builder({ flux }: { flux: Flux | '' }) {
     setEditor(null)
   }
 
-  const canEdit = can(auth?.user, 'analyst')
+  const canEdit = canDo(auth?.user, 'edit_dashboards')
   const bar =
     slot && canEdit
       ? createPortal(

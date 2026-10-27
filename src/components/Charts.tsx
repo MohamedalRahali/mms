@@ -5,6 +5,8 @@ import { TONE_COLORS, useIntel } from '../lib/intel'
 import { useI18n } from '../lib/i18n'
 import { useCountUp } from '../lib/motion'
 import { BUILDER_TEXT, type Dim, type WidgetConf } from '../lib/dashboards'
+import { RadarWidget } from './Radar'
+import { hasModule, useAuth } from '../lib/auth'
 
 /** Rendu de chaque type de widget : listes, barres, colonnes, camembert, courbe, chiffre clé, tableau, nuage */
 
@@ -123,7 +125,7 @@ function Columns({ rows, dim, onPick }: { rows: Count[]; dim: Dim; onPick?: (nam
   )
 }
 
-function Donut({ rows, dim, onPick }: { rows: Count[]; dim: Dim; onPick?: (name: string) => void }) {
+export function Donut({ rows, dim, onPick }: { rows: Count[]; dim: Dim; onPick?: (name: string) => void }) {
   const i = useI18n()
   const label = useLabel(dim)
   const [hover, setHover] = useState<number | null>(null)
@@ -187,7 +189,7 @@ function Donut({ rows, dim, onPick }: { rows: Count[]; dim: Dim; onPick?: (name:
   )
 }
 
-function Line({ perDay }: { perDay: { date: string; count: number }[] }) {
+export function Line({ perDay }: { perDay: { date: string; count: number }[] }) {
   const i = useI18n()
   const [hover, setHover] = useState<number | null>(null)
   const W = 600
@@ -382,6 +384,15 @@ function StatsBody({ conf }: { conf: WidgetConf }) {
 }
 
 export function WidgetBody({ conf }: { conf: WidgetConf }) {
+  const auth = useAuth()
+  const { lang } = useI18n()
+  if (conf.type === 'emerging' || conf.type === 'stories' || conf.type === 'alerts' || conf.type === 'mood')
+    // Widgets du radar : seulement si le module « الرادار الذكي » est ouvert au profil (le serveur refuse sinon)
+    return hasModule(auth?.user, 'radar') ? (
+      <RadarWidget type={conf.type} flux={conf.flux} days={conf.days} />
+    ) : (
+      <p className="news-status">{lang === 'ar' ? 'هذه الأداة غير متاحة في ملف صلاحياتك.' : 'Not available for your profile.'}</p>
+    )
   if (conf.type === 'news') return <NewsDigest flux={conf.flux} days={conf.days} category={conf.category} />
   return <StatsBody conf={conf} />
 }
@@ -398,8 +409,8 @@ export function useWidgetTitles(conf: WidgetConf) {
         : i.t.digest
       : conf.type === 'line'
         ? b.perDay
-        : conf.type === 'tone'
-          ? b.types.tone
+        : conf.type === 'tone' || conf.type === 'emerging' || conf.type === 'stories' || conf.type === 'alerts' || conf.type === 'mood'
+          ? b.types[conf.type]
           : conf.type === 'kpi'
             ? b.metrics[conf.metric]
             : `${b.dims[conf.dim]} / ${b.types[conf.type]}`

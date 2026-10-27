@@ -23,7 +23,7 @@ let watches = []
 let running = false
 const ruleCache = new Map()
 
-const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tunis', year: 'numeric', month: '2-digit', day: '2-digit' })
+const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tripoli', year: 'numeric', month: '2-digit', day: '2-digit' })
 const today = () => dayKey.format(new Date())
 const dayOf = (iso) => dayKey.format(new Date(iso))
 const addDays = (day, n) => new Date(Date.parse(`${day}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10)
@@ -197,7 +197,7 @@ export function deleteWatch(id) {
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 const FLUX_AR = { mosaique: 'إذاعة موزاييك', libye: 'الرصد الليبي' }
-const dateAr = new Intl.DateTimeFormat('ar-TN-u-nu-latn', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Tunis' })
+const dateAr = new Intl.DateTimeFormat('ar-TN-u-nu-latn', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Tripoli' })
 
 export function buildAlertEmail(watch, found) {
   const link = `${(process.env.PUBLIC_URL || 'http://localhost:5174').replace(/\/$/, '')}/?watch=${watch.id}`
@@ -256,7 +256,8 @@ export async function sendMail(to, mail) {
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
     })
   }
-  await transport.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to: to.join(', '), ...mail })
+  // Réponse du serveur SMTP (destinataires acceptés et refusés), lue par l'envoi des rapports
+  return transport.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to: to.join(', '), ...mail })
 }
 
 /* ---------------------------------------------------------------- Telegram */

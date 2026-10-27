@@ -26,9 +26,38 @@ let cache = { at: 0, items: [], all: [], comments: [], reactions: new Map(), byI
 
 // Sources ou canaux coupés depuis la console Super Admin : retirés de toute la plateforme
 let hidden = null
+let signature = ''
+let previous = new Map() // id → { json, obj } de la lecture précédente
 export function setHidden(fn) {
   hidden = fn
   cache.at = 0
+  signature = ''
+}
+
+/** Empreinte des fichiers des veilles (noms, tailles, dates) : on ne relit et ne réanalyse que s'ils ont changé */
+function filesSignature() {
+  const parts = [process.env.MMS_MOSAIQUE, process.env.MMS_DEMO]
+  const scan = (dir, depth) => {
+    let names
+    try {
+      names = fs.readdirSync(dir)
+    } catch {
+      return
+    }
+    for (const name of names.sort()) {
+      const file = path.join(dir, name)
+      try {
+        const st = fs.statSync(file)
+        if (st.isDirectory()) depth > 0 && scan(file, depth - 1)
+        else if (name.endsWith('.json')) parts.push(`${file}:${st.size}:${st.mtimeMs}`)
+      } catch {
+        /* fichier disparu entre deux lectures */
+      }
+    }
+  }
+  if (process.env.MMS_MOSAIQUE === '1') scan(process.env.MOSAIQUE_DATA_DIR, 2)
+  scan(process.env.LIBYE_DATA_DIR, 0)
+  return parts.join('|')
 }
 
 function readJson(file) {
@@ -46,6 +75,11 @@ function listOf(data) {
 }
 
 const clean = (v) => (typeof v === 'string' ? v.trim() : '')
+// Liens venant des sources : http(s) ou chemin du site seulement ; javascript:, data:, vbscript:… sont écartés
+const webUrl = (v) => {
+  const u = clean(v)
+  return /^https?:\/\//i.test(u) || (u.startsWith('/') && !u.startsWith('//')) ? u : ''
+}
 const normCategory = (c) => clean(c).toLowerCase() || 'autre'
 
 function langCode(l) {
@@ -98,7 +132,7 @@ function threadOf(f) {
   const out = {
     forum: clean(f.forum),
     topic: clean(f.sujet),
-    topicUrl: clean(f.sujet_url),
+    topicUrl: webUrl(f.sujet_url),
     messageId: clean(String(f.message_id ?? '')),
     replyTo: clean(String(f.reponse_a ?? '')),
   }
@@ -185,8 +219,8 @@ function loadLibye(dir, track) {
         origin: clean(n.source) || 'Source libyenne',
         channel,
         lang: langCode(n.langue) || 'ar',
-        url: clean(n.url),
-        image: clean(n.image),
+        url: webUrl(n.url),
+        image: webUrl(n.image),
         broadcasts: 1,
         live: false,
         tone: toneOf(n.ton),
@@ -198,10 +232,10 @@ function loadLibye(dir, track) {
         media: mediaOf(n.media, channel),
         subType: clean(n.sous_type).toLowerCase() || (BROADCAST.has(channel) ? channel : ''),
         ref: clean(n.ref),
-        mediaUrl: clean(n.media_url),
+        mediaUrl: webUrl(n.media_url),
         transcription: clean(n.transcription),
         author: clean(n.auteur),
-        parent: n.parent && typeof n.parent === 'object' ? { id: clean(n.parent.id), url: clean(n.parent.url), title: clean(n.parent.titre) } : undefined,
+        parent: n.parent && typeof n.parent === 'object' ? { id: clean(n.parent.id), url: webUrl(n.parent.url), title: clean(n.parent.titre) } : undefined,
         thread: threadOf(n.fil),
       })
     }
@@ -265,6 +299,14 @@ export function parentOf(it) {
 
 export function getItems() {
   if (Date.now() - cache.at < RELOAD_MS) return cache
+  // Rien n'a changé depuis la dernière lecture : on garde les fiches déjà analysées (et leurs caches de recherche)
+  // ; les actualités d'exemple, datées par rapport à maintenant, sont toujours régénérées
+  const sig = filesSignature()
+  if (sig === signature && process.env.MMS_DEMO !== '1') {
+    cache.at = Date.now()
+    return cache
+  }
+  signature = sig
   let latest = 0
   const track = (file) => {
     try {
@@ -278,6 +320,21 @@ export function getItems() {
     ...(process.env.MMS_MOSAIQUE === '1' ? loadMosaique(process.env.MOSAIQUE_DATA_DIR, track) : []),
     ...loadLibye(process.env.LIBYE_DATA_DIR, track),
   ].filter((n) => n.title)
+  // Fiche identique à la lecture précédente : on reprend l'objet d'avant (remis à l'état lu, les liens
+  // commentaires/réponses étant recalculés plus bas), pour garder les caches liés à l'objet
+  const next = new Map()
+  for (let k = 0; k < items.length; k++) {
+    const it = items[k]
+    if (!it.id || next.has(it.id)) continue
+    const json = JSON.stringify(it)
+    const old = previous.get(it.id)
+    if (old && old.json === json) {
+      for (const key of Object.keys(old.obj)) if (!(key in it)) delete old.obj[key]
+      items[k] = Object.assign(old.obj, it)
+    }
+    next.set(it.id, { json, obj: items[k] })
+  }
+  previous = next
   const demo = process.env.MMS_DEMO === '1'
   if (demo) items.push(...demoItems())
   items.sort((a, b) => b.date.localeCompare(a.date))

@@ -2,6 +2,7 @@ import { useContext, useState, type KeyboardEvent } from 'react'
 import { type Flux, type NewsItem, type Spike, type Tone, DrillContext, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { TONE_COLORS, useIntel } from '../lib/intel'
+import { canDo, useAuth } from '../lib/auth'
 
 /** Éléments de la couche « intelligence » : pics d'activité, tonalité, entités et étiquettes d'une fiche */
 
@@ -14,6 +15,7 @@ function SpikeRow({ spike, flux }: { spike: Spike; flux: Flux | '' }) {
   const [state, setState] = useState<'' | 'loading' | 'error'>('')
   const [result, setResult] = useState<Explained | null>(null)
   const label = spike.dim === 'categories' ? i.category(spike.name) : spike.name
+  const mayAsk = canDo(useAuth()?.user, 'ai_ask')
 
   async function explain() {
     setState('loading')
@@ -42,7 +44,7 @@ function SpikeRow({ spike, flux }: { spike: Spike; flux: Flux | '' }) {
           <strong dir="auto">{label}</strong>
         </button>
         <span className="mms-spike__line">{spike.avg > 0 ? x.spikeLine(i.num(spike.count), i.num(spike.avg)) : x.spikeNew(i.num(spike.count))}</span>
-        {!result && (
+        {!result && mayAsk && (
           <button type="button" className="news-btn news-btn--ghost mms-spike__why" onClick={explain} disabled={state === 'loading'}>
             {state === 'loading' ? x.explaining : x.why}
           </button>
