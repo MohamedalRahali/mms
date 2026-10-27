@@ -1,8 +1,8 @@
 /* MMS — service worker : l'interface s'ouvre même hors ligne, les données restent toujours fraîches */
-const CACHE = 'mms-shell-v1'
+const CACHE = 'mms-shell-v2'
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icon-192.png'])).then(() => self.skipWaiting()))
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icons-cnsd/icon-192.png'])).then(() => self.skipWaiting()))
 })
 
 self.addEventListener('activate', (e) => {
