@@ -9,6 +9,7 @@ import { useCountUp } from '../lib/motion'
 import { NewsCard } from './NewsCard'
 import { EngagementChips } from './Engagement'
 import { PageHead } from './Extras'
+import { LoadState } from './LoadState'
 
 /**
  * Fonctions de niveau Meltwater : assistant de requête booléenne, engagement des posts,
@@ -163,7 +164,7 @@ export function ShareOfVoice({ flux }: { flux: Flux | '' }) {
   }, [actors])
   const q = new URLSearchParams({ days: String(days), actors: actors.join('|') })
   if (flux) q.set('flux', flux)
-  const { data } = useFetch<Sov>(actors.length ? `/api/news/sov?${q}` : '/api/news/sov?actors=')
+  const { data, error } = useFetch<Sov>(actors.length ? `/api/news/sov?${q}` : '/api/news/sov?actors=')
   const rows = data?.actors ?? []
   const sum = rows.reduce((a, r) => a + r.count, 0) || 1
   const [hover, setHover] = useState<number | null>(null)
@@ -235,7 +236,7 @@ export function ShareOfVoice({ flux }: { flux: Flux | '' }) {
       {actors.length < 1 ? (
         <p className="news-status">{p.sovEmpty}</p>
       ) : !data ? (
-        <p className="news-status">{i.t.loading}</p>
+        <LoadState error={error} />
       ) : (
         <div className="mms-pro-grid">
           <section className="mms-panel fx-tilt fx-soft">
@@ -405,7 +406,7 @@ export function ComparePeriods({ flux }: { flux: Flux | '' }) {
   const p = usePro()
   const drill = useContext(DrillContext)
   const [days, setDays] = useState(7)
-  const { data } = useFetch<Compare>(`/api/news/compare?days=${days}${flux ? `&flux=${flux}` : ''}`)
+  const { data, error } = useFetch<Compare>(`/api/news/compare?days=${days}${flux ? `&flux=${flux}` : ''}`)
   const inter = (e: EngagementTotals) => e.reactions + e.shares + e.comments
   return (
     <>
@@ -423,7 +424,7 @@ export function ComparePeriods({ flux }: { flux: Flux | '' }) {
         </p>
       </div>
       {!data ? (
-        <p className="news-status">{i.t.loading}</p>
+        <LoadState error={error} />
       ) : (
         <>
           <div className="mms-stats">
@@ -487,7 +488,7 @@ type Schedule = {
 
 function ScheduleForm() {
   const p = usePro()
-  const { data } = useFetch<Schedule>('/api/briefing/schedule', 0)
+  const { data, error } = useFetch<Schedule>('/api/briefing/schedule', 0)
   const [form, setForm] = useState<Schedule | null>(null)
   const [recipients, setRecipients] = useState('')
   const [state, setState] = useState<'' | 'saving' | 'saved' | 'sending' | 'sent' | 'error' | 'nochannel'>('')
@@ -593,7 +594,7 @@ export function ExecutiveBriefing({ flux }: { flux: Flux | '' }) {
   const auth = useAuth()
   const drill = useContext(DrillContext)
   const [days, setDays] = useState(7)
-  const { data } = useFetch<Briefing>(`/api/briefing?days=${days}${flux ? `&flux=${flux}` : ''}`)
+  const { data, error } = useFetch<Briefing>(`/api/briefing?days=${days}${flux ? `&flux=${flux}` : ''}`)
   const [summary, setSummary] = useState<Summary | null>(null)
   const [state, setState] = useState<'' | 'loading' | 'error'>('')
   useEffect(() => setSummary(null), [days, flux])
@@ -636,7 +637,7 @@ export function ExecutiveBriefing({ flux }: { flux: Flux | '' }) {
       </div>
       {state === 'error' && <p className="news-status news-status--error">{p.aiError}</p>}
       {!data ? (
-        <p className="news-status">{i.t.loading}</p>
+        <LoadState error={error} />
       ) : (
         <article className="mms-brief__sheet">
           <header className="mms-brief__head">
@@ -794,7 +795,7 @@ export function InstallButton() {
 
 export function TopEngaged({ flux, days = 7 }: { flux: Flux | ''; days?: number }) {
   const p = usePro()
-  const { data } = useFetch<Stats>(`/api/news/stats?days=${days}${flux ? `&flux=${flux}` : ''}`)
+  const { data, error } = useFetch<Stats>(`/api/news/stats?days=${days}${flux ? `&flux=${flux}` : ''}`)
   const items = data?.topEngaged ?? []
   return (
     <section className="mms-panel mms-panel--wide">

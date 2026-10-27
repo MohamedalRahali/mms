@@ -150,6 +150,7 @@ const MODULE_RULES = [
   [/^\/news\/processed$/, ['news', 'media']],
   [/^\/geo(\/|$)/, ['geo']],
   [/^\/sources(\/|$)/, ['news']],
+  [/^\/pinboards(\/|$)/, ['news', 'media', 'dashboard']],
   [/^\/report$/, ['report']],
 ]
 
@@ -167,6 +168,7 @@ function actionFor(method, p) {
   if (write && p.startsWith('/dashboards')) return 'edit_dashboards'
   if (write && p.startsWith('/watches')) return 'manage_watches'
   if (write && p.startsWith('/tags')) return 'tags'
+  if (write && p.startsWith('/pinboards')) return 'tags'
   if (write && /^\/reports\/[^/]+\/email$/.test(p)) return 'send_email'
   if ((write && p.startsWith('/briefing/schedule')) || p === '/briefing/send') return 'schedule'
   if (write && p.startsWith('/diffusion')) return 'diffusion'

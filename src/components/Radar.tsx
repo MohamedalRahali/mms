@@ -7,6 +7,7 @@ import { type Barometer, type Emerging, type SmartAlert, type Story, type ToneRo
 import { PageHead } from './Extras'
 import { canDo, useAuth } from '../lib/auth'
 import { AlertFlowBar } from './AlertFlow'
+import { LoadState } from './LoadState'
 
 /**
  * « الرادار الذكي » : alertes classées, sujets émergents, histoires reprises par plusieurs médias et
@@ -342,8 +343,8 @@ function SentimentBarometer({ flux }: { flux: Flux | '' }) {
   const r = radarText(i.lang)
   const x = useIntel()
   const drill = useContext(DrillContext)
-  const { data } = useFetch<Barometer>(`/api/radar/sentiment?days=14${fluxParam(flux, '&')}`)
-  if (!data) return <p className="news-status">{r.loading}</p>
+  const { data, error } = useFetch<Barometer>(`/api/radar/sentiment?days=14${fluxParam(flux, '&')}`)
+  if (!data) return <LoadState error={error} />
   const max = Math.max(1, ...data.perDay.map((d) => Math.max(d.positive, d.negative)))
   return (
     <section className="radar-block">
@@ -418,7 +419,7 @@ export function RadarBrief({ flux, onOpen }: { flux: Flux | ''; onOpen: () => vo
   const i = useI18n()
   const r = radarText(i.lang)
   const drill = useContext(DrillContext)
-  const { data } = useFetch<{ alerts: SmartAlert[] }>(`/api/radar/alerts${fluxParam(flux)}`)
+  const { data, error } = useFetch<{ alerts: SmartAlert[] }>(`/api/radar/alerts${fluxParam(flux)}`)
   // Les pics sont déjà dans le bandeau « نشاط غير معتاد » juste en dessous : ici, le reste des alertes critiques
   const critical = (data?.alerts ?? []).filter((a) => a.level === 3 && a.kind !== 'spike').slice(0, 3)
   if (!critical.length) return null
@@ -458,8 +459,8 @@ export function RadarWidget({ type, flux, days }: { type: 'emerging' | 'stories'
         : type === 'alerts'
           ? `/api/radar/alerts${fluxParam(flux)}`
           : `/api/radar/sentiment?days=${Math.min(Math.max(days, 2), 90)}${fluxParam(flux, '&')}`
-  const { data } = useFetch<{ topics?: Emerging[]; stories?: Story[]; alerts?: SmartAlert[] } & Partial<Barometer>>(url)
-  if (!data) return <p className="news-status">{r.loading}</p>
+  const { data, error } = useFetch<{ topics?: Emerging[]; stories?: Story[]; alerts?: SmartAlert[] } & Partial<Barometer>>(url)
+  if (!data) return <LoadState error={error} />
   if (type === 'mood')
     return (
       <div className="radar-baro__gauge radar-widget">

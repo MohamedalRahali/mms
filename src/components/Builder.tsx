@@ -5,6 +5,7 @@ import { type Facets, type Flux, FLUX_KEYS, ReloadContext, useFetch } from '../l
 import { useI18n } from '../lib/i18n'
 import { canDo, hasModule, useAuth } from '../lib/auth'
 import { ShareDialog, useBrand } from './Share'
+import { LoadState } from './LoadState'
 
 const RADAR_TYPES: string[] = ['emerging', 'stories', 'alerts', 'mood']
 import {
@@ -308,6 +309,7 @@ export function Builder({ flux }: { flux: Flux | '' }) {
   const [drag, setDrag] = useState<Drag | null>(null)
   const [editor, setEditor] = useState<{ conf: WidgetConf; isNew: boolean } | null>(null)
   const [status, setStatus] = useState<'' | 'saving' | 'error'>('')
+  const [loadFailed, setLoadFailed] = useState(false)
   const gridRef = useRef<HTMLDivElement>(null)
   const [slot, setSlot] = useState<HTMLElement | null>(null)
   const [sharing, setSharing] = useState(false)
@@ -316,9 +318,9 @@ export function Builder({ flux }: { flux: Flux | '' }) {
   useEffect(() => setSlot(document.getElementById('mms-appbar-slot')), [])
   useEffect(() => {
     fetch('/api/dashboards')
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((json) => setSaved(json.boards?.length ? json.boards : DEFAULT_BOARDS))
-      .catch(() => setSaved(DEFAULT_BOARDS))
+      .catch(() => setLoadFailed(true))
   }, [])
 
   const editing = draft !== null
@@ -450,6 +452,7 @@ export function Builder({ flux }: { flux: Flux | '' }) {
         )
       : null
 
+  if (loadFailed) return <LoadState error />
   if (!saved || !board) return <p className="news-status">{i.t.loading}</p>
   const ordered = [...board.widgets].sort((a, c) => a.y - c.y || a.x - c.x)
 

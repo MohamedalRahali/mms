@@ -145,6 +145,7 @@ export type Filters = {
   sort: string
   country: string
   processed: string
+  region: string
 }
 export const EMPTY_FILTERS: Filters = {
   q: '',
@@ -164,6 +165,7 @@ export const EMPTY_FILTERS: Filters = {
   sort: '',
   country: '',
   processed: '',
+  region: '',
 }
 
 /** Clic sur un graphique ou une entité : ouvre la liste des actualités avec ces filtres */
@@ -214,6 +216,14 @@ export function useFetch<T>(rawUrl: string, refreshMs = REFRESH_MS) {
     const id = window.setInterval(() => setTick((t) => t + 1), refreshMs)
     return () => window.clearInterval(id)
   }, [refreshMs])
+
+  // Nouvelle adresse (autre filtre, autre période) : on n'affiche plus le résultat de l'ancienne
+  const [shownUrl, setShownUrl] = useState(url)
+  if (shownUrl !== url) {
+    setShownUrl(url)
+    setData(null)
+    setError(false)
+  }
 
   useEffect(() => {
     let cancelled = false

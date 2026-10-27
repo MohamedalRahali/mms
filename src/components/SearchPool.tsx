@@ -4,11 +4,12 @@ import { useI18n } from '../lib/i18n'
 import { hasModule, useAuth } from '../lib/auth'
 import { WATCH_TEXT, type WatchOption } from '../lib/watches'
 import { countryName, flagOf, fmtReach, isNetwork } from '../lib/listing'
-import { NewsList } from './NewsList'
+import { PoolSearch } from './PoolSearch'
 import { NetworkIcon } from './Listing'
 import { Diffusion } from './Diffusion'
 import './listing.css'
 import './pool.css'
+import { LoadState } from './LoadState'
 
 /**
  * مجمع البحث (équivalent du « SearchPool ») : recherche libre et rétrospective sur toute la base, catalogue des
@@ -80,7 +81,7 @@ function SourcesIndex() {
   const i = useI18n()
   const s = TEXT[i.lang === 'ar' ? 'ar' : 'en']
   const drill = useContext(DrillContext)
-  const { data } = useFetch<Catalog>('/api/sources/catalog')
+  const { data, error } = useFetch<Catalog>('/api/sources/catalog')
   const [q, setQ] = useState('')
   const [type, setType] = useState('')
   const [cc, setCc] = useState('')
@@ -92,7 +93,7 @@ function SourcesIndex() {
       ),
     [data, q, type, cc, st],
   )
-  if (!data) return <p className="news-status">{i.t.loading}</p>
+  if (!data) return <LoadState error={error} />
   return (
     <section>
       <p className="news-status">
@@ -144,7 +145,7 @@ function SourcesIndex() {
               {i.channel(x.channel)}
             </span>
             <span role="cell" data-label={s.cols[2]}>{x.country ? `${flagOf(x.country)} ${countryName(x.country, i.lang)}` : '—'}</span>
-            <span role="cell" data-label={s.cols[3]}>{x.langs.map((l) => i.language(l)).join('، ') || '—'}</span>
+            <span role="cell" data-label={s.cols[3]}>{x.langs.map((l) => i.language(l)).join(i.lang === 'ar' ? '، ' : ', ') || '—'}</span>
             <span role="cell" data-label={s.cols[4]} title={x.reachSet ? '' : s.estimated}>
               {fmtReach(x.reach, i.lang)}
               {!x.reachSet && <small> ≈</small>}
@@ -232,7 +233,7 @@ export function SearchPool({ flux }: { flux: Flux | '' }) {
           </button>
         ))}
       </div>
-      {tab === 'search' && <NewsList flux={flux} />}
+      {tab === 'search' && <PoolSearch flux={flux} />}
       {tab === 'sources' && <SourcesIndex />}
       {tab === 'broadcast' && <Diffusion />}
       {tab === 'queries' && <SavedQueries />}

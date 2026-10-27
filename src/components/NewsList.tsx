@@ -15,7 +15,8 @@ import { type Overview, type ResultTab, ChartsTab, GroupHeader, ListToolbar, Net
 import { countryName, flagOf, useListPrefs } from '../lib/listing'
 import { type Health } from '../lib/news'
 
-export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Flux | ''; initialWatch?: string; initialFilters?: Partial<Filters> }) {
+// bare : la recherche et les filtres sont pilotés par la page appelante (مجمع البحث) ; seuls les résultats sont affichés
+export function NewsList({ flux, initialWatch = '', initialFilters, bare = false }: { flux: Flux | ''; initialWatch?: string; initialFilters?: Partial<Filters>; bare?: boolean }) {
   const i = useI18n()
   const x = useIntel()
   const p = usePro()
@@ -86,13 +87,15 @@ export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Fl
 
   return (
     <>
+      {!bare && (
+        <>
       <form className="news-filters" onSubmit={onSubmit}>
         <input
           type="search"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder={t.searchPlaceholder}
-          aria-label="Search"
+          aria-label={i.lang === 'ar' ? 'بحث' : 'Search'}
           maxLength={500}
           dir="auto"
         />
@@ -136,14 +139,14 @@ export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Fl
             ]}
           />
         )}
-        <select value={filters.days} onChange={(e) => update({ days: e.target.value })} aria-label="Period">
+        <select value={filters.days} onChange={(e) => update({ days: e.target.value })} aria-label={i.lang === 'ar' ? 'الفترة' : 'Period'}>
           {PERIODS.map((p) => (
             <option key={p.value} value={p.value}>
               {p.label}
             </option>
           ))}
         </select>
-        <select value={filters.category} onChange={(e) => update({ category: e.target.value })} aria-label="Category">
+        <select value={filters.category} onChange={(e) => update({ category: e.target.value })} aria-label={i.lang === 'ar' ? 'الموضوع' : 'Category'}>
           <option value="">{t.allCategories}</option>
           {facets?.categories.map((c) => (
             <option key={c.name} value={c.name}>
@@ -151,7 +154,7 @@ export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Fl
             </option>
           ))}
         </select>
-        <select value={filters.channel} onChange={(e) => update({ channel: e.target.value })} aria-label="Channel">
+        <select value={filters.channel} onChange={(e) => update({ channel: e.target.value })} aria-label={i.lang === 'ar' ? 'القناة' : 'Channel'}>
           <option value="">{t.allChannels}</option>
           {facets?.channels.map((c) => (
             <option key={c.name} value={c.name}>
@@ -159,7 +162,7 @@ export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Fl
             </option>
           ))}
         </select>
-        <select value={filters.lang} onChange={(e) => update({ lang: e.target.value })} aria-label="Language">
+        <select value={filters.lang} onChange={(e) => update({ lang: e.target.value })} aria-label={i.lang === 'ar' ? 'اللغة' : 'Language'}>
           <option value="">{t.allLanguages}</option>
           {facets?.languages.map((l) => (
             <option key={l.name} value={l.name}>
@@ -277,6 +280,8 @@ export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Fl
         }}
       />
 
+        </>
+      )}
       <ResultTabs tab={tab} onTab={setTab} total={data?.found ?? data?.total} overview={overview} />
       {tab === 'sources' && (
         <SourcesTab
@@ -358,7 +363,7 @@ export function NewsList({ flux, initialWatch = '', initialFilters }: { flux: Fl
       )}
 
       {data && data.pages > 1 && (
-        <nav className="news-pager" aria-label="pages">
+        <nav className="news-pager" aria-label={i.lang === 'ar' ? 'الصفحات' : 'Pages'}>
           <button type="button" className="news-btn news-btn--ghost" disabled={page <= 1} onClick={() => setPage(page - 1)}>
             {t.prev}
           </button>

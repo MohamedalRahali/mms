@@ -6,6 +6,7 @@ import { canDo, useAuth } from '../lib/auth'
 import { ToneMeter } from './Listing'
 import './listing.css'
 import './geo.css'
+import { LoadState } from './LoadState'
 
 /**
  * الحضور في إجابات الذكاء الاصطناعي : questions du client posées à l'IA configurée dans MMS, réponses gardées,
@@ -103,6 +104,7 @@ export function GeoPresence() {
   const [form, setForm] = useState<Pick<Settings, 'enabled' | 'schedule' | 'dailyLimit'>>({ enabled: true, schedule: 'off', dailyLimit: 20 })
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
 
   function apply(v: GeoView) {
     setView(v)
@@ -112,9 +114,9 @@ export function GeoPresence() {
   }
   useEffect(() => {
     fetch('/api/geo')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((v) => v && apply(v))
-      .catch(() => {})
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((v) => apply(v))
+      .catch(() => setLoadFailed(true))
   }, [])
 
   async function save() {
@@ -151,7 +153,7 @@ export function GeoPresence() {
     }
   }
 
-  if (!view) return <p className="news-status">{i.t.loading}</p>
+  if (!view) return <LoadState error={loadFailed} />
   return (
     <div className="geo">
       <header className="geo__head">

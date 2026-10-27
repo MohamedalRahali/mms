@@ -903,3 +903,62 @@
   height: 7px;
   border-radius: 4px;
 }
+
+/* سجل الإرسال */
+.dispatch {
+  margin-top: 16px;
+}
+.dispatch__table {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+.dispatch__row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 2.4fr 0.6fr 1fr 0.7fr 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 4px;
+  border-top: 1px solid var(--line);
+}
+.dispatch__row--head {
+  border-top: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.dispatch__status {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+.dispatch__status.is-sent {
+  background: rgba(46, 158, 91, 0.16);
+  color: #2e9e5b;
+}
+.dispatch__status.is-failed,
+.dispatch__status.is-blocked {
+  background: rgba(217, 83, 79, 0.16);
+  color: #d9534f;
+}
+@media (max-width: 720px) {
+  .dispatch__row--head {
+    display: none;
+  }
+  .dispatch__row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.mms-itr {
+  margin-top: 4px;
+}
+.mms-itr .mms-brief b {
+  display: block;
+}
+.mms-itr .mms-brief p {
+  margin: 4px 0;
+}
+.mms-itr .mms-brief small {
+  color: var(--ink-soft);
+}

@@ -557,7 +557,7 @@ export function smartAlerts(items, { now = Date.now(), history = historyOf(items
 const KIND_AR = { spike: 'ارتفاع مفاجئ', emerging: 'موضوع جديد', negative: 'تصاعد السلبية', story: 'خبر واسع الانتشار' }
 const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-export function startRadarAlerts(dataDir, getItems, { sendTelegram, telegramReady, sendMail, canSend = () => true }) {
+export function startRadarAlerts(dataDir, getItems, { sendTelegram, telegramReady, sendMail, canSend = () => true, onSent = () => {} }) {
   if (process.env.MMS_RADAR_ALERTS !== '1') return
   const file = path.join(dataDir, 'radar-sent.json')
   let sent = {}
@@ -591,6 +591,7 @@ export function startRadarAlerts(dataDir, getItems, { sendTelegram, telegramRead
           html: `<div dir="rtl" style="font-family:Arial,sans-serif">${text.replace(/\n/g, '<br>')}</div>`,
         })
       for (const a of fresh) sent[a.id] = now
+      onSent({ count: fresh.length, channels: [...(telegramReady() ? ['telegram'] : []), ...(to.length ? ['email'] : [])], recipients: to.length, names: fresh.map((a) => a.label) })
       fs.mkdirSync(dataDir, { recursive: true })
       fs.writeFileSync(file, JSON.stringify(sent))
     } catch (err) {

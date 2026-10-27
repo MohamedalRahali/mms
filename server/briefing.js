@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { getItems } from './store.js'
 import { onMailPolicyChange, splitRecipients } from './mailPolicy.js'
+import { logDispatch } from './dispatchLog.js'
 import { aiEnabled, briefingSummary } from './ai.js'
 import { briefingFacts, buildBriefing } from './insights.js'
 import { sendMail, sendTelegram, telegramReady } from './watches.js'
@@ -147,6 +148,7 @@ export async function sendBriefing() {
     sent.push('telegram')
   }
   if (!sent.length) throw Object.assign(new Error('Aucun canal configuré'), { code: 'NO_CHANNEL' })
+  logDispatch({ kind: 'briefing', name: `التقرير التنفيذي (${conf.days} أيام)`, count: report.b?.current?.total || 0, channels: sent, recipients: conf.recipients.length })
   return sent
 }
 

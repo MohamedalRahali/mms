@@ -7,6 +7,7 @@ import { MediaIcon } from './MediaParts'
 import { SaveSearchButton } from './Listing'
 import { type MediaIconName } from '../lib/media'
 import './broadcast.css'
+import { LoadState } from './LoadState'
 
 /**
  * Broadcasts — البث : temps d'antenne estimé, recherche dans les transcriptions avec passages surlignés et horodatés,
@@ -240,8 +241,8 @@ export function ClipCard({ clip, terms, query, focus }: { clip: Clip; terms: str
 function AirtimePanel({ query }: { query: string }) {
   const i = useI18n()
   const b = useText()
-  const { data } = useFetch<Airtime>(`/api/media/broadcast/airtime?${query}`)
-  if (!data) return <p className="news-status">{i.t.loading}</p>
+  const { data, error } = useFetch<Airtime>(`/api/media/broadcast/airtime?${query}`)
+  if (!data) return <LoadState error={error} />
   const bars = (list: { name: string; minutes: number }[], label: (n: string) => string) => {
     if (!list.length) return <p className="news-status">{i.t.noData}</p>
     const max = Math.max(...list.map((r) => r.minutes), 0.1)

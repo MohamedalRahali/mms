@@ -416,11 +416,11 @@ export default function App() {
                       </svg>
                     </button>
                   </div>
-                  <div className="seg seg--lang" role="group" aria-label="Language">
-                    <button type="button" className={lang === 'ar' ? 'seg__btn is-active' : 'seg__btn'} onClick={() => setLang('ar')}>
+                  <div className="seg seg--lang" role="group" aria-label={lang === 'ar' ? 'اللغة' : 'Language'}>
+                    <button type="button" className={lang === 'ar' ? 'seg__btn is-active' : 'seg__btn'} aria-pressed={lang === 'ar'} aria-label="العربية" onClick={() => setLang('ar')}>
                       ع
                     </button>
-                    <button type="button" className={lang === 'en' ? 'seg__btn is-active' : 'seg__btn'} onClick={() => setLang('en')}>
+                    <button type="button" className={lang === 'en' ? 'seg__btn is-active' : 'seg__btn'} aria-pressed={lang === 'en'} aria-label="English" onClick={() => setLang('en')}>
                       EN
                     </button>
                   </div>
@@ -462,7 +462,7 @@ export default function App() {
                   )}
                 </header>
                 {/* Onglets : utilisés sur mobile, où le menu latéral est replié */}
-                <nav className="mms-tabs" aria-label="Navigation">
+                <nav className="mms-tabs" aria-label={lang === 'ar' ? 'التنقل' : 'Navigation'}>
                   {TABS.map((v) => (
                     <button key={v.key} type="button" className={shown === v.key ? 'mms-tabs__btn is-active' : 'mms-tabs__btn'} onClick={() => go(v.key)}>
                       {v.label}

@@ -125,3 +125,30 @@ test('répartition par région : ouest, est, sud et municipalités', async () =>
   assert.equal(r.places[0].name, 'طرابلس')
   assert.equal(r.places[0].count, 2)
 })
+
+test('لوحات التثبيت : création, épinglage sans doublon, retrait, suppression', async () => {
+  const { initPinboards, createPinboard, pinItem, unpinItem, pinboard, deletePinboard, listPinboards } = await import('../server/pinboards.js')
+  initPinboards(fs.mkdtempSync(path.join(os.tmpdir(), 'mms-pin-')))
+  const b = createPinboard(' ملف النفط ', 'a@npdc.gov.ly')
+  assert.equal(b.name, 'ملف النفط')
+  const it = { id: 'x1', title: 't', url: 'https://alwasat.ly/1', origin: 'الوسط', date: '2026-10-27T10:00:00Z' }
+  pinItem(b.id, it, 'a@npdc.gov.ly')
+  assert.equal(pinItem(b.id, it, 'b@npdc.gov.ly').count, 1, 'pas de doublon')
+  assert.equal(pinboard(b.id).items[0].addedBy, 'a@npdc.gov.ly')
+  assert.equal(unpinItem(b.id, 'https://alwasat.ly/1').count, 0)
+  assert.throws(() => createPinboard(''), /NO_NAME/)
+  assert.throws(() => pinItem('inconnu', it), /NOT_FOUND/)
+  assert.ok(deletePinboard(b.id))
+  assert.equal(listPinboards().length, 0)
+})
+
+test('سجل الإرسال : lignes horodatées, sans adresses, plus récentes d’abord', async () => {
+  const { initDispatchLog, logDispatch, dispatchHistory } = await import('../server/dispatchLog.js')
+  initDispatchLog(fs.mkdtempSync(path.join(os.tmpdir(), 'mms-log-')))
+  logDispatch({ kind: 'watch', name: 'ليبيا', count: 3, channels: ['email', 'email', 'telegram'], recipients: 2 })
+  logDispatch({ kind: 'radar', name: 'x', count: 1, status: 'blocked', error: 'DOMAIN_BLOCKED' })
+  const rows = dispatchHistory()
+  assert.equal(rows[0].kind, 'radar')
+  assert.deepEqual(rows[1].channels, ['email', 'telegram'])
+  assert.ok(!JSON.stringify(rows).includes('@'))
+})

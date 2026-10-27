@@ -9,6 +9,8 @@ import { canDo, useAuth } from '../lib/auth'
 import { MediaBadge, MediaContext, MediaReactions, MediaTranscript } from './MediaParts'
 import { PickBox } from './ReportPick'
 import { BriefButton, CountryFlag, NetworkIcon, ProcessedToggle, SimilarFold } from './Listing'
+import { PinButton } from './Pinboards'
+import { TranslateButton } from './Translate'
 import { isNetwork } from '../lib/listing'
 
 export const HEART = 'M12 21s-7.5-4.6-9.6-9.3C1 8.4 3 5 6.4 5c2 0 3.3 1 4.1 2.2h3C14.3 6 15.6 5 17.6 5 21 5 23 8.4 21.6 11.7 19.5 16.4 12 21 12 21z'
@@ -141,6 +143,7 @@ function FullCard({ item, variant, brief }: { item: NewsItem; variant: 'list' | 
           </span>
           <span className="news-card__tools">
             {variant === 'list' && <ProcessedToggle item={item} />}
+            {variant === 'list' && <PinButton item={item} />}
             <PickBox item={item} />
             <button
               type="button"
@@ -172,6 +175,7 @@ function FullCard({ item, variant, brief }: { item: NewsItem; variant: 'list' | 
           </p>
         )}
         {brief && item.lang !== 'ar' && <BriefButton item={item} />}
+        <TranslateButton item={item} />
         <p className="news-card__meta">
           <span>{i.dateTime(item.date)}</span>
           <span>{i.channel(item.channel)}</span>

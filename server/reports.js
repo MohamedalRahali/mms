@@ -617,7 +617,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 
 /* ---------------------------------------------------------------- routes */
 
-export function mountReports(app, dataDir, { getItems, aiEnabled, aiRun, sendMail, displayName }) {
+export function mountReports(app, dataDir, { getItems, aiEnabled, aiRun, sendMail, displayName, logDispatch: logDispatchFn = () => {} }) {
   dir = path.join(dataDir, 'reports')
   const gens = new Map() // compte → dates des générations
   const mails = new Map() // compte → dates des envois
@@ -815,6 +815,7 @@ export function mountReports(app, dataDir, { getItems, aiEnabled, aiRun, sendMai
       entry.accepted = accepted
       entry.rejected = rejected
       entry.messageId = String(info.messageId || '').slice(0, 200)
+      logDispatchFn({ kind: 'report', name: report.title || report.id, channels: ['email'], recipients: accepted.length, by: req.user.email })
       report.history = [entry, ...report.history].slice(0, 100)
       writeAll(req.user.email, all)
       res.json({ ok: true, accepted, rejected, history: report.history })

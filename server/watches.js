@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { getItems } from './store.js'
 import { onMailPolicyChange, splitRecipients } from './mailPolicy.js'
+import { logDispatch } from './dispatchLog.js'
 
 /**
  * Veille programmée (الرصد المبرمج), sur le principe de NewsRadar :
@@ -414,6 +415,7 @@ export async function runWatches() {
         const smtp = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS)
         if (watch.recipients.length && (smtp || !telegramReady())) await sendMail(watch.recipients, buildAlertEmail(watch, found))
         watch.lastError = null
+        logDispatch({ kind: 'watch', name: watch.name, count: found.length, channels: [...(telegramReady() ? ['telegram'] : []), ...(watch.recipients.length && smtp ? ['email'] : [])], recipients: watch.recipients.length })
         // Envoyés (ou sans destinataire) : on ne les signalera plus
         watch.notified = [...watch.notified, ...found.map(({ it }) => itemKey(it))].slice(-5000)
       } catch (err) {
@@ -421,6 +423,7 @@ export async function runWatches() {
         const code = err.code === 'smtp_missing' ? 'smtp_missing' : 'smtp_error'
         if (watch.lastError !== code) console.error(`Veille « ${watch.name} » : ${err.message}`)
         watch.lastError = code
+        logDispatch({ kind: 'watch', name: watch.name, count: found.length, channels: ['email'], recipients: watch.recipients.length, status: err.code === 'DOMAIN_BLOCKED' ? 'blocked' : 'failed', error: err.code || code })
         watch.matchCount -= found.length
         watch.matches = watch.matches.slice(found.length)
       }

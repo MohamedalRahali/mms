@@ -2,6 +2,7 @@ import { useContext, useState } from 'react'
 import { DrillContext, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import './listing.css'
+import { LoadState } from './LoadState'
 
 /**
  * Répartition territoriale (التوزيع الجغرافي) : actualités par région de la Libye (غرب / شرق / جنوب) et par
@@ -33,8 +34,8 @@ export function RegionsPanel() {
   const t = TEXT[i.lang === 'ar' ? 'ar' : 'en']
   const drill = useContext(DrillContext)
   const [days, setDays] = useState(7)
-  const { data } = useFetch<Regions>(`/api/news/regions?days=${days}`)
-  if (!data) return null
+  const { data, error } = useFetch<Regions>(`/api/news/regions?days=${days}`)
+  if (!data) return error ? <LoadState error /> : null
   const sum = data.regions.west + data.regions.east + data.regions.south || 1
   const max = Math.max(...data.places.map((p) => p.count), 1)
   return (

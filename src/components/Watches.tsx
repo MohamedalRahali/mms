@@ -4,6 +4,8 @@ import { type Flux, FLUX_KEYS } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { canDo, useAuth } from '../lib/auth'
 import { THEMES, type Watch, WATCH_TEXT, ZONES, themesToRules } from '../lib/watches'
+import { DispatchHistory } from './DispatchHistory'
+import { LoadState } from './LoadState'
 
 /** Écran « الرصد المبرمج » : zone surveillée, thèmes à cocher, période, destinataires, puis liste des veilles */
 
@@ -61,12 +63,12 @@ function WatchForm({ onCreated }: { onCreated: () => void }) {
 
   const themes = THEMES.filter((t) => picked.includes(t.key)).map((t) => ({ key: t.key, words: words[t.key] }))
   const rules = themesToRules(scope, themes)
-  const zoneName = scope.includes(ZONES.libye[0]) ? 'ليبيا' : scope.includes(ZONES.tunisie[0]) ? 'تونس' : scope[0] || ''
+  const zoneName = scope.includes(ZONES.libye[0]) ? w.zoneLibye : scope.includes(ZONES.tunisie[0]) ? w.zoneTunisie : scope[0] || ''
   const autoName = [
     zoneName,
     THEMES.filter((t) => picked.includes(t.key))
-      .map((t) => t.ar)
-      .join('، '),
+      .map((t) => (i.lang === 'ar' ? t.ar : t.en))
+      .join(i.lang === 'ar' ? '، ' : ', '),
   ]
     .filter(Boolean)
     .join(' – ')
@@ -297,19 +299,21 @@ export function Watches({ onOpen }: { onOpen: (id: string) => void }) {
   const i = useI18n()
   const w = WATCH_TEXT[i.lang]
   const [list, setList] = useState<Watch[] | null>(null)
+  const [failed, setFailed] = useState(false)
   const [smtp, setSmtp] = useState(true)
   const [tick, setTick] = useState(0)
   useEffect(() => {
     let off = false
     const load = () =>
       fetch('/api/watches')
-        .then((r) => r.json())
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
         .then((json) => {
           if (off) return
-          setList(json.watches)
+          setList(json.watches ?? [])
           setSmtp(json.smtp)
+          setFailed(false)
         })
-        .catch(() => {})
+        .catch(() => !off && setFailed(true))
     load()
     // La vérification tourne en arrière-plan : on relit la liste pour voir les nouveaux résultats
     const id = window.setInterval(load, 15_000)
@@ -335,7 +339,7 @@ export function Watches({ onOpen }: { onOpen: (id: string) => void }) {
             </div>
           </header>
           <div className="mms-widget__body">
-            {!list && <p className="news-status">{i.t.loading}</p>}
+            {!list && <LoadState error={failed} />}
             {list?.length === 0 && <p className="news-status">{w.empty}</p>}
             {list?.map((x) => (
               <WatchRow key={x.id} watch={x} onChange={reload} onOpen={onOpen} />
@@ -343,6 +347,7 @@ export function Watches({ onOpen }: { onOpen: (id: string) => void }) {
           </div>
         </section>
       </div>
+      <DispatchHistory />
     </>
   )
 }

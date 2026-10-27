@@ -34,7 +34,9 @@ import { cachedBrief, initBrief, itemBrief } from './brief.js'
 import { mountGeo } from './geo.js'
 import { mountCatalog } from './catalog.js'
 import { canSendAlert, initAlertFlow, mountAlertFlow, withFlow } from './alertFlow.js'
-import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionStats, resolveEntities } from './entities.js'
+import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionOf, regionStats, resolveEntities } from './entities.js'
+import { initPinboards, mountPinboards } from './pinboards.js'
+import { dispatchHistory, initDispatchLog, logDispatch } from './dispatchLog.js'
 import { setEntityResolver } from './store.js'
 
 /** Serveur MMS : API de lecture des actualités + site compilé (dist/) en production */
@@ -90,6 +92,7 @@ function applyFilters(items, q) {
       (!q.tag || tagsOf(it).includes(q.tag)) &&
       (!q.important || (it.importance || 1) >= 2) &&
       (!q.country || countryOf(it) === q.country) &&
+      (!q.region || regionOf(it) === q.region) &&
       (!q.processed || (q.processed === 'yes') === isProcessed(itemKey(it))) &&
       (!since || Date.parse(it.date) >= since) &&
       (!match || match(searchText(it))) &&
@@ -144,6 +147,7 @@ app.use((req, res, next) => {
 
 // Permissions détaillées par profil (modules et boutons), réglées dans la console Super Admin
 initPermissions(path.join(root, 'data', 'superadmin'))
+initDispatchLog(path.join(root, 'data'))
 // Console Super Admin (/superadmin) : blocages IP et pays, maintenance et journaux passent avant tout le reste
 mountSuperAdmin(app, root)
 
@@ -306,7 +310,7 @@ initImages(path.join(root, 'data'))
 mountDiffusion(app, path.join(root, 'data'))
 mountMedia(app)
 // Générateur de rapports (التقارير) : publications cochées seulement, rapports propres à chaque compte
-mountReports(app, path.join(root, 'data'), { getItems, aiEnabled, aiRun: aroundRun, sendMail })
+mountReports(app, path.join(root, 'data'), { getItems, aiEnabled, aiRun: aroundRun, sendMail, logDispatch })
 initUsage(path.join(root, 'data'))
 app.get('/api/img/:key', imageRoute)
 
@@ -867,6 +871,11 @@ for (const view of Object.keys(RADAR_VIEWS))
 // Traitement des alertes : étapes et historique (action « تحديد الأخبار كمُعالَجة » du profil)
 initAlertFlow(path.join(root, 'data'))
 mountAlertFlow(app)
+// لوحات التثبيت : collections d'articles épinglés, communes à l'équipe
+initPinboards(path.join(root, 'data'))
+mountPinboards(app, { getItems })
+// سجل الإرسال : envois des veilles, alertes du radar, briefing et rapports
+app.get('/api/watches/history', (_req, res) => res.json({ rows: dispatchHistory() }))
 
 // Résumé par l'IA d'une histoire ou d'un sujet émergent du radar (même moteur et même cache que les pics)
 let radarAiRunning = false
@@ -981,7 +990,7 @@ app.use((err, req, res, _next) => {
 
 startWatches(path.join(root, 'data'))
 startBriefing(path.join(root, 'data'))
-startRadarAlerts(path.join(root, 'data'), getItems, { sendTelegram, telegramReady, sendMail, canSend: canSendAlert })
+startRadarAlerts(path.join(root, 'data'), getItems, { sendTelegram, telegramReady, sendMail, canSend: canSendAlert, onSent: (r) => logDispatch({ kind: 'radar', name: r.names.slice(0, 3).join(' · '), count: r.count, channels: r.channels, recipients: r.recipients }) })
 
 // Sur le VPS, MMS_HOST=127.0.0.1 : seul nginx (HTTPS) parle au serveur
 const HOST = process.env.MMS_HOST || undefined
