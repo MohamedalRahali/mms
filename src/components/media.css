@@ -592,23 +592,6 @@
   width: auto;
   height: 40px;
 }
-/* Texte noir du logo : sur le thème sombre, posé sur une plaque claire */
-:root:not([data-theme='light']) .mms-head__logo {
-  background: linear-gradient(180deg, #ffffff, #eef3f0);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.35),
-    0 6px 18px rgba(0, 0, 0, 0.25);
-}
-/* Reflet qui traverse le logo toutes les 8 secondes */
-.mms-head__logo::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.75) 50%, transparent 65%);
-  transform: translateX(-120%);
-  animation: npdc-sheen 8s ease-in-out 1.2s infinite;
-  pointer-events: none;
-}
 .mms-head__logo:hover {
   transform: translateY(-1px) scale(1.02);
   box-shadow:
