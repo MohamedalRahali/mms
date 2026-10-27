@@ -1,4 +1,5 @@
 import { useContext, useState } from 'react'
+import { shortDay, useHistory } from '../lib/history'
 import { BuzzBars, NewsDigest } from './Dashboard'
 import { type Count, type Filters, type Stats, type Tone, DrillContext, TONES, useFetch } from '../lib/news'
 import { TONE_COLORS, useIntel } from '../lib/intel'
@@ -401,7 +402,9 @@ export function WidgetBody({ conf }: { conf: WidgetConf }) {
 export function useWidgetTitles(conf: WidgetConf) {
   const i = useI18n()
   const b = BUILDER_TEXT[i.lang]
-  const path = `MMS / ${conf.flux ? i.flux(conf.flux) : i.t.allSources} / ${b.days(conf.days)}`
+  const history = useHistory()
+  const since = history?.since ? ` · ${i.lang === 'ar' ? 'منذ' : 'since'} ${shortDay(history.since)}` : ''
+  const path = `MMS / ${conf.flux ? i.flux(conf.flux) : i.t.allSources} / ${b.days(conf.days)}${since}`
   const auto =
     conf.type === 'news'
       ? conf.category

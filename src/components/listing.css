@@ -745,3 +745,161 @@
     margin-inline-start: 0;
   }
 }
+
+/* « البيانات منذ » : date de début des données */
+.mms-since {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
+.mms-since.is-short {
+  border-color: #c9921b;
+  color: var(--ink);
+}
+.mms-since.is-compact {
+  margin: 0;
+  padding: 1px 8px;
+  font-size: 11.5px;
+}
+
+/* Double authentification */
+.mfa-page {
+  max-width: 560px;
+  margin: 6vh auto;
+  text-align: start;
+}
+.mfa-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0;
+}
+.mfa-key {
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 17px;
+  letter-spacing: 1px;
+  word-break: break-all;
+  user-select: all;
+}
+.mfa-enable {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+.mfa-enable label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mfa-enable input {
+  width: 9em;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 18px;
+  letter-spacing: 3px;
+}
+.mfa-codes {
+  columns: 2;
+  margin: 0;
+  padding-inline-start: 22px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 15px;
+  line-height: 1.9;
+}
+
+/* Répartition par région de la Libye */
+.geo-regions {
+  margin: 16px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.geo-regions header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.geo-regions h3,
+.geo-regions h4 {
+  margin: 0 0 6px;
+}
+.geo-regions h4 {
+  margin-top: 12px;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+.geo-regions__bar {
+  display: flex;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--line);
+}
+.geo-regions__bar i {
+  display: block;
+  height: 100%;
+}
+.geo-regions__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.geo-regions__legend span {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-inline-end: 5px;
+  border-radius: 3px;
+}
+.geo-regions__places {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.geo-regions__places button {
+  display: grid;
+  grid-template-columns: minmax(70px, auto) 1fr auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 3px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+.geo-regions__places i {
+  display: block;
+  height: 7px;
+  border-radius: 4px;
+}

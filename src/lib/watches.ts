@@ -23,6 +23,8 @@ export type Watch = {
   // Veille créée depuis « حفظ البحث » : requête booléenne et filtres de la recherche
   query?: string
   filters?: Record<string, string>
+  createdBy?: string
+  blockedRecipients?: string[]
 }
 
 /** Zones prêtes à l'emploi : MMS suit la Tunisie (Mosaïque FM) et la Libye */
@@ -161,6 +163,8 @@ export const WATCH_TEXT = {
     confirmRemove: 'حذف هذا الرصد نهائياً؟',
     showNews: 'عرض الأخبار',
     period: (from: string, to: string | null) => (to ? `من ${from} إلى ${to}` : `من ${from} · رصد دائم`),
+    owner: 'أنشأه',
+    duplicate: (name: string, by: string) => `يوجد رصد نشط مطابق: «${name}»${by ? ` (أنشأه ${by})` : ''}. هل تريد إنشاء نسخة ثانية رغم ذلك؟`,
     results: (n: number) => `${n} نتيجة مرسلة`,
     lastSent: 'آخر ما أُرسل',
     noRecipients: 'بدون بريد: النتائج تظهر في قسم الأخبار فقط',
@@ -175,6 +179,8 @@ export const WATCH_TEXT = {
       BAD_EMAIL: 'أحد عناوين البريد غير صحيح.',
       TOO_MANY: 'تم بلوغ الحد الأقصى لعدد عمليات الرصد (100).',
       BAD_QUERY: 'صيغة البحث غير صحيحة.',
+      DUPLICATE: 'يوجد رصد نشط مطابق.',
+      DOMAIN_BLOCKED: 'عناوين البريد خارج النطاقات المسموح بها (مثل npdc.gov.ly) غير مقبولة.',
       FAILED: 'تعذّرت العملية. أعد المحاولة.',
     } as Record<string, string>,
   },
@@ -212,6 +218,8 @@ export const WATCH_TEXT = {
     confirmRemove: 'Delete this watch permanently?',
     showNews: 'Show news',
     period: (from: string, to: string | null) => (to ? `from ${from} to ${to}` : `since ${from} · permanent`),
+    owner: 'Created by',
+    duplicate: (name: string, by: string) => `An identical active watch already exists: “${name}”${by ? ` (created by ${by})` : ''}. Create a second one anyway?`,
     results: (n: number) => `${n} results sent`,
     lastSent: 'Last sent',
     noRecipients: 'No email: results only appear in the news',
@@ -226,6 +234,8 @@ export const WATCH_TEXT = {
       BAD_EMAIL: 'One of the email addresses is not valid.',
       TOO_MANY: 'Maximum number of watches reached (100).',
       BAD_QUERY: 'The search syntax is not valid.',
+      DUPLICATE: 'An identical active watch already exists.',
+      DOMAIN_BLOCKED: 'Email addresses outside the allowed domains (such as npdc.gov.ly) are not accepted.',
       FAILED: 'The operation failed. Please try again.',
     } as Record<string, string>,
   },

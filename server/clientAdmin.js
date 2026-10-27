@@ -3,6 +3,12 @@ import path from 'node:path'
 import { setSourceMeta } from './sourceMeta.js'
 import { createApiKey, listApiKeys, revokeApiKey } from './apiKeys.js'
 import { listShares, revokeShare } from './shares.js'
+import { mailPolicy, setMailPolicy } from './mailPolicy.js'
+import { mfaPolicy, setMfaPolicy } from './mfa.js'
+import { applyMailPolicyToWatches } from './watches.js'
+import { applyMailPolicyToBriefing } from './briefing.js'
+import { listEntities, saveEntities } from './entities.js'
+import { reviewOption, setReviewOption } from './alertFlow.js'
 
 /**
  * Réglages de la console Super Admin ajoutés avec la liste d'actualités enrichie :
@@ -11,7 +17,7 @@ import { listShares, revokeShare } from './shares.js'
  */
 
 let brandFile = ''
-let brand = { name: '', logo: '', updatedAt: null }
+let brand = { name: '', logo: '', assistant: '', updatedAt: null }
 const LOGO_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/
 const MAX_LOGO = 400_000 // caractères de l'URL data: (≈ 300 Ko d'image)
 
@@ -19,13 +25,13 @@ export function initBrand(dir) {
   brandFile = path.join(dir, 'brand.json')
   try {
     const saved = JSON.parse(fs.readFileSync(brandFile, 'utf8'))
-    brand = { name: String(saved.name || '').slice(0, 120), logo: LOGO_RE.test(saved.logo || '') ? saved.logo : '', updatedAt: saved.updatedAt || null }
+    brand = { name: String(saved.name || '').slice(0, 120), logo: LOGO_RE.test(saved.logo || '') ? saved.logo : '', assistant: String(saved.assistant || '').slice(0, 40), updatedAt: saved.updatedAt || null }
   } catch {
     /* pas encore de logo : celui de la plateforme */
   }
 }
 
-export const brandOf = () => ({ name: brand.name, logo: brand.logo, updatedAt: brand.updatedAt })
+export const brandOf = () => ({ name: brand.name, logo: brand.logo, assistant: brand.assistant || '', updatedAt: brand.updatedAt })
 
 const fail = (res, status, error) => res.status(status).json({ error })
 
@@ -44,7 +50,9 @@ export function mountClientAdmin(sa, { audit }) {
     const name = String(req.body?.name ?? brand.name).trim().slice(0, 120)
     const logo = req.body?.logo === undefined ? brand.logo : String(req.body.logo || '')
     if (logo && (logo.length > MAX_LOGO || !LOGO_RE.test(logo))) return fail(res, 400, 'BAD_LOGO')
-    brand = { name, logo, updatedAt: new Date().toISOString() }
+    // Nom affiché de l'assistant IA (« Around » par défaut), au nom du Centre si le client le souhaite
+    const assistant = String(req.body?.assistant ?? brand.assistant ?? '').trim().slice(0, 40)
+    brand = { name, logo, assistant, updatedAt: new Date().toISOString() }
     fs.mkdirSync(path.dirname(brandFile), { recursive: true })
     fs.writeFileSync(brandFile, JSON.stringify(brand))
     audit(req, 'brand', name || '—', logo ? 'logo' : 'sans logo')
@@ -66,6 +74,43 @@ export function mountClientAdmin(sa, { audit }) {
     if (!row) return fail(res, 404, 'NOT_FOUND')
     audit(req, 'apikey_revoke', row.name, row.prefix)
     res.json({ row })
+  })
+
+  /* ---- diffusion : domaines destinataires autorisés, adresses mises de côté */
+  const blockedNow = () => ({ watches: applyMailPolicyToWatches(), briefing: applyMailPolicyToBriefing() })
+  sa.get('/mail-policy', (_req, res) => res.json({ policy: mailPolicy(), blocked: blockedNow() }))
+  sa.put('/mail-policy', (req, res) => {
+    try {
+      const policy = setMailPolicy(req.body || {})
+      audit(req, 'mail_policy', policy.domains.join(', '))
+      res.json({ policy, blocked: blockedNow() })
+    } catch (err) {
+      fail(res, err.status || 500, err.code || 'FAILED')
+    }
+  })
+
+  /* ---- validation des alertes critiques par un analyste avant envoi */
+  sa.get('/alert-review', (_req, res) => res.json({ review: reviewOption() }))
+  sa.put('/alert-review', (req, res) => {
+    const review = setReviewOption(req.body || {})
+    audit(req, 'alert_review', review.critical ? 'on' : 'off')
+    res.json({ review })
+  })
+
+  /* ---- double authentification : règle */
+  sa.get('/mfa-policy', (_req, res) => res.json({ policy: mfaPolicy() }))
+  sa.put('/mfa-policy', (req, res) => {
+    const policy = setMfaPolicy(req.body || {})
+    audit(req, 'mfa_policy', policy.requireAll ? 'all' : policy.requireAdmins ? 'admins' : 'off')
+    res.json({ policy })
+  })
+
+  /* ---- référentiel des entités (acteurs, institutions, lieux, médias) */
+  sa.get('/entities', (_req, res) => res.json({ entities: listEntities() }))
+  sa.put('/entities', (req, res) => {
+    const entities = saveEntities(req.body?.entities)
+    audit(req, 'entities', `${entities.length}`)
+    res.json({ entities })
   })
 
   sa.get('/shares', (_req, res) => res.json({ shares: listShares() }))

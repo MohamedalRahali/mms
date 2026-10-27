@@ -7,7 +7,7 @@ import './listing.css'
 
 /** Partage d'un tableau de bord par lien (lecture seule, expiration, révocation) et page publique du lien */
 
-export type Brand = { name: string; logo: string }
+export type Brand = { name: string; logo: string; assistant?: string }
 
 /** Logo et nom du client, réglés dans la console Super Admin (sinon le logo de la plateforme) */
 export function useBrand() {

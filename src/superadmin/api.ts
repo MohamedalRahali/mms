@@ -72,6 +72,10 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   print: 'طباعة تقرير',
   report: 'عرض تقرير',
   export: 'تصدير',
+  send: 'إرسال بالبريد',
+  share: 'مشاركة لوحة',
+  delete: 'حذف',
+  alert: 'معالجة تنبيه',
   ai: 'تحليل بالذكاء الاصطناعي',
   lang: 'تغيير اللغة',
   view: 'فتح صفحة',
@@ -79,6 +83,12 @@ export const ACTIVITY_LABEL: Record<string, string> = {
 
 export const SECURITY_LABEL: Record<string, string> = {
   login_ok: 'دخول ناجح',
+  mfa_asked: 'طلب رمز التحقق',
+  mfa_fail: 'رمز تحقق خاطئ',
+  mfa_enabled: 'تفعيل التحقق بخطوتين',
+  mfa_disabled: 'إيقاف التحقق بخطوتين',
+  mail_blocked: 'بريد محجوب (خارج النطاقات)',
+  share_create: 'إنشاء رابط مشاركة',
   login_fail: 'دخول فاشل',
   login_disabled: 'دخول حساب معطّل',
   locked: 'حظر مؤقت بعد محاولات',
@@ -117,6 +127,10 @@ export const AUDIT_LABEL: Record<string, string> = {
   apikey_revoke: 'إلغاء مفتاح API',
   share_revoke: 'إلغاء رابط مشاركة',
   geo_settings: 'إعدادات الحضور في إجابات الذكاء الاصطناعي',
+  mail_policy: 'النطاقات المسموح بها للبريد',
+  alert_review: 'اعتماد التنبيهات الحرجة',
+  mfa_policy: 'قاعدة التحقق بخطوتين',
+  entities: 'المرجع الموحد للفاعلين',
 }
 
 export const ERROR_LABEL: Record<string, string> = {

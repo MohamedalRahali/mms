@@ -7,7 +7,9 @@ import { getItems, reactionsOf } from './store.js'
 import { aiEnabled, aiProvider, aiUsage, analyse, aroundRun, cached, explainSpike, initUsage, loadKey, writeQuery } from './ai.js'
 import { allTags, countList, entitiesOf, findSpikes, initTags, itemKey, setTags, spikeItems, tagsOf, toCsv } from './intel.js'
 import { keyStatus } from './keys.js'
-import { currentUser, initAuth, loginRoute, logoutRoute, requireAuth } from './auth.js'
+import { currentUser, initAuth, loginRoute, logoutRoute, mfaDisableRoute, mfaEnableRoute, mfaLoginRoute, mfaSetupRoute, mfaStateOf, readUsers, requireAuth } from './auth.js'
+import { initMfaPolicy } from './mfa.js'
+import { initMailPolicy } from './mailPolicy.js'
 import { initPermissions, permissionGate, permsOf } from './permissions.js'
 import { logSecurity } from './monitor.js'
 import { compileQuery, queryError, searchText } from './query.js'
@@ -19,9 +21,9 @@ import { mountDiffusion } from './diffusion.js'
 import { mountMedia } from './media.js'
 import { mountReports } from './reports.js'
 import { AGENTS, ASK_SPEC, agentFacts, agentItems, agentStats, askPrompt, itemLines, sourceCard, specFor } from './around.js'
-import { emergingTopics, sentimentBarometer, smartAlerts, startRadarAlerts, storyClusters, storyIndex } from './radar.js'
+import { emergingTopics, historyOf, sentimentBarometer, smartAlerts, startRadarAlerts, storyClusters, storyIndex } from './radar.js'
 import { startRadarWorker } from './radarWorker.js'
-import { createWatch, deleteWatch, enabledWatches, itemsForWatch, listWatches, sendMail, sendTelegram, setEnabled, setWatchTools, startWatches, telegramReady } from './watches.js'
+import { createWatch, deleteWatch, enabledWatches, itemsForWatch, listWatches, sendMail, sendTelegram, setEnabled, setMailBlockedListener, setWatchTools, startWatches, telegramReady } from './watches.js'
 import { countryOf } from './sourceMeta.js'
 import { initProcessed, isProcessed, processedOf, setProcessed } from './processed.js'
 import { GROUPS, decorate, foldStories, groupNews, overview, sortNews } from './newsView.js'
@@ -31,6 +33,9 @@ import { brandOf } from './clientAdmin.js'
 import { cachedBrief, initBrief, itemBrief } from './brief.js'
 import { mountGeo } from './geo.js'
 import { mountCatalog } from './catalog.js'
+import { canSendAlert, initAlertFlow, mountAlertFlow, withFlow } from './alertFlow.js'
+import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionStats, resolveEntities } from './entities.js'
+import { setEntityResolver } from './store.js'
 
 /** Serveur MMS : API de lecture des actualités + site compilé (dist/) en production */
 
@@ -147,11 +152,41 @@ initAuth(path.join(root, 'data'))
 initTags(path.join(root, 'data'))
 app.post('/api/auth/login', express.json({ limit: '4kb' }), loginRoute)
 app.post('/api/auth/logout', logoutRoute)
+// Double authentification : 2e étape de la connexion, activation, désactivation (règle dans la console Super Admin)
+initMfaPolicy(path.join(root, 'data', 'superadmin'))
+// Liste blanche des domaines destinataires (veilles, rapports, briefing, alertes) ; refus journalisés
+initMailPolicy(path.join(root, 'data', 'superadmin'))
+setMailBlockedListener((blocked, subject) => logSecurity('mail_blocked', { ip: '', ua: '', login: '', detail: `${blocked.join(', ')} · ${String(subject).slice(0, 80)}` }))
+app.post('/api/auth/mfa', express.json({ limit: '2kb' }), mfaLoginRoute)
+app.post('/api/auth/mfa/setup', mfaSetupRoute)
+app.post('/api/auth/mfa/enable', express.json({ limit: '2kb' }), mfaEnableRoute)
+app.post('/api/auth/mfa/disable', express.json({ limit: '2kb' }), mfaDisableRoute)
 app.get('/api/auth/me', (req, res) => {
   const user = currentUser(req)
   if (!user) return res.status(401).json({ error: 'AUTH' })
-  res.json({ user: { ...user, perms: permsOf(user) } })
+  const raw = readUsers().find((u) => u.email === user.email)
+  res.json({ user: { ...user, perms: permsOf(user), mfa: mfaStateOf(raw) } })
 })
+
+// Référentiel des entités : variantes d'un même acteur fusionnées, médias jamais comptés comme acteurs
+initEntities(path.join(root, 'data', 'superadmin'))
+const applyEntities = () =>
+  setEntityResolver((items) => {
+    const media = new Set(items.map((it) => normName(it.origin || '')).filter(Boolean))
+    for (const it of items) {
+      // Entités telles que lues (gardées à part, hors JSON) : un changement du référentiel repart de la source
+      if (!it._raw) Object.defineProperty(it, '_raw', { value: { people: it.people, orgs: it.orgs, places: it.places }, enumerable: false, configurable: true, writable: true })
+      const raw = it._raw
+      const r = resolveEntities(raw, media)
+      it.people = r.people
+      it.orgs = r.orgs
+      it.places = r.places
+      // Pertinence Libye, calculée une fois (alertes du radar, y compris dans le thread de calcul) ; hors JSON
+      Object.defineProperty(it, 'ly', { value: libyaRelevant(it), enumerable: false, configurable: true, writable: true })
+    }
+  })
+applyEntities()
+onEntitiesChange(applyEntities)
 
 /* -------- accès sans session : lien de partage d'un tableau de bord, API des clients, logo du client */
 initProcessed(path.join(root, 'data'))
@@ -281,6 +316,8 @@ app.get('/api/health', (_req, res) => {
   const real = items.filter((it) => !it.demo)
   res.json({
     ok: true,
+    // Profondeur des données : « données depuis le JJ/MM » et comparaisons masquées avant 14 jours
+    history: historyMemo(items),
     lastUpdate,
     demo,
     ai: aiEnabled(),
@@ -343,6 +380,12 @@ app.get('/api/news', async (req, res) => {
   const data = await newsData(req.query)
   if (!data) return res.status(404).json({ error: 'NO_WATCH' })
   res.json(data)
+})
+
+// Répartition par région de la Libye (ouest, est, sud) et par municipalité, mêmes filtres que la liste
+app.get('/api/news/regions', (req, res) => {
+  const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 365)
+  res.json({ days, ...regionStats(applyFilters(getItems().items, { ...req.query, days })) })
 })
 
 // Onglets au-dessus des résultats : sources classées, personnalités ou comptes, pays (mêmes filtres que la liste)
@@ -430,16 +473,32 @@ app.get('/api/news/facets', (_req, res) => {
 app.get('/api/news/export.csv', (req, res) => {
   const items = poolOf(getItems(), req.query)
   const watched = req.query.watch ? itemsForWatch(String(req.query.watch), items) : items
-  const found = applyFilters(watched || [], req.query).slice(0, 5000)
+  // Exports limités par rôle (lecture 500 lignes, analyste 2 000, administrateur 5 000), avec filigrane nom + date
+  const limit = { viewer: 500, analyst: 2000 }[req.user.role] || 5000
+  const all = applyFilters(watched || [], req.query)
+  const found = all.slice(0, limit)
+  const mark = `# MMS Radar · ${req.user.name || req.user.email} <${req.user.email}> · ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC · ${found.length}/${all.length} · وثيقة داخلية — لا تُنشر`
   res.setHeader('content-type', 'text/csv; charset=utf-8')
   res.setHeader('content-disposition', `attachment; filename="mms-${new Date().toISOString().slice(0, 10)}.csv"`)
-  res.send(toCsv(found))
+  const bom = String.fromCharCode(0xfeff)
+  const csv = toCsv(found).replace(bom, '')
+  // Filigrane en première ligne, après le BOM UTF-8 (Excel lit alors l'arabe correctement)
+  res.send(`${bom}${mark}\r\n${csv}`)
 })
 
 // Détection des pics : dernières 24 h comparées aux 7 jours d'avant
+// Historique de la collecte, recalculé à chaque nouvelle version des données
+let historyCache = { items: null, value: null }
+function historyMemo(items) {
+  if (historyCache.items !== items) historyCache = { items, value: historyOf(items) }
+  return historyCache.value
+}
+
+// Hausses soudaines : seulement avec 14 jours d'historique (sinon la montée en charge de la collecte passerait pour un pic)
 app.get('/api/news/spikes', (req, res) => {
   const { items } = getItems()
-  res.json({ spikes: findSpikes(applyFilters(items, { flux: req.query.flux })) })
+  const history = historyMemo(items)
+  res.json({ history, spikes: history.enough ? findSpikes(applyFilters(items, { flux: req.query.flux })) : [] })
 })
 
 // Étiquettes d'équipe, communes à tous les postes : data/tags.json
@@ -695,7 +754,9 @@ app.get('/api/news/sov', (req, res) => {
 app.get('/api/news/compare', (req, res) => {
   const { items } = getItems()
   const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 180)
-  res.json(comparePeriods(applyFilters(items, { flux: req.query.flux }), days))
+  const history = historyMemo(items)
+  // Période de référence plus ancienne que la collecte : comparaison signalée comme non fiable
+  res.json({ ...comparePeriods(applyFilters(items, { flux: req.query.flux }), days), history, insufficient: history.days < 2 * days })
 })
 
 // Rapport exécutif : chiffres, synthèse IA (si déjà rédigée), envoi programmé
@@ -745,9 +806,9 @@ app.get('/api/watches', (_req, res) =>
 )
 app.post('/api/watches', express.json({ limit: '100kb' }), (req, res) => {
   try {
-    res.status(201).json({ watch: createWatch(req.body || {}) })
+    res.status(201).json({ watch: createWatch(req.body || {}, req.user.email) })
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.code || 'FAILED' })
+    res.status(err.status || 500).json({ error: err.code || 'FAILED', ...(err.existing ? { existing: err.existing } : {}) })
   }
 })
 app.patch('/api/watches/:id', express.json({ limit: '2kb' }), (req, res) => {
@@ -797,7 +858,15 @@ function radarData(view, q) {
   radarCache.set(key, { at: Date.now(), data })
   return data
 }
-for (const view of Object.keys(RADAR_VIEWS)) app.get(`/api/radar${view}`, (req, res) => res.json(radarData(view, req.query)))
+for (const view of Object.keys(RADAR_VIEWS))
+  app.get(`/api/radar${view}`, (req, res) => {
+    const data = radarData(view, req.query)
+    // Alertes : état de traitement de chaque alerte (accusé, attribution, validation, clôture)
+    res.json(view === '/alerts' ? { ...data, alerts: withFlow(data.alerts || []) } : data)
+  })
+// Traitement des alertes : étapes et historique (action « تحديد الأخبار كمُعالَجة » du profil)
+initAlertFlow(path.join(root, 'data'))
+mountAlertFlow(app)
 
 // Résumé par l'IA d'une histoire ou d'un sujet émergent du radar (même moteur et même cache que les pics)
 let radarAiRunning = false
@@ -912,7 +981,7 @@ app.use((err, req, res, _next) => {
 
 startWatches(path.join(root, 'data'))
 startBriefing(path.join(root, 'data'))
-startRadarAlerts(path.join(root, 'data'), getItems, { sendTelegram, telegramReady, sendMail })
+startRadarAlerts(path.join(root, 'data'), getItems, { sendTelegram, telegramReady, sendMail, canSend: canSendAlert })
 
 // Sur le VPS, MMS_HOST=127.0.0.1 : seul nginx (HTTPS) parle au serveur
 const HOST = process.env.MMS_HOST || undefined

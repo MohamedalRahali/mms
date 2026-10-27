@@ -24,7 +24,7 @@ function compute(job, items) {
 }
 
 // Champs utilisés par le radar : on n'envoie pas le reste au thread
-const FIELDS = ['id', 'flux', 'title', 'summary', 'category', 'date', 'origin', 'channel', 'media', 'url', 'tone', 'people', 'orgs', 'places', 'importance', 'lang']
+const FIELDS = ['id', 'flux', 'title', 'summary', 'category', 'date', 'origin', 'channel', 'media', 'url', 'tone', 'people', 'orgs', 'places', 'importance', 'lang', 'ly']
 const slim = (it) => Object.fromEntries(FIELDS.filter((k) => it[k] !== undefined).map((k) => [k, it[k]]))
 
 if (!isMainThread) {

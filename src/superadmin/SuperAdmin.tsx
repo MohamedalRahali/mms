@@ -3,11 +3,12 @@ import './superadmin.css'
 import { Permissions, PermsSummary, ProfileSelect, loadCatalog } from './Permissions'
 import { GeoGlobe } from './GeoGlobe'
 import { ApiKeysCard, BrandCard, SharesCard, SourceMetaCell } from './ClientSettings'
+import { AlertReviewCard, EntitiesEditor, MailPolicyCard, MfaPolicyCard } from './Governance'
 import { ACTIVITY_LABEL, AUDIT_LABEL, ROLE_LABEL, SECURITY_LABEL, ago, api, errText, flag, fmtBytes, fmtDate, fmtDay, fmtMinutes, fmtNum, qs, setAuthLost } from './api'
 
 /** Console Super Admin (وحدة التحكم العليا) : /superadmin, séparée de la plateforme */
 
-type Section = 'dash' | 'users' | 'team' | 'perms' | 'access' | 'analytics' | 'activity' | 'security' | 'sources' | 'settings'
+type Section = 'dash' | 'users' | 'team' | 'perms' | 'access' | 'analytics' | 'activity' | 'security' | 'sources' | 'entities' | 'settings'
 const SECTIONS: [Section, string, string][] = [
   ['dash', 'لوحة المراقبة', '◉'],
   ['users', 'المستخدمون', '👥'],
@@ -18,6 +19,7 @@ const SECTIONS: [Section, string, string][] = [
   ['activity', 'سجل النشاط', '☰'],
   ['security', 'الأمان', '🛡'],
   ['sources', 'مصادر التغذية', '📡'],
+  ['entities', 'المرجع الموحد للفاعلين', '🧭'],
   ['settings', 'الإعدادات', '⚙'],
 ]
 
@@ -132,6 +134,7 @@ export default function SuperAdmin() {
         {section === 'activity' && <Activity />}
         {section === 'security' && <Security />}
         {section === 'sources' && <Sources />}
+        {section === 'entities' && <EntitiesEditor />}
         {section === 'settings' && <Settings />}
       </main>
       {openUser && <UserSheet email={openUser} onClose={() => setOpenUser(null)} />}
@@ -472,7 +475,7 @@ function Dashboard({ onUser }: { onUser: (e: string) => void }) {
 
 /* ---------------------------------------------------------------- المستخدمون */
 
-type UserRow = { email: string; name: string; role: string; profile?: string; profileName?: string; disabled: boolean; createdAt: string | null; online: boolean; lastSeen: string | null; lastIp: string; country: string; sessions: number; fails: number; note: string }
+type UserRow = { email: string; name: string; role: string; profile?: string; profileName?: string; disabled: boolean; mfa?: boolean; createdAt: string | null; online: boolean; lastSeen: string | null; lastIp: string; country: string; sessions: number; fails: number; note: string }
 const FILTERS: [string, string][] = [
   ['all', 'الكل'],
   ['online', 'متصل'],
@@ -828,6 +831,17 @@ function UserSheet({ email, onClose }: { email: string; onClose: () => void }) {
               <button type="button" className="sa-btn sa-btn--ghost" onClick={() => run(() => api(`${path}/logout`, 'POST'), 'تم إغلاق كل الجلسات.')}>
                 إغلاق الجلسات
               </button>
+              {u.mfa && (
+                <button
+                  type="button"
+                  className="sa-btn sa-btn--ghost"
+                  onClick={() => {
+                    if (window.confirm('إعادة تعيين التحقق بخطوتين لهذا الحساب؟ سيُطلب منه تفعيله من جديد عند الدخول.')) run(() => api(path, 'PATCH', { resetMfa: true }), 'تمت إعادة تعيين التحقق بخطوتين وإغلاق الجلسات.')
+                  }}
+                >
+                  إعادة تعيين التحقق بخطوتين
+                </button>
+              )}
             </div>
             {data.perms && <PermsSummary perms={data.perms} />}
 
@@ -1443,6 +1457,9 @@ function Settings() {
         <textarea className="sa-input" rows={3} placeholder="رسالة الصيانة" value={s.maintenance.message} onChange={(e) => setS({ ...s, maintenance: { ...s.maintenance, message: e.target.value } })} />
         <p className="sa-muted">في وضع الصيانة يرى الجميع هذه الرسالة، وتبقى هذه اللوحة متاحة.</p>
       </Card>
+      <MailPolicyCard onMsg={setMsg} />
+      <MfaPolicyCard onMsg={setMsg} />
+      <AlertReviewCard onMsg={setMsg} />
       <BrandCard onMsg={setMsg} />
       <Card title="التسجيل">
         <p className="sa-muted">لا يوجد تسجيل ذاتي في MMS: الحسابات تُنشأ فقط من قسم «المستخدمون» أو من لوحة الإدارة.</p>

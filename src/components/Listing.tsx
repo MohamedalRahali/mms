@@ -1,8 +1,10 @@
 import { type FormEvent, type ReactNode, useContext, useState } from 'react'
+import { DataSince } from './DataSince'
 import { type Count, type Filters, type GroupStat, type NewsItem, type SimilarItem, type Stats, type Tone, DrillContext, TONES, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { useIntel } from '../lib/intel'
 import { canDo, useAuth } from '../lib/auth'
+import { WATCH_TEXT } from '../lib/watches'
 import { type GroupBy, type ListPrefs, type Network, LIST_TEXT, NETWORKS, NETWORK_COLOR, NETWORK_ICON, countryName, effectiveDir, flagOf, fmtReach, isNetwork } from '../lib/listing'
 import { BuzzBars } from './Dashboard'
 import { Donut, Line, ToneTrend, colorFor } from './Charts'
@@ -253,6 +255,7 @@ export function ChartsTab({ query, days }: { query: string; days: string }) {
   return (
     <>
       <p className="news-status">{l.chartsNote(days ? `${i.num(Number(days))} ${i.lang === 'ar' ? 'يوم' : 'days'}` : l.last30)}</p>
+      <DataSince />
       <div className="mms-rcharts">
         <ChartCard title={l.perDay}>
           <Line perDay={data.perDay} />
@@ -453,17 +456,25 @@ export function SaveSearchButton({ filters, email }: { filters: Filters; email: 
     setBusy(true)
     setMsg('')
     try {
-      const res = await fetch('/api/watches', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim() || filters.q || picked.map(label).join(' · '), query: filters.q, filters: Object.fromEntries(picked.map((k) => [k, filters[k]])), recipients: to }),
-      })
-      const json = await res.json().catch(() => ({}))
+      const send = (force: boolean) =>
+        fetch('/api/watches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name.trim() || filters.q || picked.map(label).join(' · '), query: filters.q, filters: Object.fromEntries(picked.map((k) => [k, filters[k]])), recipients: to, force }),
+        })
+      let res = await send(false)
+      let json = await res.json().catch(() => ({}))
+      // Veille identique déjà active : on dit laquelle et qui l'a créée avant d'en faire une seconde
+      if (res.status === 409 && json.existing && window.confirm(WATCH_TEXT[i.lang].duplicate(json.existing.name, json.existing.createdBy))) {
+        res = await send(true)
+        json = await res.json().catch(() => ({}))
+      }
       if (!res.ok) throw new Error(json.error || 'FAILED')
       setMsg(l.created)
       setTimeout(() => setOpen(false), 1800)
     } catch (err) {
-      setMsg(`${i.lang === 'ar' ? 'تعذّر الإنشاء' : 'Could not create'} (${(err as Error).message})`)
+      const code = (err as Error).message
+      setMsg(WATCH_TEXT[i.lang].errors[code] ?? `${i.lang === 'ar' ? 'تعذّر الإنشاء' : 'Could not create'} (${code})`)
     } finally {
       setBusy(false)
     }

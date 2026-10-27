@@ -1,10 +1,12 @@
 import { useContext, useState } from 'react'
+import { DataSince } from './DataSince'
 import { type Filters, type Flux, type Tone, DrillContext, TONES, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { TONE_COLORS, useIntel } from '../lib/intel'
 import { type Barometer, type Emerging, type SmartAlert, type Story, type ToneRow, radarText } from '../lib/radar'
 import { PageHead } from './Extras'
 import { canDo, useAuth } from '../lib/auth'
+import { AlertFlowBar } from './AlertFlow'
 
 /**
  * « الرادار الذكي » : alertes classées, sujets émergents, histoires reprises par plusieurs médias et
@@ -113,6 +115,7 @@ function Alerts({ flux }: { flux: Flux | '' }) {
               <strong dir="auto">{a.kind === 'spike' && a.detail.dim === 'categories' ? i.category(a.label) : a.label}</strong>
               <span className="radar-alert__line">{r.alertLine(a, i.num)}</span>
             </button>
+            <AlertFlowBar alert={a} />
           </li>
         ))}
       </ul>
@@ -399,6 +402,7 @@ export function Radar({ flux }: { flux: Flux | '' }) {
   return (
     <div className="radar">
       <PageHead title={r.title} intro={r.intro} />
+      <DataSince />
       <Alerts flux={flux} />
       <div className="radar-grid">
         <EmergingTopics flux={flux} />

@@ -28,6 +28,13 @@ let cache = { at: 0, items: [], all: [], comments: [], reactions: new Map(), byI
 let hidden = null
 let signature = ''
 let previous = new Map() // id → { json, obj } de la lecture précédente
+// Référentiel des entités (server/entities.js) : variantes fusionnées, médias retirés des acteurs, à chaque lecture
+let resolver = null
+export function setEntityResolver(fn) {
+  resolver = fn
+  cache.at = 0
+  signature = ''
+}
 export function setHidden(fn) {
   hidden = fn
   cache.at = 0
@@ -339,6 +346,7 @@ export function getItems() {
   previous = next
   const demo = process.env.MMS_DEMO === '1'
   if (demo) items.push(...demoItems())
+  if (resolver) resolver(items)
   items.sort((a, b) => b.date.localeCompare(a.date))
   // Commentaires à part : seuls ceux dont la publication est dans MMS sont gardés
   const editorial = items.filter((it) => it.media !== 'comment')

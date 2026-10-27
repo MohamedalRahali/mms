@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { getItems } from './store.js'
+import { onMailPolicyChange, splitRecipients } from './mailPolicy.js'
 
 /**
  * Veille programmée (الرصد المبرمج), sur le principe de NewsRadar :
@@ -168,7 +169,21 @@ function fail(code) {
   return Object.assign(new Error(code), { status: 400, code })
 }
 
-export function createWatch(body) {
+/** Empreinte d'une veille : mots des règles et de la requête (sans ordre ni casse), filtres, veille, période */
+export function watchSignature(w) {
+  const words = [...new Set([...(w.rules || []), w.query || ''].join(' ').split(/[\s()"،,|]+|\b(?:AND|OR|NOT|ET|OU)\b/i).map((x) => normalize(x)).filter(Boolean))].sort()
+  const filters = Object.entries(w.filters || {}).filter(([, v]) => v).sort().map(([k, v]) => `${k}=${normalize(v)}`)
+  return JSON.stringify({ words, filters, flux: w.flux || '', to: w.to || null })
+}
+
+/** Veille déjà active qui surveille la même chose (mêmes mots, filtres, veille et fin de période), ou null */
+export function duplicateOf(candidate) {
+  const sig = watchSignature(candidate)
+  const same = watches.find((w) => w.enabled && statusOf(w) !== 'finished' && watchSignature(w) === sig)
+  return same ? { id: same.id, name: same.name, createdBy: same.createdBy || '', status: statusOf(same) } : null
+}
+
+export function createWatch(body, by = '') {
   if (watches.length >= MAX_WATCHES) throw fail('TOO_MANY')
   const rules = (Array.isArray(body.rules) ? body.rules : []).map((r) => String(r).trim()).filter((r) => r && parseRule(r).length)
   const query = String(body.query || '').trim()
@@ -180,6 +195,9 @@ export function createWatch(body) {
   }
   if (filters.country && !/^[A-Z]{2}$/.test(filters.country)) delete filters.country
   if (!rules.length && !query && !Object.keys(filters).length) throw fail('NO_RULES')
+  // Doublon d'une veille active : refusé, sauf confirmation explicite (force)
+  const dup = duplicateOf({ rules, query, filters, flux: ['mosaique', 'libye'].includes(body.flux) ? body.flux : '', to: body.to ? String(body.to) : null })
+  if (dup && !body.force) throw Object.assign(fail('DUPLICATE'), { status: 409, existing: dup })
   if (rules.length > MAX_RULES || rules.some((r) => r.length > MAX_RULE_LEN)) throw fail('RULES_TOO_LONG')
   const from = DAY_RE.test(body.from) ? body.from : today()
   const to = body.to ? String(body.to) : null
@@ -194,6 +212,8 @@ export function createWatch(body) {
   ]
   if (recipients.length > MAX_RECIPIENTS) throw fail('TOO_MANY_RECIPIENTS')
   if (recipients.some((r) => !EMAIL_RE.test(r))) throw fail('BAD_EMAIL')
+  // Destinataires limités aux domaines officiels (liste blanche de la console Super Admin)
+  if (splitRecipients(recipients).blocked.length) throw fail('DOMAIN_BLOCKED')
   const watch = {
     id: Math.random().toString(36).slice(2, 10),
     name:
@@ -211,6 +231,7 @@ export function createWatch(body) {
     recipients,
     enabled: true,
     createdAt: new Date().toISOString(),
+    createdBy: String(by || '').slice(0, 120),
     lastRun: null,
     lastError: null,
     matchCount: 0,
@@ -286,8 +307,17 @@ ${more > 0 ? `<p style="color:#555;font-size:13px">… و${more} خبر آخر �
 }
 
 let transport = null
+// Journal des envois refusés par la liste blanche (branché sur le journal de sécurité par server/index.js)
+let onMailBlocked = () => {}
+export const setMailBlockedListener = (fn) => (onMailBlocked = fn)
+
 export async function sendMail(to, mail) {
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS) throw Object.assign(new Error('smtp_missing'), { code: 'smtp_missing' })
+  // Aucun e-mail ne part hors des domaines autorisés, quel que soit le module qui l'envoie
+  const { ok, blocked } = splitRecipients((Array.isArray(to) ? to : [to]).map(String))
+  if (blocked.length) onMailBlocked(blocked, mail?.subject || '')
+  if (!ok.length) throw Object.assign(new Error('domain_blocked'), { code: 'DOMAIN_BLOCKED' })
+  to = ok
   if (!transport) {
     let nodemailer
     try {
@@ -401,9 +431,36 @@ export async function runWatches() {
   }
 }
 
+/**
+ * Liste blanche appliquée aux veilles déjà enregistrées : les adresses hors domaines autorisés sont mises de côté
+ * (blockedRecipients), jamais supprimées ; elles reviennent si leur domaine est autorisé plus tard.
+ * Copie de sauvegarde de watches.json avant la première mise de côté.
+ */
+export function applyMailPolicyToWatches() {
+  let changed = false
+  for (const w of watches) {
+    const all = [...new Set([...(w.recipients || []), ...(w.blockedRecipients || [])])]
+    const { ok, blocked } = splitRecipients(all)
+    if (JSON.stringify(ok) !== JSON.stringify(w.recipients || []) || JSON.stringify(blocked) !== JSON.stringify(w.blockedRecipients || [])) {
+      if (!changed && blocked.length && fs.existsSync(file)) {
+        const backup = file.replace(/\.json$/, '.avant-liste-blanche.json')
+        if (!fs.existsSync(backup)) fs.copyFileSync(file, backup)
+      }
+      w.recipients = ok
+      if (blocked.length) w.blockedRecipients = blocked
+      else delete w.blockedRecipients
+      changed = true
+    }
+  }
+  if (changed) save()
+  return watches.filter((w) => w.blockedRecipients?.length).map((w) => ({ id: w.id, name: w.name, createdBy: w.createdBy || '', blocked: w.blockedRecipients }))
+}
+
 export function startWatches(dataDir) {
   file = path.join(dataDir, 'watches.json')
   load()
+  applyMailPolicyToWatches()
+  onMailPolicyChange(applyMailPolicyToWatches)
   // MMS relit ses données toutes les 30 s ; la veille repasse toutes les 5 min, et dès qu'il y a du nouveau
   let last = ''
   const tick = () => {

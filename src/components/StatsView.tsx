@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { DataSince } from './DataSince'
 import { type Count, type Flux, type Stats, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { useCountUp } from '../lib/motion'
@@ -88,6 +89,7 @@ export function StatsView({ flux }: { flux: Flux | '' }) {
 
   return (
     <>
+      <DataSince />
       <div className="news-filters">
         <select value={days} onChange={(e) => setDays(e.target.value)} aria-label="period">
           <option value="7">{t.last7}</option>

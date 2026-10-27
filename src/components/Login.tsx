@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { type User } from '../lib/auth'
+import { MfaCode } from './Mfa'
 
 /** Page de connexion selon la charte MMS Radar : panneau de présentation, carte claire de connexion, logo du Centre */
 
@@ -83,6 +84,8 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const [forgot, setForgot] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // Double authentification active sur le compte : deuxième étape (code à 6 chiffres)
+  const [ticket, setTicket] = useState('')
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -96,6 +99,11 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || 'FAILED')
+      if (json.mfa === 'code' && json.ticket) {
+        setTicket(json.ticket)
+        setPassword('')
+        return
+      }
       onLogin(json.user)
     } catch (err) {
       setError(t.errors[(err as Error).message] ?? t.errors.FAILED)
@@ -142,6 +150,9 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
       </section>
 
       <main className="mms-login__main">
+        {ticket ? (
+          <MfaCode ticket={ticket} lang={lang} onLogin={onLogin} onBack={() => setTicket('')} />
+        ) : (
         <form className="mms-login__card" onSubmit={submit}>
           <div className="mms-login__brand">
             <RadarMark />
@@ -206,6 +217,7 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
             {t.secure}
           </p>
         </form>
+        )}
         <p className="around-credit">
           <img src="/around-logo-footer.png" alt="Around Expressions" width={120} height={91} loading="lazy" />
           <span dir="ltr">© {new Date().getFullYear()} MMS — Copyright by Around Expressions</span>

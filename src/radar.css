@@ -637,3 +637,66 @@
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   margin: 0;
 }
+
+/* Traitement des alertes : statut, actions, historique */
+.alert-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 2px 0;
+  font-size: 12px;
+}
+.alert-flow__status {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-weight: 700;
+}
+.alert-flow.is-validated .alert-flow__status,
+.alert-flow.is-closed .alert-flow__status {
+  background: rgba(46, 158, 91, 0.16);
+  color: #2e9e5b;
+}
+.alert-flow.is-escalated .alert-flow__status {
+  background: rgba(217, 83, 79, 0.16);
+  color: #d9534f;
+}
+.alert-flow__btn {
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.alert-flow__panel {
+  flex-basis: 100%;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.alert-flow__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.alert-flow__form input {
+  flex: 1 1 140px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+}
+.alert-flow__panel ol {
+  margin: 0;
+  padding-inline-start: 18px;
+}
+.alert-flow__panel li p {
+  margin: 2px 0 6px;
+}

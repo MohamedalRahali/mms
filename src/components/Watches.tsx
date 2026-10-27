@@ -77,12 +77,19 @@ function WatchForm({ onCreated }: { onCreated: () => void }) {
     setError('')
     setDone(false)
     try {
-      const res = await fetch('/api/watches', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim() || autoName, rules, themes: picked, scope, flux, from, to: permanent ? null : to, recipients }),
-      })
-      const json = await res.json()
+      const send = (force: boolean) =>
+        fetch('/api/watches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name.trim() || autoName, rules, themes: picked, scope, flux, from, to: permanent ? null : to, recipients, force }),
+        })
+      let res = await send(false)
+      let json = await res.json()
+      // Même surveillance déjà active : on montre laquelle et qui l'a créée, puis on demande confirmation
+      if (res.status === 409 && json.existing && window.confirm(w.duplicate(json.existing.name, json.existing.createdBy))) {
+        res = await send(true)
+        json = await res.json()
+      }
       if (!res.ok) throw new Error(json.error || 'FAILED')
       setDone(true)
       setName('')
@@ -243,6 +250,12 @@ function WatchRow({ watch, onChange, onOpen }: { watch: Watch; onChange: () => v
       )}
       <p className="mms-watch__meta">
         {watch.recipients.length ? <span dir="ltr">{watch.recipients.join(', ')}</span> : w.noRecipients} · {w.results(watch.matchCount)}
+        {watch.createdBy && (
+          <>
+            {' · '}
+            {w.owner}: <span dir="ltr">{watch.createdBy}</span>
+          </>
+        )}
       </p>
       {watch.lastError && <p className="news-status news-status--error">{watch.lastError === 'smtp_missing' ? w.smtpMissing : w.smtpError}</p>}
       {watch.matches.length > 0 && (

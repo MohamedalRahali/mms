@@ -819,7 +819,7 @@ export function mountReports(app, dataDir, { getItems, aiEnabled, aiRun, sendMai
       writeAll(req.user.email, all)
       res.json({ ok: true, accepted, rejected, history: report.history })
     } catch (err) {
-      entry.error = err.code === 'smtp_missing' ? 'SMTP_MISSING' : err.code === 'REJECTED' ? 'REJECTED' : 'SMTP_ERROR'
+      entry.error = err.code === 'smtp_missing' ? 'SMTP_MISSING' : err.code === 'REJECTED' ? 'REJECTED' : err.code === 'DOMAIN_BLOCKED' ? 'DOMAIN_BLOCKED' : 'SMTP_ERROR'
       console.error(`Rapport ${report.id}, envoi : ${err.message}`)
       report.history = [entry, ...report.history].slice(0, 100)
       writeAll(req.user.email, all)

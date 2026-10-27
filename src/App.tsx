@@ -19,10 +19,14 @@ import { radarText } from './lib/radar'
 import { PRO_TEXT } from './lib/pro'
 import { type I18n, type Lang, I18nContext, initialLang, makeI18n, saveLang } from './lib/i18n'
 import { useAlerts, useCollapsed, useFavorites } from './lib/prefs'
-import { type ModuleKey, type User, canDo, hasModule, onBusy, useAuth } from './lib/auth'
+import { type MfaInfo, type ModuleKey, type User, canDo, hasModule, onBusy, useAuth } from './lib/auth'
+import { MfaPanel } from './components/Mfa'
 import { track } from './lib/track'
 import { ReportTray } from './components/ReportPick'
 import { CommandPalette, type PaletteEntry } from './components/CommandPalette'
+import { useBrand } from './components/Share'
+import { RegionsPanel } from './components/Regions'
+import { DataSince } from './components/DataSince'
 
 // Générateur de rapports (éditeur, exports Word et PDF) : chargé seulement à l'ouverture de la page
 const Reports = lazy(() => import('./components/reports/Reports'))
@@ -203,6 +207,12 @@ export default function App() {
   const [presenting, setPresenting] = useState(false)
   // Palette de commandes : Ctrl+K (⌘K sur Mac) depuis n'importe quelle page
   const [palette, setPalette] = useState(false)
+  // Panneau « التحقق بخطوتين » du compte
+  const [mfaOpen, setMfaOpen] = useState(false)
+  const [mfaState, setMfaState] = useState<MfaInfo | null>(null)
+  // Marque du client : nom de l'assistant IA (« Around » par défaut), réglé dans la console Super Admin
+  const brand = useBrand()
+  const renameAssistant = (label: string) => (brand?.assistant ? label.replace(/Around/g, brand.assistant) : label)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
@@ -260,7 +270,7 @@ export default function App() {
       { key: 'media-live', label: MEDIA_PAGE_TEXT[lang].nav.live },
       { key: 'watch', label: WATCH_TEXT[lang].menu },
       { key: 'stats', label: t.navStats },
-      { key: 'assistant', label: pro.navAssistantShort },
+      { key: 'assistant', label: renameAssistant(pro.navAssistantShort) },
       { key: 'sov', label: pro.navSov },
       { key: 'compare', label: pro.navCompare },
       { key: 'briefing', label: pro.navBriefing },
@@ -279,7 +289,7 @@ export default function App() {
           { key: 'news', label: t.sideNewsBoard },
           { key: 'watch', label: WATCH_TEXT[lang].title },
           { key: 'stats', label: t.sideAnalysis },
-          { key: 'assistant', label: pro.navAssistant },
+          { key: 'assistant', label: renameAssistant(pro.navAssistant) },
           { key: 'ai', label: t.sideAi },
           { key: 'sov', label: pro.navSov },
           { key: 'compare', label: pro.navCompare },
@@ -426,6 +436,17 @@ export default function App() {
                       <button
                         type="button"
                         className="mms-logout"
+                        onClick={() => setMfaOpen(true)}
+                        title={lang === 'ar' ? 'التحقق بخطوتين' : 'Two-step verification'}
+                        aria-label={lang === 'ar' ? 'التحقق بخطوتين' : 'Two-step verification'}
+                      >
+                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+                          <path fill="currentColor" d="M12 1 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-4zm0 6a2.5 2.5 0 0 1 2.5 2.5V11h.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h.5V9.5A2.5 2.5 0 0 1 12 7zm0 1.5a1 1 0 0 0-1 1V11h2V9.5a1 1 0 0 0-1-1z" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="mms-logout"
                         onClick={auth.logout}
                         title={lang === 'ar' ? 'تسجيل الخروج' : 'Log out'}
                         aria-label={lang === 'ar' ? 'تسجيل الخروج' : 'Log out'}
@@ -499,7 +520,9 @@ export default function App() {
                       <Suspense fallback={<p className="news-status">{t.loading}</p>}>
                       {shown === 'dashboard' && (
                         <>
+                          <DataSince />
                           <CommandHero flux={flux} />
+                          <RegionsPanel />
                           {hasModule(auth?.user, 'radar') && <RadarBrief flux={flux} onOpen={() => go('radar')} />}
                           <SpikeBanner flux={flux} />
                           <Builder flux={flux} />
@@ -561,6 +584,14 @@ export default function App() {
                   />
                 )}
                 {presenting && <Presentation flux={flux} onClose={closePresent} />}
+                {mfaOpen && auth && (
+                  <MfaPanel
+                    lang={lang}
+                    mfa={mfaState ?? auth.user.mfa ?? { enabled: false, required: false, setup: false, recoveryLeft: 0 }}
+                    onChange={(m) => setMfaState(m)}
+                    onClose={() => setMfaOpen(false)}
+                  />
+                )}
                 {clip && hasModule(auth?.user, 'media') && (
                   <Suspense fallback={null}>
                     <ClipModal id={clip.id} t={clip.t} q={clip.q} onClose={() => setClip(null)} />

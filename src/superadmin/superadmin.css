@@ -926,3 +926,12 @@ textarea.sa-input {
   word-break: break-all;
   user-select: all;
 }
+
+.sa-sub {
+  margin: 14px 0 6px;
+  font-size: 14px;
+}
+.sa-entities td .sa-input {
+  width: 100%;
+  min-width: 90px;
+}

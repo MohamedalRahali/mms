@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { DataSince } from './DataSince'
 import { type Count, type EngagementTotals, type Flux, type NewsItem, type Spike, type Stats, type Tone, DrillContext, TONES, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { TONE_COLORS, useIntel } from '../lib/intel'
@@ -362,6 +363,7 @@ export function ShareOfVoice({ flux }: { flux: Flux | '' }) {
 type Pair = { name: string; current: number; previous: number }
 type Profile = { total: number; sources: number; important: number; tones: Record<Tone, number>; engagement: EngagementTotals }
 type Compare = {
+  insufficient?: boolean
   days: number
   current: Profile
   previous: Profile
@@ -408,6 +410,12 @@ export function ComparePeriods({ flux }: { flux: Flux | '' }) {
   return (
     <>
       <PageHead title={p.cmpTitle} intro={p.cmpIntro} />
+      <DataSince />
+      {data?.insufficient && (
+        <p className="mms-note" role="note">
+          {i.lang === 'ar' ? 'الفترة السابقة أقدم من بداية جمع البيانات: الفروق المعروضة لا تعكس تطوراً حقيقياً.' : 'The previous period predates data collection: the differences shown do not reflect a real trend.'}
+        </p>
+      )}
       <div className="mms-toolbar">
         <Seg value={days} options={[7, 14, 30, 90].map((d) => [d, p.cmpPeriods[d]] as [number, string])} onChange={setDays} />
         <p className="mms-legend-inline">

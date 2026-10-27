@@ -1,7 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { normalize } from './watches.js'
-import { findSpikes } from './intel.js'
+import { findSpikes, spikeItems } from './intel.js'
+import { libyaRelevant } from './entities.js'
 
 /**
  * « Radar intelligent » de MMS : ce que la veille fait remonter sans qu'on ait à le chercher.
@@ -417,72 +418,132 @@ export function sentimentBarometer(items, { days = 14, now = Date.now() } = {}) 
 /* ---------------------------------------------------------------- alertes */
 
 /**
- * Alertes classées par gravité (3 = critique, 2 = à suivre, 1 = information) :
+ * Profondeur de l'historique : premier jour où la collecte tourne vraiment (au moins 5 fiches et 5 % du jour le plus
+ * chargé), et nombre de jours depuis. Les comparaisons (« hausse soudaine », moyennes, sujets « nouveaux ») ne sont
+ * calculées qu'à partir de MIN_HISTORY_DAYS jours : avant, la montée en charge de la collecte passerait pour un événement.
+ */
+export const MIN_HISTORY_DAYS = 14
+export function historyOf(items, now = Date.now()) {
+  const perDay = new Map()
+  for (const it of items) {
+    const d = dayKey.format(new Date(it.date))
+    perDay.set(d, (perDay.get(d) || 0) + 1)
+  }
+  const max = Math.max(0, ...perDay.values())
+  const floor = Math.max(5, max * 0.05)
+  const since = [...perDay.entries()]
+    .filter(([, n]) => n >= floor)
+    .map(([d]) => d)
+    .sort()[0]
+  const days = since ? Math.max(Math.round((now - Date.parse(`${since}T12:00:00Z`)) / DAY), 0) + 1 : 0
+  return { since: since || null, days, enough: days >= MIN_HISTORY_DAYS, min: MIN_HISTORY_DAYS }
+}
+
+// Seuils minimaux : en dessous, un pourcentage ou un écart n'est qu'un effet statistique
+export const ALERT_MIN = { spike: { count: 10, sources: 3 }, negative: { count: 10, sources: 3 }, emerging: { count: 5, sources: 3 }, story: { sources: 4 } }
+// Part des fiches d'une alerte qui doivent concerner la Libye (mot « ليبيا », acteur ou lieu libyen)
+const LIBYA_SHARE = 0.5
+
+const libyaShare = (list) => (list.length ? list.filter((it) => (it.ly !== undefined ? it.ly : libyaRelevant(it))).length / list.length : 0)
+const sourcesOf = (list) => new Set(list.map((it) => it.origin)).size
+
+/**
+ * Alertes à 3 niveaux (3 = حرج / critique, 2 = مرتفع / élevé, 1 = معلومة / information) :
  * pics d'activité, sujets nouveaux, montée du négatif autour d'un acteur, histoire largement reprise.
+ * - chaque alerte doit atteindre un volume et un nombre de sources minimaux (ALERT_MIN) ;
+ * - un sujet n'entre que si la moitié au moins de ses fiches concerne la Libye (score de pertinence « libya ») ;
+ * - les alertes fondées sur une comparaison (pic, sujet nouveau, montée du négatif) attendent 14 jours d'historique ;
+ * - un pourcentage négatif ne déclenche rien sous le volume minimal.
  * `filter` est le filtre de la liste d'actualités qui ouvre l'alerte.
  */
-export function smartAlerts(items, { now = Date.now() } = {}) {
+export function smartAlerts(items, { now = Date.now(), history = historyOf(items, now) } = {}) {
   const alerts = []
-  for (const s of findSpikes(items, now).slice(0, 6))
-    alerts.push({
-      id: `spike:${s.dim}:${s.name}`,
-      kind: 'spike',
-      level: s.count >= 5 * (s.avg + 1) ? 3 : 2,
-      label: s.name,
-      detail: { recent: s.count, avg: s.avg, dim: s.dim },
-      filter: { [s.filter]: s.name },
-    })
-  // Sujets nouveaux : expressions ou entités seulement, et pas déjà signalées par un pic
-  const spiked = new Set(alerts.map((a) => normalize(a.label)))
-  for (const t of emergingTopics(items, { hours: 24, now, limit: 10 })
-    .filter((t) => t.isNew && t.sources >= 3 && t.kind !== 'word' && !spiked.has(normalize(t.label)))
-    .slice(0, 2))
-    alerts.push({ id: `new:${t.key}`, kind: 'emerging', level: t.sources >= 5 ? 3 : 2, label: t.label, detail: { recent: t.recent, sources: t.sources }, filter: { q: `"${t.label}"` } })
-
-  // Montée du négatif : part négative des dernières 24 h nettement au-dessus de celle des 7 jours d'avant
-  const recent = new Map()
-  const before = new Map()
-  for (const it of items) {
+  const recentItems = items.filter((it) => {
     const t = Date.parse(it.date)
-    if (t > now || t < now - 8 * DAY) continue
-    const map = t >= now - DAY ? recent : before
-    const tone = toneOf(it).tone
-    for (const e of [...(it.people || []), ...(it.orgs || []), ...(it.places || [])]) {
-      let r = map.get(e)
-      if (!r) map.set(e, (r = { n: 0, neg: 0 }))
-      r.n++
-      if (tone === 'negative') r.neg++
+    return t <= now && t >= now - DAY
+  })
+  if (history.enough) {
+    for (const s of findSpikes(items, now)) {
+      const found = spikeItems(recentItems, s.dim, s.name, now)
+      const sources = sourcesOf(found)
+      const libya = libyaShare(found)
+      if (s.count < ALERT_MIN.spike.count || sources < ALERT_MIN.spike.sources || libya < LIBYA_SHARE) continue
+      const ratio = s.count / (s.avg + 1)
+      alerts.push({
+        id: `spike:${s.dim}:${s.name}`,
+        kind: 'spike',
+        level: ratio >= 5 && s.count >= 25 && sources >= 6 ? 3 : ratio >= 3 ? 2 : 1,
+        label: s.name,
+        detail: { recent: s.count, avg: s.avg, dim: s.dim, sources, libya: Math.round(libya * 100) },
+        filter: { [s.filter]: s.name },
+      })
+    }
+    // Sujets nouveaux : expressions ou entités seulement, et pas déjà signalées par un pic
+    const spiked = new Set(alerts.map((a) => normalize(a.label)))
+    for (const t of emergingTopics(items, { hours: 24, now, limit: 15 })) {
+      if (!t.isNew || t.kind === 'word' || spiked.has(normalize(t.label))) continue
+      if (t.recent < ALERT_MIN.emerging.count || t.sources < ALERT_MIN.emerging.sources) continue
+      const libya = libyaShare(t.sample || [])
+      if (libya < LIBYA_SHARE) continue
+      alerts.push({ id: `new:${t.key}`, kind: 'emerging', level: t.sources >= 8 && t.recent >= 15 ? 3 : t.sources >= 5 ? 2 : 1, label: t.label, detail: { recent: t.recent, sources: t.sources, libya: Math.round(libya * 100) }, filter: { q: `"${t.label}"` } })
+    }
+
+    // Montée du négatif : part négative des dernières 24 h nettement au-dessus de celle des 7 jours d'avant
+    const recent = new Map()
+    const before = new Map()
+    for (const it of items) {
+      const t = Date.parse(it.date)
+      if (t > now || t < now - 8 * DAY) continue
+      const map = t >= now - DAY ? recent : before
+      const tone = toneOf(it).tone
+      for (const e of [...(it.people || []), ...(it.orgs || []), ...(it.places || [])]) {
+        let r = map.get(e)
+        if (!r) map.set(e, (r = { n: 0, neg: 0, items: [] }))
+        r.n++
+        if (tone === 'negative') r.neg++
+        if (map === recent) r.items.push(it)
+      }
+    }
+    for (const [name, r] of recent) {
+      if (r.n < ALERT_MIN.negative.count) continue
+      const sources = sourcesOf(r.items)
+      if (sources < ALERT_MIN.negative.sources) continue
+      const libya = libyaShare(r.items)
+      if (libya < LIBYA_SHARE) continue
+      const b = before.get(name) || { n: 0, neg: 0 }
+      const share = r.neg / r.n
+      const baseShare = b.n ? b.neg / b.n : 0
+      if (!(share >= 0.5 && share - baseShare >= 0.25)) continue
+      // Déjà signalé par un pic : on y ajoute la part négative plutôt que de doubler l'alerte
+      const spike = alerts.find((a) => a.kind === 'spike' && normalize(a.label) === normalize(name))
+      if (spike) spike.detail.negative = Math.round(share * 100)
+      else
+        alerts.push({
+          id: `neg:${name}`,
+          kind: 'negative',
+          level: share >= 0.75 && r.n >= 25 && sources >= 6 ? 3 : share >= 0.6 ? 2 : 1,
+          label: name,
+          detail: { share: Math.round(share * 100), before: Math.round(baseShare * 100), recent: r.n, sources, libya: Math.round(libya * 100) },
+          filter: { entity: name, tone: 'negative' },
+        })
     }
   }
-  for (const [name, r] of recent) {
-    if (r.n < 3) continue
-    const b = before.get(name) || { n: 0, neg: 0 }
-    const share = r.neg / r.n
-    const baseShare = b.n ? b.neg / b.n : 0
-    if (!(share >= 0.5 && share - baseShare >= 0.25)) continue
-    // Déjà signalé par un pic : on y ajoute la part négative plutôt que de doubler l'alerte
-    const spike = alerts.find((a) => a.kind === 'spike' && normalize(a.label) === normalize(name))
-    if (spike) spike.detail.negative = Math.round(share * 100)
-    else
-      alerts.push({
-        id: `neg:${name}`,
-        kind: 'negative',
-        level: share >= 0.75 && r.n >= 5 ? 3 : 2,
-        label: name,
-        detail: { share: Math.round(share * 100), before: Math.round(baseShare * 100), recent: r.n },
-        filter: { entity: name, tone: 'negative' },
-      })
-  }
-  for (const c of storyClusters(items, { hours: 24, now, limit: 5 }).filter((c) => c.sources.length >= 4))
+  // Histoire reprise par beaucoup de sources : pas de comparaison, utilisable dès le début de la collecte
+  for (const c of storyClusters(items, { hours: 24, now, limit: 8 })) {
+    if (c.sources.length < ALERT_MIN.story.sources) continue
+    const libya = libyaShare(c.items.map((x) => ({ title: x.title, summary: '', people: [], orgs: [], places: [] })))
+    const leadLibya = libyaRelevant({ title: c.title, summary: c.summary, people: [], orgs: [], places: [] })
+    if (Math.max(libya, leadLibya ? 1 : 0) < LIBYA_SHARE) continue
     alerts.push({
       id: `story:${c.id}`,
       kind: 'story',
-      level: c.sources.length >= 7 ? 3 : 1,
+      level: c.sources.length >= 10 ? 3 : c.sources.length >= 6 ? 2 : 1,
       label: c.title,
-      detail: { sources: c.sources.length, size: c.size },
+      detail: { sources: c.sources.length, size: c.size, libya: Math.round(Math.max(libya, leadLibya ? 1 : 0) * 100) },
       filter: { q: c.query.join(' ') },
     })
-  return alerts.sort((a, b) => b.level - a.level).slice(0, 14)
+  }
+  return alerts.sort((a, b) => b.level - a.level || (b.detail.sources || 0) - (a.detail.sources || 0)).slice(0, 14)
 }
 
 /* ---------------------------------------------------------------- envoi des alertes critiques */
@@ -496,7 +557,7 @@ export function smartAlerts(items, { now = Date.now() } = {}) {
 const KIND_AR = { spike: 'ارتفاع مفاجئ', emerging: 'موضوع جديد', negative: 'تصاعد السلبية', story: 'خبر واسع الانتشار' }
 const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-export function startRadarAlerts(dataDir, getItems, { sendTelegram, telegramReady, sendMail }) {
+export function startRadarAlerts(dataDir, getItems, { sendTelegram, telegramReady, sendMail, canSend = () => true }) {
   if (process.env.MMS_RADAR_ALERTS !== '1') return
   const file = path.join(dataDir, 'radar-sent.json')
   let sent = {}
@@ -517,7 +578,8 @@ export function startRadarAlerts(dataDir, getItems, { sendTelegram, telegramRead
       const now = Date.now()
       for (const [id, at] of Object.entries(sent)) if (now - at > 3 * DAY) delete sent[id]
       const items = getItems().items.filter((it) => !it.demo)
-      const fresh = smartAlerts(items, { now }).filter((a) => a.level === 3 && !sent[a.id])
+      // Option « validation par un analyste » : une alerte critique ne part qu'une fois validée
+      const fresh = smartAlerts(items, { now }).filter((a) => a.level === 3 && !sent[a.id] && canSend(a))
       if (!fresh.length) return
       const base = (process.env.PUBLIC_URL || 'http://localhost:5174').replace(/\/$/, '')
       const lines = fresh.map((a) => `• <b>${escHtml(KIND_AR[a.kind])}</b> : ${escHtml(a.label)}`)

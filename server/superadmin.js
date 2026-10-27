@@ -179,6 +179,7 @@ function userRow(u, fails) {
     profile: u.profile || '',
     profileName: permsOf({ role: roleOf(u), profile: u.profile }).profileName,
     disabled: Boolean(u.disabled),
+    mfa: Boolean(u.totp?.secret),
     createdAt: u.createdAt || null,
     online: isOnline(u.email),
     lastSeen: seen ? iso(seen.t) : null,
@@ -205,6 +206,11 @@ function deriveActivity(req, user, ip) {
   else if (req.method === 'GET' && (p === '/api/report' || p === '/api/briefing')) logActivity(user, ip, 'report', p === '/api/report' ? `يومي ${q.day || ''}` : `تنفيذي ${q.days || 7}`)
   else if (req.method === 'POST' && p.startsWith('/api/ai/')) logActivity(user, ip, 'ai', p.slice(8) + (req.body?.question ? ` : ${req.body.question}` : req.body?.text ? ` : ${req.body.text}` : ''))
   else if (req.method === 'POST' && p === '/api/briefing/summary') logActivity(user, ip, 'ai', 'briefing')
+  // Journal d'audit (audit produit) : envois, partages, suppressions, statut des alertes
+  else if (req.method === 'POST' && (/^\/api\/reports\/[^/]+\/email$/.test(p) || p === '/api/briefing/send')) logActivity(user, ip, 'send', p.startsWith('/api/briefing') ? 'التقرير التنفيذي' : `تقرير ${p.split('/')[3]}`)
+  else if (req.method === 'POST' && p === '/api/shares') logActivity(user, ip, 'share', String(req.body?.boardId || ''))
+  else if (req.method === 'DELETE') logActivity(user, ip, 'delete', p.slice(4))
+  else if (req.method === 'POST' && p.startsWith('/api/radar/alerts/')) logActivity(user, ip, 'alert', `${p.split('/')[4] || ''} ${req.body?.status || ''}`)
 }
 
 /* ---------------------------------------------------------------- montage */
@@ -539,9 +545,15 @@ export function mountSuperAdmin(app, root) {
       u.disabled = Boolean(req.body.disabled)
       changes.push(u.disabled ? 'disabled' : 'enabled')
     }
+    // Double authentification réinitialisée (appareil perdu) : le compte la réactivera à sa prochaine connexion
+    if (req.body?.resetMfa) {
+      delete u.totp
+      delete u.totpPending
+      changes.push('mfa reset')
+    }
     writeUsers(users)
     // Désactivé ou mot de passe changé : toutes ses sessions sont fermées
-    if (u.disabled || req.body?.password) closeSessions(u.email)
+    if (u.disabled || req.body?.password || req.body?.resetMfa) closeSessions(u.email)
     audit(req, 'user_update', u.email, changes.join(', '))
     res.json({ ok: true })
   })

@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { permsOf } from './permissions.js'
+import { mfaRequired, newSecret, otpauthUri, recoveryCodes, useRecovery, verifyTotp } from './mfa.js'
 
 /**
  * Connexion à MMS : comptes dans data/users.json (mots de passe hachés avec scrypt, jamais en clair),
@@ -131,6 +132,29 @@ function setCookie(res, token, maxAgeMs, secure) {
   res.setHeader('Set-Cookie', parts.join('; '))
 }
 
+// Connexions en attente du code de double authentification : jeton → compte (5 minutes, 5 essais)
+const tickets = new Map()
+const TICKET_MS = 5 * 60_000
+
+/** Ouvre la session (cookie) après mot de passe, et code si la double authentification est active */
+function openSession(req, res, user, remember, ip, ua, detail = '') {
+  const token = crypto.randomBytes(32).toString('base64url')
+  const ttl = remember ? LONG_MS : SHORT_MS
+  sessions.set(token, { email: user.email, expires: Date.now() + ttl, at: Date.now(), ip, ua })
+  saveSessions()
+  onAuthEvent('login_ok', { ip, ua, login: user.email, detail })
+  setCookie(res, token, ttl, req.secure)
+  const pub = publicUser(user)
+  res.json({ user: { ...pub, perms: permsOf(pub), mfa: mfaStateOf(user) } })
+}
+
+/** État de la double authentification d'un compte, pour l'interface */
+export function mfaStateOf(user) {
+  const enabled = Boolean(user?.totp?.secret)
+  const required = mfaRequired(user)
+  return { enabled, required, setup: required && !enabled, recoveryLeft: enabled ? (user.totp.recovery || []).length : 0 }
+}
+
 export function loginRoute(req, res) {
   const { login, password, remember } = req.body || {}
   // Identifiant et mot de passe : du texte seulement (pas de tableau ni d'objet JSON)
@@ -159,13 +183,108 @@ export function loginRoute(req, res) {
     return res.status(403).json({ error: 'DISABLED' })
   }
   fails.delete(key)
-  const token = crypto.randomBytes(32).toString('base64url')
-  const ttl = remember ? LONG_MS : SHORT_MS
-  sessions.set(token, { email: user.email, expires: Date.now() + ttl, at: Date.now(), ip, ua })
-  saveSessions()
-  onAuthEvent('login_ok', { ip, ua, login: user.email })
-  setCookie(res, token, ttl, req.secure)
-  res.json({ user: { ...publicUser(user), perms: permsOf(publicUser(user)) } })
+  // Double authentification active : la session ne s'ouvre qu'avec le code (ou un code de secours)
+  if (user.totp?.secret) {
+    for (const [t, v] of tickets) if (Date.now() - v.at > TICKET_MS) tickets.delete(t)
+    const ticket = crypto.randomBytes(24).toString('base64url')
+    tickets.set(ticket, { email: user.email, remember: Boolean(remember), ip, ua, at: Date.now(), tries: 0 })
+    onAuthEvent('mfa_asked', { ip, ua, login: user.email })
+    return res.json({ mfa: 'code', ticket })
+  }
+  openSession(req, res, user, remember, ip, ua)
+}
+
+/** Deuxième étape de la connexion : code à 6 chiffres ou code de secours */
+export function mfaLoginRoute(req, res) {
+  const { ticket, code } = req.body || {}
+  const t = typeof ticket === 'string' && tickets.get(ticket)
+  const ip = req.ip || ''
+  const ua = String(req.headers['user-agent'] || '').slice(0, 200)
+  if (!t || Date.now() - t.at > TICKET_MS || t.ip !== ip) return res.status(401).json({ error: 'EXPIRED' })
+  if (typeof code !== 'string' || code.length > 40) return res.status(400).json({ error: 'BAD_REQUEST' })
+  const users = readUsers()
+  const user = users.find((u) => u.email === t.email)
+  if (!user?.totp?.secret || user.disabled) {
+    tickets.delete(ticket)
+    return res.status(401).json({ error: 'EXPIRED' })
+  }
+  const step = verifyTotp(user.totp.secret, code, { lastStep: user.totp.lastStep ?? -1 })
+  let detail = 'mfa'
+  if (step >= 0) user.totp.lastStep = step
+  else {
+    const left = useRecovery(user.totp.recovery, code)
+    if (!left) {
+      t.tries++
+      onAuthEvent('mfa_fail', { ip, ua, login: user.email })
+      if (t.tries >= 5) tickets.delete(ticket)
+      return res.status(401).json({ error: 'BAD_CODE', left: Math.max(5 - t.tries, 0) })
+    }
+    user.totp.recovery = left
+    detail = 'mfa_recovery'
+  }
+  writeUsers(users)
+  tickets.delete(ticket)
+  openSession(req, res, user, t.remember, ip, ua, detail)
+}
+
+/** Compte de la session (objet complet de users.json), ou null */
+function sessionUser(req) {
+  const token = readCookie(req)
+  const s = token && sessions.get(token)
+  if (!s || s.expires < Date.now()) return null
+  const users = readUsers()
+  const user = users.find((u) => u.email === s.email && !u.disabled)
+  return user ? { users, user } : null
+}
+
+/** Activation, étape 1 : nouvelle clé (pas encore active) et adresse otpauth:// */
+export function mfaSetupRoute(req, res) {
+  const found = sessionUser(req)
+  if (!found) return res.status(401).json({ error: 'AUTH' })
+  const { users, user } = found
+  user.totpPending = { secret: newSecret(), at: new Date().toISOString() }
+  writeUsers(users)
+  res.json({ secret: user.totpPending.secret, uri: otpauthUri(user.totpPending.secret, user.email) })
+}
+
+/** Activation, étape 2 : le premier code valide active la clé ; 10 codes de secours renvoyés une seule fois */
+export function mfaEnableRoute(req, res) {
+  const found = sessionUser(req)
+  if (!found) return res.status(401).json({ error: 'AUTH' })
+  const { users, user } = found
+  const pending = user.totpPending
+  const step = pending ? verifyTotp(pending.secret, req.body?.code) : -1
+  if (step < 0) return res.status(400).json({ error: 'BAD_CODE' })
+  const { codes, hashes } = recoveryCodes()
+  user.totp = { secret: pending.secret, enabledAt: new Date().toISOString(), lastStep: step, recovery: hashes }
+  delete user.totpPending
+  writeUsers(users)
+  onAuthEvent('mfa_enabled', { ip: req.ip || '', ua: String(req.headers['user-agent'] || '').slice(0, 200), login: user.email })
+  res.json({ ok: true, recovery: codes, mfa: mfaStateOf(user) })
+}
+
+/** Désactivation par le titulaire (avec un code valide), seulement si la règle ne l'impose pas à son compte */
+export function mfaDisableRoute(req, res) {
+  const found = sessionUser(req)
+  if (!found) return res.status(401).json({ error: 'AUTH' })
+  const { users, user } = found
+  if (mfaRequired(user)) return res.status(403).json({ error: 'REQUIRED' })
+  if (!user.totp?.secret || verifyTotp(user.totp.secret, req.body?.code, { lastStep: user.totp.lastStep ?? -1 }) < 0) return res.status(400).json({ error: 'BAD_CODE' })
+  delete user.totp
+  writeUsers(users)
+  onAuthEvent('mfa_disabled', { ip: req.ip || '', ua: String(req.headers['user-agent'] || '').slice(0, 200), login: user.email })
+  res.json({ ok: true, mfa: mfaStateOf(user) })
+}
+
+/** Réinitialisation par le Super Admin (appareil perdu, plus de code de secours) */
+export function resetMfa(email) {
+  const users = readUsers()
+  const user = users.find((u) => u.email.toLowerCase() === String(email).toLowerCase())
+  if (!user) return false
+  delete user.totp
+  delete user.totpPending
+  writeUsers(users)
+  return true
 }
 
 export function logoutRoute(req, res) {
@@ -182,6 +301,9 @@ export function requireAuth(req, res, next) {
   if (req.path.startsWith('/auth/')) return next()
   const user = currentUser(req)
   if (!user) return res.status(401).json({ error: 'AUTH' })
+  // Double authentification exigée mais pas encore activée : seule l'activation est permise (personne n'est bloqué dehors)
+  const raw = findUser(user.email)
+  if (raw && mfaRequired(raw) && !raw.totp?.secret) return res.status(403).json({ error: 'MFA_SETUP' })
   req.user = user
   next()
 }

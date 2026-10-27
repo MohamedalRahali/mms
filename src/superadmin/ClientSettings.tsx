@@ -63,10 +63,12 @@ export function SourceMetaCell({ name, country, reach, reachSet, onSaved }: { na
 /* ---------------------------------------------------------------- شعار العميل */
 
 export function BrandCard({ onMsg }: { onMsg: (m: string) => void }) {
-  const { data, reload } = useList<{ brand: { name: string; logo: string } }>('/brand')
+  const { data, reload } = useList<{ brand: { name: string; logo: string; assistant?: string } }>('/brand')
   const [name, setName] = useState<string | null>(null)
+  const [assistant, setAssistant] = useState<string | null>(null)
   const shown = name ?? data?.brand.name ?? ''
-  async function save(patch: { name?: string; logo?: string }) {
+  const shownAssistant = assistant ?? data?.brand.assistant ?? ''
+  async function save(patch: { name?: string; logo?: string; assistant?: string }) {
     try {
       await api('/brand', 'PUT', patch)
       onMsg('تم حفظ هوية العميل.')
@@ -96,8 +98,9 @@ export function BrandCard({ onMsg }: { onMsg: (m: string) => void }) {
         <img className="sa-brandlogo" src={data?.brand.logo || '/logo-npdc.png'} alt="" />
       </div>
       <input className="sa-input" placeholder="اسم العميل (اختياري)" value={shown} maxLength={120} onChange={(e) => setName(e.target.value)} dir="auto" />
+      <input className="sa-input" placeholder="اسم المساعد الذكي (Around افتراضياً)" value={shownAssistant} maxLength={40} onChange={(e) => setAssistant(e.target.value)} dir="auto" aria-label="اسم المساعد الذكي" />
       <div className="sa-row">
-        <button type="button" className="sa-btn" onClick={() => save({ name: shown })}>
+        <button type="button" className="sa-btn" onClick={() => save({ name: shown, assistant: shownAssistant })}>
           حفظ الاسم
         </button>
         <label className="sa-btn sa-btn--ghost">

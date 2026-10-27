@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { getItems } from './store.js'
+import { onMailPolicyChange, splitRecipients } from './mailPolicy.js'
 import { aiEnabled, briefingSummary } from './ai.js'
 import { briefingFacts, buildBriefing } from './insights.js'
 import { sendMail, sendTelegram, telegramReady } from './watches.js'
@@ -28,6 +29,21 @@ function save() {
 
 export const briefingConf = () => ({ ...conf, smtp: Boolean(process.env.SMTP_USER && process.env.SMTP_PASS), telegramReady: telegramReady(), ai: aiEnabled() })
 
+/** Liste blanche : adresses hors domaines autorisés mises de côté (jamais supprimées), rendues si le domaine est autorisé */
+export function applyMailPolicyToBriefing() {
+  const all = [...new Set([...(conf.recipients || []), ...(conf.blockedRecipients || [])])]
+  const { ok, blocked } = splitRecipients(all)
+  if (JSON.stringify(ok) !== JSON.stringify(conf.recipients || []) || JSON.stringify(blocked) !== JSON.stringify(conf.blockedRecipients || [])) {
+    if (blocked.length && file && fs.existsSync(file)) {
+      const backup = file.replace(/\.json$/, '.avant-liste-blanche.json')
+      if (!fs.existsSync(backup)) fs.copyFileSync(file, backup)
+    }
+    conf = { ...conf, recipients: ok, blockedRecipients: blocked }
+    save()
+  }
+  return conf.blockedRecipients || []
+}
+
 export function setBriefingConf(body) {
   const recipients = [
     ...new Set(
@@ -42,7 +58,8 @@ export function setBriefingConf(body) {
     weekday: Math.min(Math.max(Math.round(Number(body?.weekday) || 0), 0), 6),
     hour: Math.min(Math.max(Math.round(Number(body?.hour) || 0), 0), 23),
     days: [7, 14, 30].includes(Number(body?.days)) ? Number(body.days) : 7,
-    recipients,
+    recipients: splitRecipients(recipients).ok,
+    blockedRecipients: splitRecipients(recipients).blocked,
     telegram: body?.telegram !== false,
   }
   save()
@@ -140,6 +157,8 @@ export function startBriefing(dataDir) {
   } catch {
     /* pas encore configuré */
   }
+  applyMailPolicyToBriefing()
+  onMailPolicyChange(applyMailPolicyToBriefing)
   const tick = async () => {
     if (!conf.enabled) return
     const now = nowTunis()

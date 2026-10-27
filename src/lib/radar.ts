@@ -55,7 +55,10 @@ export type SmartAlert = {
   label: string
   detail: Record<string, number | string>
   filter: Record<string, string>
+  flow?: AlertFlow
 }
+export type AlertStatus = 'new' | 'ack' | 'assigned' | 'escalated' | 'validated' | 'closed'
+export type AlertFlow = { status: AlertStatus; assignee?: string; history: { at: string; by: string; status: AlertStatus; assignee?: string; comment?: string }[] }
 
 export const RADAR_TEXT = {
   ar: {
@@ -64,7 +67,7 @@ export const RADAR_TEXT = {
     intro: 'ما يجب أن تعرفه الآن دون أن تبحث عنه: المواضيع الصاعدة، الأخبار التي تتناقلها عدة مصادر، ومؤشر المزاج الإعلامي حول الفاعلين.',
     alerts: 'تنبيهات ذكية',
     alertsEmpty: 'لا شيء غير عادي في آخر 24 ساعة.',
-    levels: { 3: 'حرج', 2: 'للمتابعة', 1: 'معلومة' } as Record<number, string>,
+    levels: { 3: 'حرج', 2: 'مرتفع', 1: 'معلومة' } as Record<number, string>,
     kinds: { spike: 'ارتفاع مفاجئ', emerging: 'موضوع جديد', negative: 'تصاعد السلبية', story: 'خبر واسع الانتشار' } as Record<SmartAlert['kind'], string>,
     alertLine: (a: SmartAlert, num: (n: number) => string) => {
       const d = a.detail
@@ -112,7 +115,7 @@ export const RADAR_TEXT = {
     intro: 'What you need to know now without searching for it: rising topics, stories picked up by many outlets, and the media mood around key actors.',
     alerts: 'Smart alerts',
     alertsEmpty: 'Nothing unusual in the last 24 hours.',
-    levels: { 3: 'Critical', 2: 'Watch', 1: 'Info' } as Record<number, string>,
+    levels: { 3: 'Critical', 2: 'High', 1: 'Info' } as Record<number, string>,
     kinds: { spike: 'Sudden spike', emerging: 'New topic', negative: 'Negative surge', story: 'Widely covered story' } as Record<SmartAlert['kind'], string>,
     alertLine: (a: SmartAlert, num: (n: number) => string) => {
       const d = a.detail

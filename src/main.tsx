@@ -13,6 +13,7 @@ import { installTracking } from './lib/track'
 import { setShareToken } from './lib/news'
 import { SharedBoard } from './components/Share'
 import { I18nContext, makeI18n } from './lib/i18n'
+import { MfaRequired } from './components/Mfa'
 
 // Console Super Admin : chargée seulement à l'adresse /superadmin, séparée de la plateforme
 const SuperAdmin = lazy(() => import('./superadmin/SuperAdmin'))
@@ -94,6 +95,21 @@ function Gate() {
         {banner}
         <Login onLogin={setUser} />
       </>
+    )
+  // Double authentification obligatoire pour ce compte et pas encore activée : activation avant tout le reste
+  if (user.mfa?.setup)
+    return (
+      <MfaRequired
+        lang={(() => {
+          try {
+            return sessionStorage.getItem('mms-lang') === 'en' ? 'en' : 'ar'
+          } catch {
+            return 'ar'
+          }
+        })()}
+        onDone={(mfa) => setUser({ ...user, mfa })}
+        onLogout={logout}
+      />
     )
   return (
     <AuthContext.Provider value={{ user, logout }}>

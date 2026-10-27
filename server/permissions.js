@@ -159,6 +159,7 @@ function actionFor(method, p) {
   if (p === '/news/export.csv') return 'export'
   if (write && /^\/ai\/(ask|agent|query|spike|brief)$/.test(p)) return 'ai_ask'
   if (write && p === '/news/processed') return 'mark_processed'
+  if (write && p.startsWith('/radar/alerts/')) return 'mark_processed'
   if (p.startsWith('/shares')) return 'share_dashboards'
   if (write && p.startsWith('/geo')) return 'ai_run'
   if (write && p === '/radar/explain') return 'ai_ask'
