@@ -163,8 +163,13 @@ else
 fi
 systemctl restart mms
 
-sleep 2
-if curl -fs -o /dev/null "http://127.0.0.1:$PORT/api/auth/me" -w '' 2>/dev/null || [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$PORT/api/auth/me)" = 401 ]; then
+# Démarrage : chargement de la base et des index (plusieurs secondes avec 20 000 fiches) ; on attend jusqu'à 30 s
+UP=0
+for _ in $(seq 1 30); do
+  sleep 1
+  [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$PORT/api/auth/me)" = 401 ] && { UP=1; break; }
+done
+if [ "$UP" = 1 ]; then
   echo
   echo "MMS est en ligne : $(grep '^PUBLIC_URL=' "$APP/.env" | cut -d= -f2-)"
   echo "Comptes : sudo -u mms node $APP/server/users.js list"

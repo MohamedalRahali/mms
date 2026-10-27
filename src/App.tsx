@@ -31,6 +31,7 @@ const Around = lazy(() => import('./components/Around').then((m) => ({ default: 
 const MediaPage = lazy(() => import('./components/MediaPages').then((m) => ({ default: m.MediaPage })))
 const LiveWall = lazy(() => import('./components/LiveWall').then((m) => ({ default: m.LiveWall })))
 const ClipModal = lazy(() => import('./components/BroadcastStudio').then((m) => ({ default: m.ClipModal })))
+const SearchPool = lazy(() => import('./components/SearchPool').then((m) => ({ default: m.SearchPool })))
 const GeoPresence = lazy(() => import('./components/GeoPresence').then((m) => ({ default: m.GeoPresence })))
 
 type View =
@@ -51,6 +52,7 @@ type View =
   | 'radar'
   | 'reports'
   | 'geo'
+  | 'pool'
   | `media-${MediaPageType}`
   | 'media-live'
 const VIEWS: View[] = [
@@ -71,6 +73,7 @@ const VIEWS: View[] = [
   'radar',
   'reports',
   'geo',
+  'pool',
   ...MEDIA_PAGES.map((m) => `media-${m}` as const),
   'media-live',
 ]
@@ -78,7 +81,7 @@ const VIEWS: View[] = [
 /** Module de permissions dont dépend chaque page (null : toujours ouverte) */
 function moduleOf(v: View): ModuleKey | null {
   if (v === 'help') return null
-  if (v === 'search') return 'news'
+  if (v === 'search' || v === 'pool') return 'news'
   if (v.startsWith('media-')) return 'media'
   return v as ModuleKey
 }
@@ -133,6 +136,7 @@ const ICONS: Record<string, string> = {
   compare: 'M4 20V10h3v10H4zm5 0V4h3v16H9zm5 0v-8h3v8h-3zm5 0V8h3v12h-3z',
   briefing: 'M5 3h10l4 4v14H5V3zm9 1.5V8h3.5L14 4.5zM7 11h10v1.6H7zm0 3.5h10v1.6H7zm0 3.5h6v1.6H7z',
   radar: 'M12 2a10 10 0 1 0 10 10h-2a8 8 0 1 1-8-8V2zm0 4a6 6 0 1 0 6 6h-2a4 4 0 1 1-4-4V6zm0 4a2 2 0 1 0 2 2h-2v-2zm1-8v10h2V4.1A8 8 0 0 1 19.9 9H22A10 10 0 0 0 13 2z',
+  pool: 'M3 5h11v2H3zm0 4h7v2H3zm0 4h7v2H3zm0 4h11v2H3zm13.5-8a4.5 4.5 0 0 1 3.6 7.2l2.6 2.6-1.4 1.4-2.6-2.6A4.5 4.5 0 1 1 16.5 9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z',
   geo: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2a8 8 0 0 1 7.7 6H15l-1.5-2.5L12 10l-1.5-2.5L9 10H4.3A8 8 0 0 1 12 4zm0 16a8 8 0 0 1-7.7-8H9l1.5 2.5L12 12l1.5 2.5L15 12h4.7A8 8 0 0 1 12 20z',
   team: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm7 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM1 20c0-3.3 3.6-6 8-6s8 2.7 8 6v1H1v-1zm17.5 1v-1c0-1.9-.8-3.6-2.1-4.8 3.5.3 6.6 2.3 6.6 4.8v1h-4.5z',
 }
@@ -280,6 +284,7 @@ export default function App() {
           { key: 'sov', label: pro.navSov },
           { key: 'compare', label: pro.navCompare },
           { key: 'geo', label: lang === 'ar' ? 'الحضور في إجابات الذكاء الاصطناعي' : 'Presence in AI answers' },
+          { key: 'pool', label: lang === 'ar' ? 'مجمع البحث' : 'Search pool' },
           { key: 'search', label: t.sideSearch },
         ],
       },
@@ -539,6 +544,7 @@ export default function App() {
                       {shown === 'media-live' && <LiveWall />}
                       {shown === 'reports' && <Reports onNews={() => go('news')} />}
                       {shown === 'geo' && <GeoPresence />}
+                      {shown === 'pool' && <SearchPool flux={flux} />}
                       </Suspense>
                     </div>
                   </main>

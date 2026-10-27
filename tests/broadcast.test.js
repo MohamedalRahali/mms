@@ -83,3 +83,15 @@ test("temps d'antenne : une tranche comptée une fois et partagée entre ses act
   assert.ok(Math.abs(pol.minutes - Math.round((seg / 2) * 10) / 10) < 0.11)
   assert.equal(r.people[0].name, 'الدبيبة')
 })
+
+test('مجمع البحث : catalogue des sources, état selon la dernière publication', async () => {
+  const { sourceCatalog } = await import('../server/catalog.js')
+  const day = 86_400_000
+  const mk = (origin, ago, extra = {}) => ({ id: `${origin}${ago}`, origin, channel: 'site', media: 'article', lang: 'ar', url: 'https://www.alwasat.ly/a', date: new Date(NOW - ago * day).toISOString(), ...extra })
+  const c = sourceCatalog([mk('A', 1), mk('A', 2), mk('B', 20, { channel: 'tv', media: 'broadcast' }), mk('C', 60)], NOW)
+  assert.equal(c.total, 3)
+  assert.deepEqual(c.sources.map((s) => [s.name, s.status, s.week]), [['A', 'active', 2], ['B', 'quiet', 0], ['C', 'idle', 0]])
+  assert.equal(c.sources[0].country, 'LY')
+  assert.equal(c.active, 1)
+  assert.ok(c.byMedia.some((m) => m.name === 'broadcast'))
+})

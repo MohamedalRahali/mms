@@ -30,6 +30,7 @@ import { apiItem, apiKeyFor, initApiKeys, keyFromRequest, takeCall } from './api
 import { brandOf } from './clientAdmin.js'
 import { cachedBrief, initBrief, itemBrief } from './brief.js'
 import { mountGeo } from './geo.js'
+import { mountCatalog } from './catalog.js'
 
 /** Serveur MMS : API de lecture des actualités + site compilé (dist/) en production */
 
@@ -889,6 +890,8 @@ app.put('/api/dashboards', express.json({ limit: '300kb' }), (req, res) => {
 
 // الحضور في إجابات الذكاء الاصطناعي : questions du client posées à l'IA configurée, réponses et mesures gardées
 mountGeo(app, path.join(root, 'data'), { aiEnabled, aiRun: aroundRun, getItems })
+// مجمع البحث : catalogue des sources reçues (lecture)
+mountCatalog(app)
 
 const dist = path.join(root, 'dist')
 if (fs.existsSync(dist)) {

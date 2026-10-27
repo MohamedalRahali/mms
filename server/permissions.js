@@ -149,6 +149,7 @@ const MODULE_RULES = [
   [/^\/ai\/brief$/, ['news', 'media']],
   [/^\/news\/processed$/, ['news', 'media']],
   [/^\/geo(\/|$)/, ['geo']],
+  [/^\/sources(\/|$)/, ['news']],
   [/^\/report$/, ['report']],
 ]
 
