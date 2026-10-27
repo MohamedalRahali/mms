@@ -1,4 +1,5 @@
 import { useContext, useEffect, useState, type FormEvent } from 'react'
+import { BroadcastStudio } from './BroadcastStudio'
 import { type Count, type Flux, type NewsResponse, type Tone, DrillContext, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { type MediaIconName, type MediaPageType, MEDIA_PAGE_TEXT, MEDIA_SUBS, useMedia } from '../lib/media'
@@ -116,7 +117,11 @@ export function MediaPage({
       {!data && !error && <p className="news-status">{i.t.loading}</p>}
       {data && <Board type={type} data={data} days={days} />}
       {type === 'broadcast' && <Diffusion />}
-      <Feed type={type} sub={sub} days={days} flux={flux} />
+      {type === 'broadcast' ? (
+        <BroadcastStudio days={days} sub={sub} flux={flux} channels={(data?.sources ?? []).map((s) => s.name)} />
+      ) : (
+        <Feed type={type} sub={sub} days={days} flux={flux} />
+      )}
     </div>
   )
 }

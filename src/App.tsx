@@ -30,6 +30,7 @@ const Reports = lazy(() => import('./components/reports/Reports'))
 const Around = lazy(() => import('./components/Around').then((m) => ({ default: m.Around })))
 const MediaPage = lazy(() => import('./components/MediaPages').then((m) => ({ default: m.MediaPage })))
 const LiveWall = lazy(() => import('./components/LiveWall').then((m) => ({ default: m.LiveWall })))
+const ClipModal = lazy(() => import('./components/BroadcastStudio').then((m) => ({ default: m.ClipModal })))
 const GeoPresence = lazy(() => import('./components/GeoPresence').then((m) => ({ default: m.GeoPresence })))
 
 type View =
@@ -178,6 +179,7 @@ export default function App() {
   // ?view=briefing (lien du rapport envoyé par e-mail) ouvre directement la page voulue
   const [view, setView] = useState<View>(() => {
     const asked = new URLSearchParams(window.location.search).get('view') as View | null
+    if (new URLSearchParams(window.location.search).get('clip')) return 'media-broadcast'
     return newsWatch ? 'news' : asked && VIEWS.includes(asked) ? asked : 'dashboard'
   })
   const auth = useAuth()
@@ -185,6 +187,11 @@ export default function App() {
   const shown: View = viewAllowed(auth?.user, view) ? view : (VIEWS.find((v) => viewAllowed(auth?.user, v)) ?? 'help')
   // Sous-type de la page Broadcasts (tv, radio, youtube) : choisi dans le menu latéral ou par ?sub=
   const [mediaSub, setMediaSub] = useState(() => new URLSearchParams(window.location.search).get('sub') ?? '')
+  // Lien d'un extrait de diffusion (/?clip=<id>&t=<secondes>&q=…) : la page Broadcasts s'ouvre avec l'extrait
+  const [clip, setClip] = useState(() => {
+    const s = new URLSearchParams(window.location.search)
+    return s.get('clip') ? { id: s.get('clip') ?? '', t: Number(s.get('t')) || 0, q: s.get('q') ?? '' } : null
+  })
   // Une seule veille (Libye) : plus de choix de source, toutes les pages couvrent toutes les sources
   const flux: Flux | '' = ''
   const [bump, setBump] = useState(0)
@@ -548,6 +555,11 @@ export default function App() {
                   />
                 )}
                 {presenting && <Presentation flux={flux} onClose={closePresent} />}
+                {clip && hasModule(auth?.user, 'media') && (
+                  <Suspense fallback={null}>
+                    <ClipModal id={clip.id} t={clip.t} q={clip.q} onClose={() => setClip(null)} />
+                  </Suspense>
+                )}
               </div>
             </DrillContext.Provider>
           </I18nContext.Provider>

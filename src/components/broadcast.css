@@ -1,0 +1,220 @@
+/* Broadcasts — البث : temps d'antenne, recherche dans les transcriptions, extraits */
+.bc-air,
+.bc-search {
+  margin: 16px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.bc-air header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 10px;
+}
+.bc-air h3,
+.bc-search h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.bc-air header span {
+  font-weight: 700;
+  color: var(--green);
+}
+.bc-air header small {
+  flex-basis: 100%;
+  color: var(--ink-soft);
+}
+.bc-air__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.bc-air__grid h4 {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+.bc-search .news-filters {
+  margin: 10px 0 6px;
+}
+.bc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.bc-clip {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-inline-start: 4px solid var(--green);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.bc-clip__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 13px;
+}
+.bc-clip__head time {
+  color: var(--ink-soft);
+}
+.bc-clip h4 {
+  margin: 8px 0 4px;
+  font-size: 15.5px;
+  line-height: 1.5;
+}
+.bc-clip__sum {
+  margin: 0 0 6px;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+.bc-clip__audio {
+  width: 100%;
+  margin: 6px 0;
+}
+.bc-clip__note {
+  margin: 4px 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.bc-clip__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 6px 0;
+  font-size: 12.5px;
+}
+.bc-clip__hits {
+  font-weight: 700;
+  color: var(--green);
+}
+.bc-clip__approx {
+  color: var(--ink-soft);
+}
+.bc-passages {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 340px;
+  overflow-y: auto;
+}
+.bc-passages li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 7px 8px;
+  border-top: 1px solid var(--line);
+}
+.bc-passages li.is-hit {
+  background: var(--green-soft);
+}
+.bc-passages li.is-focus {
+  outline: 2px solid var(--green);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+.bc-passages p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.bc-passages__time {
+  min-width: 64px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  cursor: pointer;
+}
+.bc-passages__time:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+.bc-passages__share {
+  border: 0;
+  background: none;
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.bc-passages__share:hover {
+  opacity: 1;
+}
+.bc-mark {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: #f2c94c;
+  color: #1b1b1b;
+}
+.bc-modal {
+  width: min(760px, 100%);
+}
+@media (max-width: 720px) {
+  .bc-air__grid {
+    grid-template-columns: 1fr;
+  }
+  .bc-passages li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .bc-passages__time {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+.bc-bars {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.bc-bars li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.bc-bars li i {
+  grid-column: 1 / -1;
+  display: block;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--green);
+}
+.bc-clip__news {
+  margin: 4px 0 6px;
+  font-size: 13px;
+}
+.bc-clip__news summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--green);
+}
+.bc-clip__news ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.bc-clip__news li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 4px 0;
+  border-top: 1px dashed var(--line);
+}
+.bc-clip__news time {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}

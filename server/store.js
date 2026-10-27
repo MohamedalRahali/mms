@@ -233,6 +233,8 @@ function loadLibye(dir, track) {
         subType: clean(n.sous_type).toLowerCase() || (BROADCAST.has(channel) ? channel : ''),
         ref: clean(n.ref),
         mediaUrl: webUrl(n.media_url),
+        // Audio de l'extrait (tranche enregistrée), quand la veille le publie : lecteur et passages cliquables
+        clipUrl: webUrl(n.clip_url),
         transcription: clean(n.transcription),
         author: clean(n.auteur),
         parent: n.parent && typeof n.parent === 'object' ? { id: clean(n.parent.id), url: webUrl(n.parent.url), title: clean(n.parent.titre) } : undefined,
