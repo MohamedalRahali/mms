@@ -24,9 +24,6 @@ type LiveChannel = {
   reason?: 'referer' | 'nosource'
 }
 
-// Écrans lus en même temps au plus ; les suivants attendent un clic
-const MAX_PLAYING = 6
-
 const TEXT = {
   ar: {
     title: 'البث المباشر',
@@ -42,7 +39,6 @@ const TEXT = {
     referer: 'الرابط الرسمي لا يعمل إلا على موقع القناة',
     nosource: 'لا يوجد رابط بث عام',
     paused: 'متوقف لتخفيف الاستهلاك · انقر للمشاهدة',
-    limit: (n: number) => `تُشغَّل ${n} شاشات كحدّ أقصى في الوقت نفسه لتخفيف الاستهلاك.`,
     last: 'آخر تسجيل',
     listen: 'انقر للاستماع',
     noRadio: 'لا توجد إذاعة مفعّلة برابط بث عام حالياً.',
@@ -69,7 +65,6 @@ const TEXT = {
     referer: 'The official stream only plays on the channel’s own site',
     nosource: 'No public stream',
     paused: 'Paused to save bandwidth · click to watch',
-    limit: (n: number) => `At most ${n} screens play at once to save bandwidth.`,
     last: 'Last recording',
     listen: 'Click to listen',
     noRadio: 'No radio station with a public stream is enabled yet.',
@@ -322,7 +317,6 @@ export function LiveWall() {
   const tvs = channels.filter((c) => c.canal === 'tv').sort((a, b) => Number(playable(b)) - Number(playable(a)))
   const radios = channels.filter((c) => c.canal === 'radio').sort((a, b) => Number(playable(b)) - Number(playable(a)))
   const onAir = channels.filter(playable).length
-  const liveTvs = tvs.filter(playable)
 
   return (
     <div className="lw mms-media--broadcast">
@@ -346,10 +340,9 @@ export function LiveWall() {
           {tvs.length === 0 && <p className="mms-mpage__empty">{x.noTv}</p>}
           <div className="lw-grid">
             {tvs.map((c) => (
-              <Tile key={c.id} c={c} play={visible && !focus && liveTvs.indexOf(c) < MAX_PLAYING} onOpen={() => setFocus(c)} />
+              <Tile key={c.id} c={c} play={visible && !focus} onOpen={() => setFocus(c)} />
             ))}
           </div>
-          {liveTvs.length > MAX_PLAYING && <p className="lw-note">{x.limit(MAX_PLAYING)}</p>}
 
           <h3 className="lw-h">{x.radios}</h3>
           {radios.length === 0 ? (
