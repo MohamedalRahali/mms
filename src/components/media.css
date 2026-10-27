@@ -580,7 +580,7 @@
   position: relative;
   display: block;
   overflow: hidden;
-  padding: 5px 12px;
+  padding: 2px 12px;
   border-radius: 12px;
   animation: npdc-in 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   transition:
@@ -590,7 +590,7 @@
 .mms-head__logo img {
   display: block;
   width: auto;
-  height: 40px;
+  height: 46px;
 }
 .mms-head__logo:hover {
   transform: translateY(-1px) scale(1.02);

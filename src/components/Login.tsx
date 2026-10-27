@@ -118,7 +118,7 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
       <section className="mms-login__panel">
         <header className="mms-login__top">
           <span className="mms-login__logo">
-            <img src="/logo-cnsd/logo-anime-fond-sombre.svg" alt="رئاسة مجلس الوزراء — المركز الوطني لدعم القرار" />
+            <img src="/logo-cnsd/v2/logo-anime-fond-sombre.svg" alt="رئاسة مجلس الوزراء — المركز الوطني لدعم القرار" />
           </span>
           <div className="mms-login__lang" role="group" aria-label="Language">
             <button type="button" className={lang === 'ar' ? 'is-active' : ''} onClick={() => setLang('ar')}>

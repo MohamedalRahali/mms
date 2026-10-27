@@ -362,7 +362,7 @@ export default function App() {
                   <div className="mms-head__brand">
                     {/* Logo du client (رئاسة مجلس الوزراء — المركز الوطني لدعم القرار), le produit en petit à côté */}
                     <span className="mms-head__logo">
-                      <img src={theme === 'dark' ? '/logo-cnsd/logo-anime-fond-sombre.svg' : '/logo-cnsd/logo-anime.svg'} alt={lang === 'ar' ? 'المركز الوطني لدعم القرار' : 'National Decision Support Centre'} width={1224} height={348} />
+                      <img src={theme === 'dark' ? '/logo-cnsd/v2/logo-anime-fond-sombre.svg' : '/logo-cnsd/v2/logo-anime.svg'} alt={lang === 'ar' ? 'المركز الوطني لدعم القرار' : 'National Decision Support Centre'} width={1679} height={322} />
                     </span>
                     <span className="mms-head__product">
                       <RadarMark size={18} />
