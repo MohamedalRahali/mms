@@ -510,20 +510,26 @@ function TimelineWidget({ conf }: { conf: WidgetConf }) {
   const base = shown.map(() => new Array(n).fill(0))
   if (stacked) for (let s = 1; s < shown.length; s++) for (let k = 0; k < n; k++) base[s][k] = base[s - 1][k] + shown[s - 1].values[k]
   const top = (s: number, k: number) => (stacked ? base[s][k] : 0) + shown[s].values[k]
-  const max = Math.max(1, ...shown.flatMap((_, s) => data.buckets.map((__, k) => top(s, k))))
+  // Échelle arrondie (1, 2, 5 × 10^n) pour des repères de valeurs lisibles
+  const peak = Math.max(1, ...shown.flatMap((_, s) => data.buckets.map((__, k) => top(s, k))))
+  const raw = peak / 4
+  const mag = 10 ** Math.floor(Math.log10(raw))
+  const stepV = Math.max(1, [1, 2, 5, 10].map((f) => f * mag).find((v) => v >= raw) ?? 10 * mag)
+  const max = stepV * Math.ceil(peak / stepV)
+  const yTicks = Array.from({ length: Math.round(max / stepV) + 1 }, (_, k) => k * stepV)
   const X = (k: number) => (n === 1 ? W / 2 : (k / (n - 1)) * W)
   const Y = (v: number) => H - (v / max) * (H - 8)
   const slot = W / n
   const tick = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(width / 95))))
-  const readout =
-    hover !== null
-      ? `${bucketLabel(data.buckets[hover], data.step, i.day)} : ${shown.map((s) => `${label(s.key)} ${i.num(s.values[hover])}`).join(' · ')}`
-      : `${b.steps[data.step]} · ${b.total} ${i.num(shown.reduce((t, s) => t + s.total, 0))}`
+  const current = data.step === 'day' ? b.inProgressDay : b.inProgress
+  const readout = `${b.steps[data.step]} · ${b.total} ${i.num(shown.reduce((t, s) => t + s.total, 0))}`
+  const xPct = (k: number) => (style === 'bars' ? ((k + 0.5) / n) * 100 : n === 1 ? 50 : (k / (n - 1)) * 100)
   return (
     <div className="mms-tl">
       <p className="mms-chart__readout" dir="auto">
         {readout}
       </p>
+      <div className="mms-tl__wrap" dir="ltr">
       <svg
         className="mms-tl__plot"
         viewBox={`0 0 ${W} ${H}`}
@@ -533,31 +539,61 @@ function TimelineWidget({ conf }: { conf: WidgetConf }) {
         onMouseLeave={() => setHover(null)}
         onMouseMove={(e) => {
           const r = e.currentTarget.getBoundingClientRect()
-          const k = Math.round(((e.clientX - r.left) / r.width) * (style === 'bars' ? n - 0.5 : n - 1) - (style === 'bars' ? 0.25 : 0))
+          const f = (e.clientX - r.left) / r.width
+          const k = style === 'bars' ? Math.floor(f * n) : Math.round(f * (n - 1))
           setHover(Math.min(Math.max(k, 0), n - 1))
         }}
       >
-        {[0.25, 0.5, 0.75].map((f) => (
-          <line key={f} x1="0" x2={W} y1={H - f * (H - 8)} y2={H - f * (H - 8)} className="mms-tl__grid" />
+        {yTicks.slice(1).map((v) => (
+          <line key={v} x1="0" x2={W} y1={Y(v)} y2={Y(v)} className="mms-tl__grid" />
         ))}
+        {n > 1 && <rect x={style === 'bars' ? (n - 1) * slot : X(n - 2)} width={style === 'bars' ? slot : X(n - 1) - X(n - 2)} y="0" height={H} className="mms-tl__current" />}
         {style === 'bars'
           ? shown.map((s, si) =>
               s.values.map((v, k) =>
-                v ? <rect key={`${s.key}-${k}`} x={k * slot + slot * 0.15} width={slot * 0.7} y={Y(top(si, k))} height={Y(base[si][k]) - Y(top(si, k))} fill={s.color} opacity={hover === null || hover === k ? 1 : 0.5} /> : null,
+                v ? <rect key={`${s.key}-${k}`} x={k * slot + slot * 0.15} width={slot * 0.7} y={Y(top(si, k))} height={Y(base[si][k]) - Y(top(si, k))} fill={s.color} opacity={(hover === null || hover === k ? 1 : 0.5) * (k === n - 1 ? 0.55 : 1)} /> : null,
               ),
             )
           : shown.map((s, si) => {
-              const line = s.values.map((_, k) => `${X(k)},${Y(top(si, k))}`).join(' ')
+              const pts = s.values.map((_, k) => `${X(k)},${Y(top(si, k))}`)
+              const line = pts.join(' ')
               const floor = s.values.map((_, k) => `${X(n - 1 - k)},${Y(stacked ? base[si][n - 1 - k] : 0)}`).join(' ')
               return (
                 <g key={s.key}>
                   {style !== 'line' && <polygon points={`${line} ${floor}`} fill={s.color} opacity={stacked ? 0.75 : 0.22} />}
-                  <polyline points={line} fill="none" stroke={s.color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+                  {/* Le dernier pas (jour, semaine… en cours) est en pointillé : il n'est pas encore complet */}
+                  <polyline points={(n > 1 ? pts.slice(0, -1) : pts).join(' ')} fill="none" stroke={s.color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+                  {n > 1 && <polyline points={pts.slice(-2).join(' ')} fill="none" stroke={s.color} strokeWidth="2" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />}
                 </g>
               )
             })}
         {hover !== null && style !== 'bars' && <line x1={X(hover)} x2={X(hover)} y1="0" y2={H} className="mms-tl__cursor" />}
       </svg>
+      {yTicks.slice(1).map((v) => (
+        <span key={v} className="mms-tl__yval" style={{ top: `${(Y(v) / H) * 100}%` }}>
+          {i.num(v)}
+        </span>
+      ))}
+      {hover !== null && (
+        <div
+          className="mms-tl__tip"
+          role="status"
+          style={{ left: `${xPct(hover)}%`, transform: `translateX(${xPct(hover) > 65 ? '-100%' : xPct(hover) < 35 ? '0' : '-50%'})` }}
+          dir={i.dir}
+        >
+          <b>
+            {bucketLabel(data.buckets[hover], data.step, i.day)}
+            {hover === n - 1 && <em> · {current}</em>}
+          </b>
+          {shown.map((s) => (
+            <span key={s.key}>
+              <i style={{ background: s.color }} />
+              <span dir="auto">{label(s.key)}</span> <strong>{i.num(s.values[hover])}</strong>
+            </span>
+          ))}
+        </div>
+      )}
+      </div>
       <div className="mms-tl__axis" dir="ltr" ref={axis}>
         {data.buckets.map((bk, k) => (
           <span key={bk} style={{ insetInlineStart: `${style === 'bars' ? (k + 0.5) * (100 / n) : n === 1 ? 50 : (k / (n - 1)) * 100}%` }}>
@@ -565,6 +601,11 @@ function TimelineWidget({ conf }: { conf: WidgetConf }) {
           </span>
         ))}
       </div>
+      {n > 1 && (
+        <p className="mms-tl__note">
+          <i aria-hidden /> {current} — {i.lang === 'ar' ? 'لم تكتمل بعد' : 'not complete yet'}
+        </p>
+      )}
       {(data.series.length > 1 || hidden.length > 0) && (
         <ul className="mms-tl__legend">
           {data.series.map((s, k) => (

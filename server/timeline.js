@@ -76,7 +76,8 @@ export function timeline(items, { days = 30, step = 'day', split = '', groups = 
   for (const g of sources)
     for (const it of g.items) {
       const t = Date.parse(it.date)
-      if (t < from || t > now) continue
+      // Le premier pas est compté en entier (pas de faux creux au début) ; les fiches plus anciennes n'ont pas d'indice
+      if (t > now) continue
       add(g.name ?? keyOf(it, split), t)
     }
   let rows = [...series.entries()].map(([key, values]) => ({ key, values, total: values.reduce((a, b) => a + b, 0) })).sort((a, b) => b.total - a.total)

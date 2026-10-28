@@ -163,6 +163,9 @@ test('courbe : pas de temps, découpage, buckets vides, comparaison de recherche
   assert.equal(t.buckets.length, 4) // 25, 26, 27 et 28 octobre
   const tv = t.series.find((s) => s.key === 'tv')
   assert.deepEqual(tv.values, [0, 0, 2, 1])
+  // Fiche du matin du 25 : avant la fenêtre glissante de 72 h, mais dans le premier jour affiché, donc comptée
+  const early = timeline([mk(80)], { days: 3, step: 'day', now: NOW2 })
+  assert.deepEqual(early.series[0].values, [1, 0, 0, 0])
   assert.equal(bucketOf(Date.parse('2026-10-28T12:00:00Z'), 'week'), '2026-10-26')
   assert.equal(bucketOf(Date.parse('2026-10-28T12:00:00Z'), 'quarter'), '2026-T4')
   const h = timeline(items, { days: 30, step: 'hour', now: NOW2 })

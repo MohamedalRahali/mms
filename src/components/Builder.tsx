@@ -201,7 +201,7 @@ function WidgetEditor({ initial, onApply, onClose }: { initial: WidgetConf; onAp
   }, [onClose])
   return (
     <div className="mms-modal" role="dialog" aria-modal="true" aria-label={b.editWidget} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="mms-modal__box">
+      <div className="mms-modal__box mms-modal__box--editor">
         <div className="mms-editor">
           <div className="mms-editor__form">
             <p className="mms-editor__label">{b.type}</p>

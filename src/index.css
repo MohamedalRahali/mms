@@ -3922,3 +3922,109 @@ textarea:focus {
 .mms-tl__axis span:last-child:not(:first-child) {
   transform: translateX(-100%);
 }
+
+/* Courbe : repères de valeurs, info-bulle, période en cours */
+.mms-tl__wrap {
+  position: relative;
+  display: flex;
+  flex: 1 1 140px;
+  min-height: 120px;
+}
+.mms-tl__wrap .mms-tl__plot {
+  flex: 1 1 auto;
+}
+.mms-tl__yval {
+  position: absolute;
+  left: 2px;
+  transform: translateY(-110%);
+  font-size: 0.68rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+.mms-tl__current {
+  fill: var(--ink-soft);
+  opacity: 0.07;
+}
+.mms-tl__tip {
+  position: absolute;
+  top: 4px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 130px;
+  max-width: 240px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-solid);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  color: var(--ink);
+  font-size: 0.76rem;
+  pointer-events: none;
+}
+.mms-tl__tip b {
+  font-size: 0.8rem;
+}
+.mms-tl__tip em {
+  font-style: normal;
+  color: var(--gold);
+}
+.mms-tl__tip > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mms-tl__tip > span strong {
+  margin-inline-start: auto;
+}
+.mms-tl__tip i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.mms-tl__note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+.mms-tl__note i {
+  width: 16px;
+  border-top: 2px dashed var(--ink-soft);
+}
+
+/* Éditeur de widget : fenêtre large (la règle 520 px des petites fenêtres ne s'applique pas ici) */
+.mms-modal__box.mms-modal__box--editor {
+  display: block;
+  width: min(1050px, 100%);
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  border-radius: 12px;
+}
+.mms-editor__types {
+  grid-auto-rows: 1fr;
+}
+.mms-editor__types button {
+  justify-content: flex-start;
+  min-height: 84px;
+}
+.mms-editor__types button span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 0.76rem;
+  line-height: 1.3;
+  text-align: center;
+}
+.mms-editor__form {
+  padding-bottom: 1.6rem;
+}
+.mms-tl > :not(.mms-tl__wrap) {
+  flex-shrink: 0;
+}
