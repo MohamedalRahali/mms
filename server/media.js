@@ -3,6 +3,7 @@ import { countList } from './intel.js'
 import { toDay } from './insights.js'
 import { mountLive } from './live.js'
 import { mountBroadcast } from './broadcast.js'
+import { mountRecordings } from './recordings.js'
 
 /**
  * Pages « الوسائط » : un tableau de bord par type de média (diffusion, podcasts, blogs, commentaires, forums).
@@ -150,6 +151,7 @@ const memo = new Map()
 export function mountMedia(app) {
   mountLive(app)
   mountBroadcast(app)
+  mountRecordings(app)
   app.get('/api/media/:type/overview', (req, res) => {
     const type = String(req.params.type)
     if (!TYPES.has(type)) return res.status(404).json({ error: 'UNKNOWN_MEDIA' })

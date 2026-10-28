@@ -78,19 +78,27 @@ async function youtubeState(url) {
   return state
 }
 
+/**
+ * Chaînes de la veille (état + réglages faits dans MMS) et chaînes du mur seulement (liveOnly), avec leurs adresses :
+ * utilisé par le mur du direct et par les enregistrements à la demande
+ */
+export function liveSources() {
+  const status = readJson(path.join(dataDir, 'libye-diffusion-etat.json'), { chaines: [] })
+  const pending = new Map((readJson(path.join(dataDir, 'libye-diffusion.json'), { sources: [] }).sources || []).map((s) => [s.id, s]))
+  const list = (status.chaines || []).map((c) => ({ ...c, ...(pending.get(c.id) || {}) }))
+  for (const s of pending.values()) if (s.ajout && !list.some((c) => c.id === s.id)) list.push(s)
+  for (const s of LIVE_ONLY) if (!list.some((c) => c.id === s.id)) list.push({ ...s, ...(pending.get(s.id) || {}), liveOnly: true })
+  return list.filter((c) => c.actif !== false)
+}
+
 export function mountLive(app) {
   app.get('/api/media/live', async (_req, res) => {
-    const status = readJson(path.join(dataDir, 'libye-diffusion-etat.json'), { chaines: [] })
-    const pending = new Map((readJson(path.join(dataDir, 'libye-diffusion.json'), { sources: [] }).sources || []).map((s) => [s.id, s]))
-    const list = (status.chaines || []).map((c) => ({ ...c, ...(pending.get(c.id) || {}) }))
-    for (const s of pending.values()) if (s.ajout && !list.some((c) => c.id === s.id)) list.push(s)
-    for (const s of LIVE_ONLY) if (!list.some((c) => c.id === s.id)) list.push({ ...s, ...(pending.get(s.id) || {}) })
+    const list = liveSources()
 
     const channels = await Promise.all(
       list
-        .filter((c) => c.actif !== false)
         .map(async (c) => {
-          const base = { id: c.id, nom: c.nom || c.id, canal: c.canal === 'radio' ? 'radio' : 'tv', last: c.dernier_enregistrement || c.dernier_succes || null }
+          const base = { id: c.id, nom: c.nom || c.id, canal: c.canal === 'radio' ? 'radio' : 'tv', last: c.dernier_enregistrement || c.dernier_succes || null, slots: Array.isArray(c.creneaux) ? c.creneaux.map(String).slice(0, 12) : [] }
           const direct = c.flux && !c.referer
           if (direct && (/\.m3u8(\?|$)/i.test(c.flux) || c.canal === 'tv')) return { ...base, mode: 'hls', src: c.flux }
           if (direct) return { ...base, mode: 'audio', src: c.flux }

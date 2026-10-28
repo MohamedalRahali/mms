@@ -7,8 +7,8 @@ import './listing.css'
 
 /** لوحات التثبيت : collections d'articles épinglés, communes à l'équipe (server/pinboards.js) */
 
-type BoardSummary = { id: string; name: string; createdBy: string; createdAt: string; count: number; updatedAt: string }
-type PinnedItem = { key: string; id: string; title: string; summary: string; url: string; origin: string; channel: string; date: string; tone: Tone | ''; addedBy: string; addedAt: string }
+export type BoardSummary = { id: string; name: string; createdBy: string; createdAt: string; count: number; updatedAt: string }
+type PinnedItem = { key: string; id: string; kind?: 'clip'; title: string; summary: string; url: string; origin: string; channel: string; date: string; tone: Tone | ''; addedBy: string; addedAt: string }
 
 const TEXT = {
   ar: {
@@ -50,7 +50,7 @@ const TEXT = {
 }
 const useText = () => TEXT[useI18n().lang === 'ar' ? 'ar' : 'en']
 
-async function listBoards(): Promise<BoardSummary[]> {
+export async function listBoards(): Promise<BoardSummary[]> {
   try {
     const r = await fetch('/api/pinboards')
     return r.ok ? (await r.json()).boards : []
@@ -187,8 +187,14 @@ export function PinboardsDialog({ onClose }: { onClose: () => void }) {
                     <b dir="auto">{x.origin}</b> · {i.dateTime(x.date)} <ToneBadge tone={x.tone} />
                   </p>
                   <a href={x.url} target="_blank" rel="noopener noreferrer" dir="auto">
+                    {x.kind === 'clip' ? '🎬 ' : ''}
                     {x.title}
                   </a>
+                  {x.kind === 'clip' && (
+                    <p className="pin-items__clip" dir="auto">
+                      {x.summary}
+                    </p>
+                  )}
                   <small>
                     📌 <span dir="ltr">{x.addedBy}</span> · {i.dateTime(x.addedAt)}
                   </small>

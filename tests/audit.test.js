@@ -182,3 +182,89 @@ test('lien public : un widget désigné par son id ne prend ses paramètres que 
   assert.equal(publicShareQuery(widgets, 'news/stats', { w: 'w1' }), null, 'route incompatible avec le type')
   assert.equal(publicShareQuery(widgets, 'news', { w: 'inconnu' }), null)
 })
+
+test('mur du direct : extrait choisi (début / fin) et chiffres par chaîne', async () => {
+  const { excerptOf, liveStats, clipOf } = await import('../server/broadcast.js')
+  const NOW3 = Date.parse('2026-10-28T20:30:00Z')
+  const words = (n, w) => Array.from({ length: n }, () => w).join(' ')
+  const transcription = `${words(50, 'أ')}. ${words(50, 'ب')}. ${words(50, 'ج')}.`
+  const it = { id: 'b1', media: 'broadcast', origin: 'قناة الوسط', channel: 'tv', subType: 'tv', title: 't', summary: '', date: new Date(NOW3 - 600_000).toISOString(), transcription }
+  const clip = clipOf(it)
+  assert.equal(clip.passages.length, 3)
+  const ex = excerptOf(clip, clip.passages[1].offset, clip.passages[2].offset)
+  assert.ok(ex.text.startsWith('ب') && ex.text.includes('ج') && !ex.text.includes('أ'))
+  assert.ok(ex.seconds > 0 && ex.to > ex.from)
+  assert.equal(excerptOf(clip, 9999, 10000), null, 'aucun passage dans la plage')
+  const other = { ...it, id: 'b2', title: 't2' }
+  const old = { ...it, id: 'b3', origin: 'قناة 218', date: new Date(NOW3 - 3 * 86_400_000).toISOString() }
+  const stats = liveStats([it, other, old], NOW3)
+  assert.equal(stats.length, 1, 'seulement les 24 dernières heures')
+  assert.deepEqual([stats[0].name, stats[0].news, stats[0].segments], ['قناة الوسط', 2, 1])
+  assert.ok(stats[0].minutes > 0 && stats[0].reach > 0)
+})
+
+test('enregistrements à la demande : période passée, durée, chevauchement fusionné, simultanés, budget, SRT', async () => {
+  const { addRecording, stopRecording, toSrt, LIMITS } = await import('../server/recordings.js')
+  const NOW = Date.parse('2026-10-28T10:00:00Z')
+  const M = 60_000
+  const iso = (t) => new Date(t).toISOString()
+  const channels = [
+    { id: 'wasat', nom: 'الوسط', canal: 'tv', slots: ['21:00-22:00'], recordable: true, inVeille: true, stream: { flux: '', youtube: '' } },
+    { id: 'tanasuh', nom: 'التناصح', canal: 'tv', slots: [], recordable: true, inVeille: false, stream: { flux: 'https://x.test/a.m3u8', youtube: '' } },
+    { id: 'nostream', nom: 'بدون', canal: 'radio', slots: [], recordable: false, inVeille: true, stream: { flux: '', youtube: '' } },
+    ...['a', 'b', 'c'].map((id) => ({ id, nom: id, canal: 'tv', slots: [], recordable: true, inVeille: true, stream: { flux: '', youtube: '' } })),
+  ]
+  const ctx = (list = [], st = { budget: { jour: 0, plafond_jour: 1.1, mois: 0, plafond_mois: 34 }, enregistrements: {} }, part = null) => ({ now: NOW, channels, list, st, part })
+  const err = (fn) => {
+    try {
+      fn()
+    } catch (e) {
+      return [e.code, e.extra]
+    }
+    return null
+  }
+  // Passé : refusé, avec le créneau du soir qui le couvre
+  const past = err(() => addRecording({ chaine: 'wasat', debut: '2026-10-27T19:10:00Z', fin: '2026-10-27T19:40:00Z' }, 'a@x', ctx()))
+  assert.equal(past[0], 'PAST')
+  assert.deepEqual(past[1].slots, ['21:00-22:00'])
+  assert.equal(err(() => addRecording({ chaine: 'nostream', debut: iso(NOW), fin: iso(NOW + 10 * M) }, '', ctx()))[0], 'NOT_RECORDABLE')
+  assert.equal(err(() => addRecording({ chaine: 'wasat', debut: iso(NOW), fin: iso(NOW + M) }, '', ctx()))[0], 'TOO_SHORT')
+  assert.equal(err(() => addRecording({ chaine: 'wasat', debut: iso(NOW), fin: iso(NOW + (LIMITS.maxMinutes + 1) * M) }, '', ctx()))[0], 'TOO_LONG')
+  // Valide ; flux transmis seulement pour une chaîne hors veille
+  const one = addRecording({ chaine: 'tanasuh', debut: iso(NOW + 10 * M), fin: iso(NOW + 40 * M) }, 'a@x', ctx())
+  assert.equal(one.item.flux, 'https://x.test/a.m3u8')
+  assert.equal(addRecording({ chaine: 'wasat', debut: iso(NOW), fin: iso(NOW + 10 * M) }, '', ctx()).item.flux, undefined, 'pas d’adresse vide')
+  assert.equal(one.estimate, 0.09)
+  // Chevauchement sur la même chaîne : une seule demande, sur l'union
+  const two = addRecording({ chaine: 'tanasuh', debut: iso(NOW + 30 * M), fin: iso(NOW + 60 * M) }, 'b@x', ctx(one.list))
+  assert.equal(two.merged, true)
+  assert.equal(two.list.length, 1)
+  assert.deepEqual([two.item.debut, two.item.fin, two.item.id], [iso(NOW + 10 * M), iso(NOW + 60 * M), one.item.id])
+  // Simultanés : au plus maxParallel
+  let list = two.list
+  for (const id of ['a', 'b']) list = addRecording({ chaine: id, debut: iso(NOW + 20 * M), fin: iso(NOW + 50 * M) }, '', ctx(list)).list
+  assert.equal(err(() => addRecording({ chaine: 'c', debut: iso(NOW + 25 * M), fin: iso(NOW + 35 * M) }, '', ctx(list)))[0], 'PARALLEL')
+  // Budget du jour : part des demandes presque consommée aujourd'hui ; demain, la part entière est disponible
+  const poor = { budget: { jour: 1.05, plafond_jour: 1.1, mois: 3, plafond_mois: 34 }, enregistrements: {} }
+  const b = err(() => addRecording({ chaine: 'c', debut: iso(NOW + 100 * M), fin: iso(NOW + 160 * M) }, '', ctx([], poor)))
+  assert.equal(b[0], 'BUDGET')
+  assert.equal(b[1].estimate, 0.18)
+  assert.ok(addRecording({ chaine: 'c', debut: iso(NOW + 24 * 60 * M), fin: iso(NOW + 25 * 60 * M) }, '', ctx([], poor)).item)
+  // Part réglée dans MMS : prioritaire sur celle de la veille
+  assert.equal(err(() => addRecording({ chaine: 'c', debut: iso(NOW + 10 * M), fin: iso(NOW + 30 * M) }, '', ctx([], undefined, 0.01)))[0], 'BUDGET')
+  // Créneaux fixes : 5 chaînes de la veille enregistrent à 21:00 (Tripoli, 4 + الوسط), une seule demande de plus passe
+  const busy = [1, 2, 3, 4].map((k) => ({ id: `f${k}`, nom: `f${k}`, canal: 'tv', slots: ['21:00-21:45'], recordable: true, inVeille: true, stream: { flux: '', youtube: '' } }))
+  const at21 = Date.parse('2026-10-28T19:00:00Z')
+  const c2 = { now: NOW, channels: [...channels, ...busy], list: [], st: null, part: 5 }
+  const l1 = addRecording({ chaine: 'a', debut: iso(at21), fin: iso(at21 + 30 * M) }, '', c2).list
+  assert.equal(err(() => addRecording({ chaine: 'b', debut: iso(at21 + 10 * M), fin: iso(at21 + 20 * M) }, '', { ...c2, list: l1 }))[0], 'CAPTURES')
+  // Arrêt : avant le début = annulation ; pendant = fin avancée
+  assert.equal(stopRecording(one.item.id, { now: NOW, list: [{ ...one.item }], st: null }).item.annule, true)
+  const during = stopRecording(one.item.id, { now: NOW + 20 * M, list: [{ ...one.item }], st: { enregistrements: { [one.item.id]: { etat: 'en_cours' } } } }).item
+  // Sans réponse de la veille 3 minutes après le début : échec expliqué, plus d'arrêt possible
+  assert.equal(err(() => stopRecording(one.item.id, { now: NOW + 20 * M, list: [{ ...one.item }], st: null }))[0], 'FINISHED')
+  assert.equal(during.fin, iso(NOW + 20 * M))
+  // SRT : blocs numérotés et heures relatives au début
+  const srt = toSrt({ debut: iso(NOW), fin: iso(NOW + 10 * M), segments: [{ debut: iso(NOW), texte: 'جملة أولى. جملة ثانية.' }] })
+  assert.match(srt, /^1\n00:00:00,000 --> 00:00:\d\d,\d{3}\nجملة أولى/)
+})

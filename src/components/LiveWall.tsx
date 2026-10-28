@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { MediaIcon } from './MediaParts'
+import { type LiveStat, LiveDesk } from './LiveDesk'
+import { Recordings } from './Recordings'
 import './live.css'
 
 /**
@@ -21,6 +23,7 @@ type LiveChannel = {
   channelId?: string
   site?: string
   last?: string | null
+  slots?: string[]
   reason?: 'referer' | 'nosource'
 }
 
@@ -50,6 +53,11 @@ const TEXT = {
     viaYoutube: 'عبر يوتيوب',
     viaHls: 'البث الرسمي',
     viaSite: 'موقع القناة',
+    stat: (n: string, m: string) => `${n} خبر · ${m} د / 24س`,
+    sortLive: 'المباشر أولاً',
+    record: 'تسجيل حسب الطلب: اختيار قناة وفترة محددة، تفريغ النص وتنزيله',
+    sortBuzz: 'الأكثر أخباراً',
+    sort: 'الترتيب',
   },
   en: {
     title: 'Live wall',
@@ -76,6 +84,11 @@ const TEXT = {
     viaYoutube: 'via YouTube',
     viaHls: 'official stream',
     viaSite: 'Channel website',
+    stat: (n: string, m: string) => `${n} news · ${m} min / 24h`,
+    sortLive: 'Live first',
+    record: 'Record on demand: pick a channel and a precise period, then read and download the transcript',
+    sortBuzz: 'Most news',
+    sort: 'Order',
   },
 }
 
@@ -161,7 +174,15 @@ function viaOf(c: LiveChannel, x: (typeof TEXT)['ar']) {
   return c.mode === 'youtube' ? x.viaYoutube : ''
 }
 
-function Tile({ c, play, onOpen }: { c: LiveChannel; play: boolean; onOpen: () => void }) {
+/** Pastille « buzz » d'une chaîne : actualités extraites et temps d'antenne des 24 dernières heures */
+function StatChip({ stat }: { stat?: LiveStat }) {
+  const i = useI18n()
+  const x = TEXT[i.lang]
+  if (!stat) return null
+  return <span className="lw-stat">{x.stat(i.num(stat.news), i.num(Math.round(stat.minutes)))}</span>
+}
+
+function Tile({ c, play, onOpen, stat }: { c: LiveChannel; play: boolean; onOpen: () => void; stat?: LiveStat }) {
   const i = useI18n()
   const x = TEXT[i.lang]
   const [ref, seen] = useOnScreen<HTMLDivElement>()
@@ -197,11 +218,12 @@ function Tile({ c, play, onOpen }: { c: LiveChannel; play: boolean; onOpen: () =
         {ok && <span className="lw-badge">{x.live}</span>}
         <span className="lw-tile__via">{viaOf(c, x)}</span>
       </button>
+      <StatChip stat={stat} />
     </div>
   )
 }
 
-function RadioTile({ c, active, onOpen }: { c: LiveChannel; active: boolean; onOpen: () => void }) {
+function RadioTile({ c, active, onOpen, stat }: { c: LiveChannel; active: boolean; onOpen: () => void; stat?: LiveStat }) {
   const i = useI18n()
   const x = TEXT[i.lang]
   const ok = playable(c)
@@ -221,11 +243,12 @@ function RadioTile({ c, active, onOpen }: { c: LiveChannel; active: boolean; onO
         </span>
       ) : null}
       <small>{ok ? x.listen : statusOf(c, x)}</small>
+      <StatChip stat={stat} />
     </button>
   )
 }
 
-function Focus({ c, onClose }: { c: LiveChannel; onClose: () => void }) {
+function Focus({ c, onClose, stat }: { c: LiveChannel; onClose: () => void; stat?: LiveStat }) {
   const i = useI18n()
   const x = TEXT[i.lang]
   const box = useRef<HTMLDivElement>(null)
@@ -301,6 +324,7 @@ function Focus({ c, onClose }: { c: LiveChannel; onClose: () => void }) {
             </a>
           )}
         </p>
+        <LiveDesk id={c.id} name={c.nom} canal={c.canal} slots={c.slots ?? []} last={c.last} via={viaOf(c, x)} stat={stat} />
       </div>
     </div>
   )
@@ -313,9 +337,13 @@ export function LiveWall() {
   const [focus, setFocus] = useState<LiveChannel | null>(null)
   const visible = usePageVisible()
   const channels = data?.channels ?? []
-  // Écrans en direct d'abord
-  const tvs = channels.filter((c) => c.canal === 'tv').sort((a, b) => Number(playable(b)) - Number(playable(a)))
-  const radios = channels.filter((c) => c.canal === 'radio').sort((a, b) => Number(playable(b)) - Number(playable(a)))
+  // Buzz de chaque chaîne (24 h), par nom de chaîne ; ordre : écrans en direct d'abord, ou chaînes les plus citées
+  const stats = new Map((useFetch<{ channels: LiveStat[] }>('/api/media/live/stats', 120_000).data?.channels ?? []).map((s) => [s.name, s]))
+  const [order, setOrder] = useState<'live' | 'buzz'>('live')
+  const rank = (a: LiveChannel, b: LiveChannel) =>
+    order === 'buzz' ? (stats.get(b.nom)?.news ?? 0) - (stats.get(a.nom)?.news ?? 0) || Number(playable(b)) - Number(playable(a)) : Number(playable(b)) - Number(playable(a))
+  const tvs = channels.filter((c) => c.canal === 'tv').sort(rank)
+  const radios = channels.filter((c) => c.canal === 'radio').sort(rank)
   const onAir = channels.filter(playable).length
 
   return (
@@ -330,6 +358,21 @@ export function LiveWall() {
         </div>
         {data && <span className="lw-onair">{x.onAir(i.num(onAir))}</span>}
       </header>
+      {data && (
+        <details className="lw-rec">
+          <summary>⏺ {x.record}</summary>
+          <Recordings />
+        </details>
+      )}
+      {data && (
+        <div className="seg lw-order" role="group" aria-label={x.sort}>
+          {(['live', 'buzz'] as const).map((o) => (
+            <button key={o} type="button" className={order === o ? 'seg__btn is-active' : 'seg__btn'} aria-pressed={order === o} onClick={() => setOrder(o)}>
+              {o === 'live' ? x.sortLive : x.sortBuzz}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && <p className="news-status news-status--error">{i.t.loadError}</p>}
       {!data && !error && <p className="news-status">{i.t.loading}</p>}
@@ -340,7 +383,7 @@ export function LiveWall() {
           {tvs.length === 0 && <p className="mms-mpage__empty">{x.noTv}</p>}
           <div className="lw-grid">
             {tvs.map((c) => (
-              <Tile key={c.id} c={c} play={visible && !focus} onOpen={() => setFocus(c)} />
+              <Tile key={c.id} c={c} play={visible && !focus} onOpen={() => setFocus(c)} stat={stats.get(c.nom)} />
             ))}
           </div>
 
@@ -350,14 +393,14 @@ export function LiveWall() {
           ) : (
             <div className="lw-radios">
               {radios.map((c) => (
-                <RadioTile key={c.id} c={c} active={focus?.id === c.id} onOpen={() => setFocus(c)} />
+                <RadioTile key={c.id} c={c} active={focus?.id === c.id} onOpen={() => setFocus(c)} stat={stats.get(c.nom)} />
               ))}
             </div>
           )}
         </>
       )}
 
-      {focus && <Focus c={focus} onClose={() => setFocus(null)} />}
+      {focus && <Focus c={focus} onClose={() => setFocus(null)} stat={stats.get(focus.nom)} />}
     </div>
   )
 }

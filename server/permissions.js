@@ -151,6 +151,7 @@ const MODULE_RULES = [
   [/^\/geo(\/|$)/, ['geo']],
   [/^\/sources(\/|$)/, ['news']],
   [/^\/pinboards(\/|$)/, ['news', 'media', 'dashboard']],
+  [/^\/recordings(\/|$)/, ['media']],
   [/^\/report$/, ['report']],
 ]
 
@@ -169,6 +170,9 @@ function actionFor(method, p) {
   if (write && p.startsWith('/watches')) return 'manage_watches'
   if (write && p.startsWith('/tags')) return 'tags'
   if (write && p.startsWith('/pinboards')) return 'tags'
+  // Enregistrements à la demande : analystes et administrateurs (mêmes profils que les tableaux d'épingles)
+  if (write && p === '/recordings/budget') return 'diffusion'
+  if (write && p.startsWith('/recordings')) return 'tags'
   if (write && /^\/reports\/[^/]+\/email$/.test(p)) return 'send_email'
   if ((write && p.startsWith('/briefing/schedule')) || p === '/briefing/send') return 'schedule'
   if (write && p.startsWith('/diffusion')) return 'diffusion'

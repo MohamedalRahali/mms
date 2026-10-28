@@ -104,7 +104,7 @@ const TEXT = {
 const useText = () => TEXT[useI18n().lang === 'ar' ? 'ar' : 'en']
 
 /** Mots surlignés dans un passage (comparaison simple, insensible à la casse) */
-function Highlight({ text, terms }: { text: string; terms: string[] }) {
+export function Highlight({ text, terms }: { text: string; terms: string[] }) {
   const usable = terms.filter((t) => t.length >= 2)
   if (!usable.length) return <>{text}</>
   const re = new RegExp(`(${usable.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi')
@@ -126,7 +126,8 @@ function Highlight({ text, terms }: { text: string; terms: string[] }) {
 const clipLink = (id: string, offset: number, q = '') => `${location.origin}/?clip=${encodeURIComponent(id)}&t=${offset}${q ? `&q=${encodeURIComponent(q)}` : ''}`
 
 /** Un extrait : en-tête, passages horodatés (cliquables : lecture de l'audio si disponible, sinon lien à copier) */
-export function ClipCard({ clip, terms, query, focus }: { clip: Clip; terms: string[]; query: string; focus?: number }) {
+// range : extrait choisi avec le découpeur du mur du direct (début et fin en secondes depuis le début de la tranche)
+export function ClipCard({ clip, terms, query, focus, range }: { clip: Clip; terms: string[]; query: string; focus?: number; range?: [number, number] }) {
   const i = useI18n()
   const b = useText()
   const [all, setAll] = useState(!clip.hits || focus != null)
@@ -218,7 +219,11 @@ export function ClipCard({ clip, terms, query, focus }: { clip: Clip; terms: str
           </div>
           <ol className="bc-passages">
             {shown.map((p) => (
-              <li key={p.n} ref={near?.n === p.n ? focused : undefined} className={`${p.hit ? 'is-hit' : ''}${near?.n === p.n ? ' is-focus' : ''}`}>
+              <li
+                key={p.n}
+                ref={near?.n === p.n ? focused : undefined}
+                className={`${p.hit ? 'is-hit' : ''}${near?.n === p.n ? ' is-focus' : ''}${range && p.offset >= range[0] && p.offset <= range[1] ? ' is-sel' : ''}`}
+              >
                 <button type="button" className="bc-passages__time" onClick={() => pick(p)} title={clip.clipUrl ? '▶' : b.approx} disabled={!clip.clipUrl}>
                   ≈ {time(p.at)}
                 </button>
@@ -362,7 +367,7 @@ export function BroadcastStudio({ days, sub, flux, channels }: { days: number; s
 }
 
 /** Extrait ouvert depuis un lien partagé (/?clip=<id>&t=<secondes>&q=…) */
-export function ClipModal({ id, t, q, onClose }: { id: string; t: number; q: string; onClose: () => void }) {
+export function ClipModal({ id, t, e, q, onClose }: { id: string; t: number; e?: number; q: string; onClose: () => void }) {
   const i = useI18n()
   const b = useText()
   const { data, error } = useFetch<Clip>(`/api/media/broadcast/clip/${encodeURIComponent(id)}${q ? `?q=${encodeURIComponent(q)}` : ''}`, 0)
@@ -372,7 +377,7 @@ export function ClipModal({ id, t, q, onClose }: { id: string; t: number; q: str
         <h3>{b.clipTitle}</h3>
         {error && <p className="news-status news-status--error">{b.notFound}</p>}
         {!data && !error && <p className="news-status">{i.t.loading}</p>}
-        {data && <ClipCard clip={data} terms={q ? [q] : []} query={q} focus={t} />}
+        {data && <ClipCard clip={data} terms={q ? [q] : []} query={q} focus={t} range={e != null && e >= t ? [t, e] : undefined} />}
         <div className="mms-modal__actions">
           <button type="button" className="news-btn news-btn--ghost" onClick={onClose}>
             {b.close}

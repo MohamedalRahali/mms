@@ -3,6 +3,7 @@ import { getItems } from './store.js'
 import { compileQuery, searchText } from './query.js'
 import { normalize } from './watches.js'
 import { toDay } from './insights.js'
+import { reachOf } from './sourceMeta.js'
 
 /**
  * Broadcasts — البث : recherche dans les transcriptions, passages horodatés, temps d'antenne estimé, extraits à partager.
@@ -180,6 +181,45 @@ export function clipOf(it, terms = [], group = [it]) {
   }
 }
 
+/**
+ * Extrait choisi dans une tranche (découpeur « بداية / نهاية ») : passages dont le décalage est entre start et end
+ * (secondes depuis le début de la tranche), avec les heures estimées de début et de fin
+ */
+export function excerptOf(clip, start, end) {
+  const a = Math.max(0, Math.min(Number(start) || 0, Number(end) || 0))
+  const b = Math.max(Number(start) || 0, Number(end) || 0)
+  const parts = clip.passages.filter((p) => p.offset >= a && p.offset <= b)
+  if (!parts.length) return null
+  const last = parts[parts.length - 1]
+  const lastSeconds = Math.round((wordsOf(last.text).length / WORDS_PER_MINUTE) * 60)
+  return {
+    start: parts[0].offset,
+    end: last.offset,
+    from: parts[0].at,
+    to: new Date(Date.parse(last.at) + lastSeconds * 1000).toISOString(),
+    seconds: last.offset + lastSeconds - parts[0].offset,
+    text: parts.map((p) => p.text).join(' '),
+  }
+}
+
+/**
+ * Chiffres de chaque chaîne pour le mur du direct (24 dernières heures) : actualités extraites (buzz), tranches
+ * enregistrées, temps d'antenne estimé, portée de la chaîne et dernière tranche
+ */
+export function liveStats(items, now = Date.now()) {
+  const pool = items.filter((it) => it.media === 'broadcast' && Date.parse(it.date) >= now - DAY && Date.parse(it.date) <= now)
+  const air = new Map(airtime(pool).channels.map((c) => [c.name, c.minutes]))
+  const rows = new Map()
+  for (const it of pool) {
+    let r = rows.get(it.origin)
+    if (!r) rows.set(it.origin, (r = { name: it.origin, news: 0, segments: new Set(), minutes: 0, reach: reachOf(it), last: it.date }))
+    r.news++
+    r.segments.add(segKey(it))
+    if (it.date > r.last) r.last = it.date
+  }
+  return [...rows.values()].map((r) => ({ ...r, segments: r.segments.size, minutes: air.get(r.name) ?? 0 })).sort((a, b) => b.news - a.news)
+}
+
 /** Fiches regroupées par tranche, dans l'ordre de la liste */
 export function bySegment(items) {
   const groups = new Map()
@@ -215,7 +255,10 @@ export function mountBroadcast(app) {
     res.json({ total: segments.length, news: found.length, page, pages, terms, items: segments.slice((page - 1) * size, page * size).map((g) => clipOf(g[0], terms, g)) })
   })
 
-  // Un extrait (lien à partager entre utilisateurs connectés : /?clip=<id>&t=<secondes>)
+  // Chiffres par chaîne pour le mur du direct
+  app.get('/api/media/live/stats', (_req, res) => res.json({ channels: liveStats(getItems().items) }))
+
+  // Un extrait (lien à partager entre utilisateurs connectés : /?clip=<id>&t=<secondes>[&e=<secondes>])
   app.get('/api/media/broadcast/clip/:id', (req, res) => {
     const it = getItems().byId.get(String(req.params.id))
     if (!it || it.media !== 'broadcast') return res.status(404).json({ error: 'NOT_FOUND' })

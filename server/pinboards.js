@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import express from 'express'
+import { clipOf, excerptOf } from './broadcast.js'
 
 /**
  * لوحات التثبيت (tableaux d'épingles) : collections d'articles épinglés, communes à l'équipe (comme les étiquettes).
@@ -70,6 +71,38 @@ export function pinItem(id, it, by) {
   return summary(b)
 }
 
+/** Épingle un extrait choisi (début / fin) d'une tranche de diffusion : texte des passages, lien vers l'extrait */
+export function pinClip(id, it, start, end, by) {
+  const b = pinboard(id)
+  if (!b) throw fail('NOT_FOUND', 404)
+  if (!it || it.media !== 'broadcast') throw fail('NO_ITEM', 404)
+  const ex = excerptOf(clipOf(it), start, end)
+  if (!ex) throw fail('EMPTY_RANGE')
+  const key = `clip:${it.id}:${ex.start}-${ex.end}`
+  if (!b.items.some((x) => x.key === key)) {
+    if (b.items.length >= MAX_ITEMS) throw fail('FULL')
+    b.items.unshift({
+      key,
+      id: it.id,
+      kind: 'clip',
+      title: String(it.title || '').slice(0, 300),
+      summary: ex.text.slice(0, 1500),
+      url: `/?clip=${encodeURIComponent(it.id)}&t=${ex.start}&e=${ex.end}`,
+      origin: it.origin,
+      channel: it.channel,
+      date: ex.from,
+      to: ex.to,
+      seconds: ex.seconds,
+      tone: it.tone || '',
+      addedBy: String(by || '').slice(0, 120),
+      addedAt: new Date().toISOString(),
+    })
+    b.updatedAt = new Date().toISOString()
+    save()
+  }
+  return summary(b)
+}
+
 export function unpinItem(id, key) {
   const b = pinboard(id)
   if (!b) throw fail('NOT_FOUND', 404)
@@ -99,5 +132,6 @@ export function mountPinboards(app, { getItems }) {
     return { ok: true }
   }))
   app.post('/api/pinboards/:id/items', express.json({ limit: '2kb' }), wrap((req) => ({ board: pinItem(String(req.params.id), getItems().byId.get(String(req.body?.id || '')), req.user.email) })))
+  app.post('/api/pinboards/:id/clips', express.json({ limit: '2kb' }), wrap((req) => ({ board: pinClip(String(req.params.id), getItems().byId.get(String(req.body?.id || '')), req.body?.start, req.body?.end, req.user.email) })))
   app.delete('/api/pinboards/:id/items', express.json({ limit: '2kb' }), wrap((req) => ({ board: unpinItem(String(req.params.id), String(req.body?.key || req.query.key || '')) })))
 }

@@ -199,7 +199,7 @@ export default function App() {
   // Lien d'un extrait de diffusion (/?clip=<id>&t=<secondes>&q=…) : la page Broadcasts s'ouvre avec l'extrait
   const [clip, setClip] = useState(() => {
     const s = new URLSearchParams(window.location.search)
-    return s.get('clip') ? { id: s.get('clip') ?? '', t: Number(s.get('t')) || 0, q: s.get('q') ?? '' } : null
+    return s.get('clip') ? { id: s.get('clip') ?? '', t: Number(s.get('t')) || 0, e: s.get('e') ? Number(s.get('e')) : undefined, q: s.get('q') ?? '' } : null
   })
   // Une seule veille (Libye) : plus de choix de source, toutes les pages couvrent toutes les sources
   const flux: Flux | '' = ''
@@ -595,7 +595,7 @@ export default function App() {
                 )}
                 {clip && hasModule(auth?.user, 'media') && (
                   <Suspense fallback={null}>
-                    <ClipModal id={clip.id} t={clip.t} q={clip.q} onClose={() => setClip(null)} />
+                    <ClipModal id={clip.id} t={clip.t} e={clip.e} q={clip.q} onClose={() => setClip(null)} />
                   </Suspense>
                 )}
               </div>
