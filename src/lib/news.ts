@@ -113,6 +113,8 @@ export type Stats = {
   engagement?: EngagementTotals
   topEngaged?: NewsItem[]
   countries?: Count[]
+  languages?: Count[]
+  regions?: Count[]
   lastUpdate: string | null
   demo: boolean
 }

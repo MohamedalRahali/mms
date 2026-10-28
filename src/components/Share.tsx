@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { type Board, ROW_PX, GAP_PX } from '../lib/dashboards'
-import { useI18n } from '../lib/i18n'
+import { I18nContext, makeI18n, useI18n } from '../lib/i18n'
+import { applyTheme } from '../lib/fx'
 import { WidgetBody, useWidgetTitles } from './Charts'
 import { type WidgetConf } from '../lib/dashboards'
 import './listing.css'
@@ -42,6 +43,13 @@ const TEXT = {
     expired: 'هذا الرابط غير صالح أو انتهت صلاحيته.',
     readOnly: 'لوحة مشتركة للقراءة فقط',
     unsaved: 'احفظ اللوحة أولاً («تعديل اللوحة» ثم «حفظ») قبل مشاركتها.',
+    publish: 'خيارات العرض',
+    pageTitle: 'عنوان الصفحة (اختياري)',
+    theme: 'المظهر',
+    themes: { '': 'حسب جهاز الزائر', dark: 'داكن', light: 'فاتح' } as Record<string, string>,
+    lang: 'اللغة',
+    autoscroll: 'تمرير تلقائي لتدفقات الأخبار (شاشة عرض)',
+    hideFooter: 'إخفاء التذييل',
   },
   en: {
     share: 'Share',
@@ -63,8 +71,17 @@ const TEXT = {
     expired: 'This link is invalid or has expired.',
     readOnly: 'Shared read-only dashboard',
     unsaved: 'Save the dashboard first (“Edit” then “Save”) before sharing it.',
+    publish: 'Display options',
+    pageTitle: 'Page title (optional)',
+    theme: 'Theme',
+    themes: { '': "Visitor's device", dark: 'Dark', light: 'Light' } as Record<string, string>,
+    lang: 'Language',
+    autoscroll: 'Auto-scroll news feeds (wall screen)',
+    hideFooter: 'Hide footer',
   },
 }
+
+export type ShareOptions = { title?: string; theme?: '' | 'dark' | 'light'; lang?: 'ar' | 'en'; autoscroll?: boolean; hideFooter?: boolean }
 
 type ShareRow = { id: string; boardId: string; boardName: string; createdBy: string; createdAt: string; expiresAt: string; status: string; views: number }
 
@@ -73,6 +90,8 @@ export function ShareDialog({ board, boardName, onClose, onPersist }: { board: B
   const i = useI18n()
   const s = TEXT[i.lang === 'ar' ? 'ar' : 'en']
   const [days, setDays] = useState(7)
+  const [options, setOptions] = useState<ShareOptions>({ title: '', theme: '', lang: i.lang === 'en' ? 'en' : 'ar', autoscroll: false, hideFooter: false })
+  const opt = (patch: Partial<ShareOptions>) => setOptions((o) => ({ ...o, ...patch }))
   const [link, setLink] = useState('')
   const [copied, setCopied] = useState(false)
   const [rows, setRows] = useState<ShareRow[]>([])
@@ -88,7 +107,7 @@ export function ShareDialog({ board, boardName, onClose, onPersist }: { board: B
   }, [board.id])
   async function create() {
     setMsg('')
-    const post = () => fetch('/api/shares', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ boardId: board.id, boardName, days }) })
+    const post = () => fetch('/api/shares', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ boardId: board.id, boardName, days, options }) })
     let res = await post()
     if (res.status === 404 && onPersist && (await onPersist())) res = await post()
     const json = await res.json().catch(() => ({}))
@@ -119,6 +138,40 @@ export function ShareDialog({ board, boardName, onClose, onPersist }: { board: B
             ))}
           </select>
         </label>
+        <details className="mms-shareopts">
+          <summary>{s.publish}</summary>
+          <label>
+            <span>{s.pageTitle}</span>
+            <input value={options.title} onChange={(e) => opt({ title: e.target.value })} maxLength={120} dir="auto" placeholder={boardName} />
+          </label>
+          <div className="mms-shareopts__row">
+            <label>
+              <span>{s.theme}</span>
+              <select value={options.theme} onChange={(e) => opt({ theme: e.target.value as ShareOptions['theme'] })}>
+                {['', 'dark', 'light'].map((t) => (
+                  <option key={t} value={t}>
+                    {s.themes[t]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>{s.lang}</span>
+              <select value={options.lang} onChange={(e) => opt({ lang: e.target.value as 'ar' | 'en' })}>
+                <option value="ar">العربية</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+          </div>
+          <label className="mms-shareopts__check">
+            <input type="checkbox" checked={options.autoscroll} onChange={(e) => opt({ autoscroll: e.target.checked })} />
+            <span>{s.autoscroll}</span>
+          </label>
+          <label className="mms-shareopts__check">
+            <input type="checkbox" checked={options.hideFooter} onChange={(e) => opt({ hideFooter: e.target.checked })} />
+            <span>{s.hideFooter}</span>
+          </label>
+        </details>
         <div className="mms-modal__actions">
           <button type="button" className="news-btn" onClick={create}>
             {s.create}
@@ -188,16 +241,38 @@ function SharedWidget({ conf }: { conf: WidgetConf }) {
 }
 
 /** Page publique /share/<jeton> : le tableau, en lecture seule, avec le logo du client */
+type SharedData = { board: Board; expiresAt: string; brand: Brand; options?: ShareOptions }
+
 export function SharedBoard({ token }: { token: string }) {
-  const i = useI18n()
-  const s = TEXT[i.lang === 'ar' ? 'ar' : 'en']
-  const [data, setData] = useState<{ board: Board; expiresAt: string; brand: Brand } | null | undefined>(undefined)
+  const outer = useI18n()
+  const [data, setData] = useState<SharedData | null | undefined>(undefined)
   useEffect(() => {
     fetch(`/api/public/share/${encodeURIComponent(token)}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then(setData)
+      .then((d: SharedData | null) => {
+        // Options choisies à la publication : thème imposé, défilement automatique des fils
+        if (d?.options?.theme) applyTheme(d.options.theme)
+        if (d?.options?.autoscroll) document.documentElement.dataset.autoscroll = '1'
+        setData(d)
+      })
       .catch(() => setData(null))
   }, [token])
+  // La langue de l'adresse (?lang=) l'emporte sur celle choisie à la publication
+  const asked = new URLSearchParams(location.search).get('lang')
+  const lang = asked ? outer.lang : data?.options?.lang === 'en' ? 'en' : outer.lang
+  return (
+    <I18nContext.Provider value={lang === outer.lang ? outer : makeI18n(lang)}>
+      <SharedPage data={data} />
+    </I18nContext.Provider>
+  )
+}
+
+function SharedPage({ data }: { data: SharedData | null | undefined }) {
+  const i = useI18n()
+  const s = TEXT[i.lang === 'ar' ? 'ar' : 'en']
+  useEffect(() => {
+    if (data) document.title = data.options?.title || data.board.name || data.brand.name || 'MMS'
+  }, [data])
   if (data === undefined) return <div className="mms-boot" aria-busy="true" />
   if (!data)
     return (
@@ -211,7 +286,7 @@ export function SharedBoard({ token }: { token: string }) {
       <header className="mms-boardhead">
         <img src={data.brand.logo || '/logo-npdc.png'} alt={data.brand.name || ''} />
         <div>
-          <h2 dir="auto">{data.board.name || data.brand.name || 'MMS'}</h2>
+          <h2 dir="auto">{data.options?.title || data.board.name || data.brand.name || 'MMS'}</h2>
           <small>
             {s.readOnly} · {s.until(i.dateTime(data.expiresAt))}
           </small>
@@ -222,9 +297,11 @@ export function SharedBoard({ token }: { token: string }) {
           <SharedWidget key={w.id} conf={w} />
         ))}
       </div>
-      <p className="mms-shared__foot" dir="ltr">
-        MMS — Around Expressions
-      </p>
+      {!data.options?.hideFooter && (
+        <p className="mms-shared__foot" dir="ltr">
+          MMS — Around Expressions
+        </p>
+      )}
     </div>
   )
 }

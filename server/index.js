@@ -37,6 +37,7 @@ import { canSendAlert, initAlertFlow, mountAlertFlow, withFlow } from './alertFl
 import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionOf, regionStats, resolveEntities } from './entities.js'
 import { initPinboards, mountPinboards } from './pinboards.js'
 import { dispatchHistory, initDispatchLog, logDispatch } from './dispatchLog.js'
+import { SPLITS, STEPS, timeline } from './timeline.js'
 import { setEntityResolver } from './store.js'
 
 /** Serveur MMS : API de lecture des actualités + site compilé (dist/) en production */
@@ -238,10 +239,10 @@ app.get('/api/public/share/:token', publicLimit, (req, res) => {
   if (!share || !board) return res.status(404).json({ error: 'NOT_FOUND' })
   countView(share)
   res.setHeader('X-Robots-Tag', 'noindex')
-  res.json({ board: { id: board.id, name: board.name || share.boardName, widgets: board.widgets }, expiresAt: share.expiresAt, brand: brandOf() })
+  res.json({ board: { id: board.id, name: board.name || share.boardName, widgets: board.widgets }, expiresAt: share.expiresAt, brand: brandOf(), options: share.options || {} })
 })
 // Données des widgets du tableau partagé : seulement les appels qu'un de ses widgets ferait, avec ses paramètres
-app.get(/^\/api\/public\/share\/([A-Za-z0-9_-]{43})\/(news\/stats|news|radar\/(?:emerging|stories|sentiment|alerts))$/, publicLimit, async (req, res) => {
+app.get(/^\/api\/public\/share\/([A-Za-z0-9_-]{43})\/(news\/stats|news\/timeline|news|radar\/(?:emerging|stories|sentiment|alerts))$/, publicLimit, async (req, res) => {
   const [token, route] = [req.params[0], req.params[1]]
   const share = shareFor(token)
   const board = share && (readBoards() || []).find((b) => b.id === share.boardId)
@@ -249,6 +250,7 @@ app.get(/^\/api\/public\/share\/([A-Za-z0-9_-]{43})\/(news\/stats|news|radar\/(?
   if (!query) return res.status(404).json({ error: 'NOT_FOUND' })
   res.setHeader('X-Robots-Tag', 'noindex')
   if (route === 'news/stats') return res.json(statsData(query))
+  if (route === 'news/timeline') return res.json(timelineData(query))
   if (route === 'news') {
     const data = await newsData(query)
     // Pas de commentaires ni d'étiquettes ou de statut d'équipe dans un lien public
@@ -386,6 +388,25 @@ app.get('/api/news', async (req, res) => {
   res.json(data)
 })
 
+// Courbe dans le temps des tableaux de bord : pas (heure → année), découpage, comparaison de recherches enregistrées
+function timelineData(q) {
+  const { items } = getItems()
+  const watches = enabledWatches()
+  const base = { ...q, days: '' }
+  const compare = String(q.compare || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 4)
+  if (q.split === 'compare' && compare.length) {
+    const groups = compare.map((id) => ({ name: watches.find((w) => w.id === id)?.name || id, items: applyFilters(itemsForWatch(id, items) || [], { ...base, watch: '' }) }))
+    return timeline([], { days: q.days, step: q.step, groups })
+  }
+  const pool = q.watch ? itemsForWatch(String(q.watch), items) || [] : items
+  return timeline(applyFilters(pool, { ...base, watch: '' }), { days: q.days, step: q.step, split: q.split === 'compare' ? '' : q.split })
+}
+app.get('/api/news/timeline', (req, res) => res.json(timelineData(req.query)))
+
 // Répartition par région de la Libye (ouest, est, sud) et par municipalité, mêmes filtres que la liste
 app.get('/api/news/regions', (req, res) => {
   const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 365)
@@ -426,7 +447,7 @@ app.post('/api/shares', express.json({ limit: '2kb' }), (req, res) => {
   const board = (readBoards() || []).find((b) => b.id === String(req.body?.boardId || ''))
   if (!board) return res.status(404).json({ error: 'NO_BOARD' })
   try {
-    const { share, token } = createShare({ boardId: board.id, boardName: board.name || String(req.body?.boardName || ''), days: req.body?.days, by: req.user.email })
+    const { share, token } = createShare({ boardId: board.id, boardName: board.name || String(req.body?.boardName || ''), days: req.body?.days, by: req.user.email, options: req.body?.options })
     logSecurity('share_create', { ip: String(req.ip || '').replace(/^::ffff:/, ''), ua: String(req.headers['user-agent'] || ''), login: req.user.email, detail: `${board.id} ${share.expiresAt}` })
     res.status(201).json({ share, token })
   } catch (err) {
@@ -529,7 +550,8 @@ app.get('/api/news/stats', (req, res) => res.json(statsData(req.query)))
 function statsData(q) {
   const cache = getItems()
   const { lastUpdate, demo } = cache
-  const items = poolOf(cache, q)
+  // Widget fondé sur une recherche enregistrée : mêmes règles que la veille
+  const items = q.watch ? itemsForWatch(String(q.watch), poolOf(cache, q)) || [] : poolOf(cache, q)
   const days = Math.min(Math.max(Number(q.days) || 30, 1), 365)
   const found = applyFilters(items, { ...q, days })
   const foundComments = q.media === 'comment' ? found : applyFilters(cache.comments, { ...q, media: '', days })
@@ -557,6 +579,8 @@ function statsData(q) {
       'tone',
     ),
     toneDays: toneDays(found, perDay),
+    languages: counts(found.filter((it) => it.lang), 'lang'),
+    regions: Object.entries(regionStats(found).regions).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
     people: countList(found, 'people'),
     orgs: countList(found, 'orgs'),
     places: countList(found, 'places'),
@@ -910,8 +934,9 @@ app.post('/api/radar/explain', express.json({ limit: '2kb' }), async (req, res) 
 
 // Tableaux de bord composés par les clients, communs à tous les postes : data/dashboards.json
 const BOARDS_FILE = path.join(root, 'data', 'dashboards.json')
-const TYPES = new Set(['news', 'bars', 'columns', 'pie', 'line', 'kpi', 'table', 'cloud', 'tone', 'emerging', 'stories', 'alerts', 'mood'])
-const DIMS = ['channels', 'categories', 'sources', 'flux', 'tones', 'people', 'orgs', 'places']
+const TYPES = new Set(['news', 'bars', 'columns', 'pie', 'line', 'kpi', 'table', 'cloud', 'tone', 'emerging', 'stories', 'alerts', 'mood', 'timeline', 'treemap', 'feed', 'text'])
+const DIMS = ['channels', 'categories', 'sources', 'flux', 'tones', 'people', 'orgs', 'places', 'languages', 'media', 'countries', 'regions']
+const STYLES = ['area', 'stacked', 'line', 'bars']
 const int = (v, min, max) => Math.min(Math.max(Math.round(Number(v) || 0), min), max)
 const str = (v, max) => String(v ?? '').slice(0, max)
 
@@ -934,6 +959,15 @@ function cleanBoards(input) {
         dim: DIMS.includes(w.dim) ? w.dim : 'channels',
         metric: ['total', 'broadcasts', 'sources', 'average'].includes(w.metric) ? w.metric : 'total',
         category: str(w.category, 60),
+        // Source de données : recherche enregistrée (veille) et/ou mots-clés ; comparaison de veilles (courbe)
+        q: str(w.q, 300),
+        watch: str(w.watch, 40),
+        compare: (Array.isArray(w.compare) ? w.compare : []).map((x) => str(x, 40)).filter(Boolean).slice(0, 4),
+        channel: str(w.channel, 60),
+        step: STEPS.includes(w.step) ? w.step : 'day',
+        split: SPLITS.includes(w.split) ? w.split : '',
+        style: STYLES.includes(w.style) ? w.style : 'area',
+        text: str(w.text, 1000),
         x: int(w.x, 0, 11),
         y: int(w.y, 0, 1000),
         w: int(w.w, 2, 12),

@@ -152,3 +152,30 @@ test('سجل الإرسال : lignes horodatées, sans adresses, plus récentes 
   assert.deepEqual(rows[1].channels, ['email', 'telegram'])
   assert.ok(!JSON.stringify(rows).includes('@'))
 })
+
+test('courbe : pas de temps, découpage, buckets vides, comparaison de recherches', async () => {
+  const { timeline, bucketOf } = await import('../server/timeline.js')
+  const NOW2 = Date.parse('2026-10-28T12:00:00Z')
+  const H2 = 3_600_000
+  const mk = (h, extra = {}) => ({ date: new Date(NOW2 - h * H2).toISOString(), channel: 'site', title: 'x', summary: '', ...extra })
+  const items = [mk(1), mk(2, { channel: 'tv' }), mk(30), mk(30, { channel: 'tv' }), mk(30, { channel: 'tv' })]
+  const t = timeline(items, { days: 3, step: 'day', split: 'channel', now: NOW2 })
+  assert.equal(t.buckets.length, 4) // 25, 26, 27 et 28 octobre
+  const tv = t.series.find((s) => s.key === 'tv')
+  assert.deepEqual(tv.values, [0, 0, 2, 1])
+  assert.equal(bucketOf(Date.parse('2026-10-28T12:00:00Z'), 'week'), '2026-10-26')
+  assert.equal(bucketOf(Date.parse('2026-10-28T12:00:00Z'), 'quarter'), '2026-T4')
+  const h = timeline(items, { days: 30, step: 'hour', now: NOW2 })
+  assert.equal(h.days, 7, 'pas horaire limité à 7 jours')
+  const c = timeline([], { days: 3, groups: [{ name: 'A', items: items.slice(0, 2) }, { name: 'B', items: [] }], now: NOW2 })
+  assert.deepEqual(c.series.map((s) => [s.key, s.total]), [['A', 2], ['B', 0]])
+})
+
+test('lien public : un widget désigné par son id ne prend ses paramètres que du tableau', async () => {
+  const { publicShareQuery } = await import('../server/shares.js')
+  const widgets = [{ id: 'w1', type: 'timeline', days: 30, flux: '', q: 'النفط', watch: '', category: '', step: 'week', split: 'channel', compare: [] }, { id: 'w2', type: 'feed', days: 7, flux: '', q: '', watch: 'abc', category: '', channel: 'tv' }]
+  assert.deepEqual(publicShareQuery(widgets, 'news/timeline', { w: 'w1', q: 'سرّي', days: '365' }), { days: '30', q: 'النفط', step: 'week', split: 'channel' })
+  assert.deepEqual(publicShareQuery(widgets, 'news', { w: 'w2', size: '100' }), { days: '7', watch: 'abc', size: '20', channel: 'tv' })
+  assert.equal(publicShareQuery(widgets, 'news/stats', { w: 'w1' }), null, 'route incompatible avec le type')
+  assert.equal(publicShareQuery(widgets, 'news', { w: 'inconnu' }), null)
+})

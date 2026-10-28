@@ -1,11 +1,14 @@
-import { useContext, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { shortDay, useHistory } from '../lib/history'
 import { BuzzBars, NewsDigest } from './Dashboard'
-import { type Count, type Filters, type Stats, type Tone, DrillContext, TONES, useFetch } from '../lib/news'
+import { NewsCard } from './NewsCard'
+import { useMedia } from '../lib/media'
+import { countryName, flagOf } from '../lib/listing'
+import { type Count, type Filters, type NewsResponse, type Stats, type Tone, DrillContext, TONES, useFetch } from '../lib/news'
 import { TONE_COLORS, useIntel } from '../lib/intel'
 import { useI18n } from '../lib/i18n'
 import { useCountUp } from '../lib/motion'
-import { BUILDER_TEXT, type Dim, type WidgetConf } from '../lib/dashboards'
+import { BUILDER_TEXT, type Dim, type Step, type WidgetConf } from '../lib/dashboards'
 import { RadarWidget } from './Radar'
 import { hasModule, useAuth } from '../lib/auth'
 
@@ -52,6 +55,10 @@ const DRILL_KEY: Partial<Record<Dim, keyof Filters>> = {
   people: 'entity',
   orgs: 'entity',
   places: 'entity',
+  languages: 'lang',
+  media: 'media',
+  countries: 'country',
+  regions: 'region',
 }
 
 /** Clic sur une part, une barre ou un mot : la liste des actualités correspondantes, sur la période du widget */
@@ -67,10 +74,19 @@ function useDrill(dim: Dim, days: number) {
 function useLabel(dim: Dim) {
   const i = useI18n()
   const x = useIntel()
+  const m = useMedia()
   const b = BUILDER_TEXT[i.lang]
   return (name: string) =>
     name === '__other'
       ? b.other
+      : dim === 'languages'
+        ? i.language(name)
+        : dim === 'media'
+          ? (m.types[name as keyof typeof m.types] ?? name)
+          : dim === 'countries'
+            ? `${flagOf(name)} ${countryName(name, i.lang)}`
+            : dim === 'regions'
+              ? (REGION_TEXT[i.lang][name] ?? name)
       : dim === 'channels'
         ? i.channel(name)
         : dim === 'categories'
@@ -317,8 +333,12 @@ function Kpi({ stats, metric }: { stats: Stats; metric: WidgetConf['metric'] }) 
 }
 
 function rowsOf(stats: Stats, dim: Dim): Count[] {
+  return rawRows(stats, dim).filter((r) => r.count > 0)
+}
+
+function rawRows(stats: Stats, dim: Dim): Count[] {
   if (dim === 'tones') return TONES.map((t) => stats.tones?.find((r) => r.name === t)).filter((r): r is Count => Boolean(r))
-  if (dim === 'people' || dim === 'orgs' || dim === 'places') return stats[dim] ?? []
+  if (dim === 'people' || dim === 'orgs' || dim === 'places' || dim === 'languages' || dim === 'media' || dim === 'countries' || dim === 'regions') return stats[dim] ?? []
   return dim === 'channels' ? stats.channels : dim === 'categories' ? stats.categories : dim === 'flux' ? stats.flux : stats.sources
 }
 
@@ -366,7 +386,7 @@ export function ToneTrend({ days, onPick }: { days: NonNullable<Stats['toneDays'
 
 function StatsBody({ conf }: { conf: WidgetConf }) {
   const i = useI18n()
-  const { data, error } = useFetch<Stats>(`/api/news/stats?days=${conf.days}${conf.flux ? `&flux=${conf.flux}` : ''}`)
+  const { data, error } = useFetch<Stats>(`/api/news/stats?${widgetParams(conf)}`)
   const label = useLabel(conf.dim)
   const pick = useDrill(conf.dim, conf.days)
   const pickTone = useDrill('tones', conf.days)
@@ -381,6 +401,7 @@ function StatsBody({ conf }: { conf: WidgetConf }) {
   if (conf.type === 'columns') return <Columns rows={rows} dim={conf.dim} onPick={pick} />
   if (conf.type === 'pie') return <Donut rows={rows} dim={conf.dim} onPick={pick} />
   if (conf.type === 'table') return <Table rows={rows} dim={conf.dim} onPick={pick} />
+  if (conf.type === 'treemap') return <Treemap rows={rows} dim={conf.dim} onPick={pick} />
   return <Cloud rows={rows} dim={conf.dim} onPick={pick} />
 }
 
@@ -394,7 +415,10 @@ export function WidgetBody({ conf }: { conf: WidgetConf }) {
     ) : (
       <p className="news-status">{lang === 'ar' ? 'هذه الأداة غير متاحة في ملف صلاحياتك.' : 'Not available for your profile.'}</p>
     )
-  if (conf.type === 'news') return <NewsDigest flux={conf.flux} days={conf.days} category={conf.category} />
+  if (conf.type === 'news') return <NewsDigest flux={conf.flux} days={conf.days} category={conf.category} extra={{ w: conf.id, q: conf.q?.trim() ?? '', watch: conf.watch ?? '' }} />
+  if (conf.type === 'timeline') return <TimelineWidget conf={conf} />
+  if (conf.type === 'feed') return <FeedWidget conf={conf} />
+  if (conf.type === 'text') return <TextWidget conf={conf} />
   return <StatsBody conf={conf} />
 }
 
@@ -404,12 +428,19 @@ export function useWidgetTitles(conf: WidgetConf) {
   const b = BUILDER_TEXT[i.lang]
   const history = useHistory()
   const since = history?.since ? ` · ${i.lang === 'ar' ? 'منذ' : 'since'} ${shortDay(history.since)}` : ''
-  const path = `MMS / ${conf.flux ? i.flux(conf.flux) : i.t.allSources} / ${b.days(conf.days)}${since}`
+  const scope = conf.q?.trim() ? ` / « ${conf.q.trim()} »` : ''
+  const path = conf.type === 'text' ? 'MMS' : `MMS / ${conf.flux ? i.flux(conf.flux) : i.t.allSources}${scope} / ${b.days(conf.days)}${since}`
   const auto =
     conf.type === 'news'
       ? conf.category
         ? `${i.t.digest} / ${i.category(conf.category)}`
         : i.t.digest
+      : conf.type === 'timeline'
+        ? `${b.types.timeline} / ${b.steps[conf.step ?? 'day']}${conf.split ? ` / ${b.splits[conf.split]}` : ''}`
+        : conf.type === 'feed'
+          ? `${b.types.feed}${conf.channel ? ` / ${i.channel(conf.channel)}` : ''}`
+          : conf.type === 'text'
+            ? b.types.text
       : conf.type === 'line'
         ? b.perDay
         : conf.type === 'tone' || conf.type === 'emerging' || conf.type === 'stories' || conf.type === 'alerts' || conf.type === 'mood'
@@ -418,4 +449,245 @@ export function useWidgetTitles(conf: WidgetConf) {
             ? b.metrics[conf.metric]
             : `${b.dims[conf.dim]} / ${b.types[conf.type]}`
   return { path, title: conf.title.trim() || auto }
+}
+
+/** Paramètres communs d'un widget : période, flux, recherche enregistrée, mots-clés ; w désigne le widget sur un lien public */
+function widgetParams(conf: WidgetConf, extra: Record<string, string> = {}) {
+  const p = new URLSearchParams({ days: String(conf.days), w: conf.id })
+  if (conf.flux) p.set('flux', conf.flux)
+  if (conf.q?.trim()) p.set('q', conf.q.trim())
+  if (conf.watch) p.set('watch', conf.watch)
+  for (const [k, v] of Object.entries(extra)) if (v) p.set(k, v)
+  return p.toString()
+}
+
+type Timeline = { step: Step; days: number; buckets: string[]; series: { key: string; values: number[]; total: number }[] }
+
+const REGION_TEXT = { ar: { west: 'الغرب', east: 'الشرق', south: 'الجنوب' }, en: { west: 'West', east: 'East', south: 'South' } } as Record<string, Record<string, string>>
+
+/** Libellé d'un pas de temps : jour et semaine en date courte, heure avec l'heure, mois, trimestre et année tels quels */
+function bucketLabel(b: string, step: Step, day: (d: string) => string) {
+  if (step === 'hour') return `${day(b.slice(0, 10))} ${b.slice(11, 13)}:00`
+  if (step === 'day' || step === 'week') return day(b)
+  return b
+}
+
+/** Courbe dans le temps : une série ou plusieurs (canal, tonalité, média, thème, veilles comparées) */
+function TimelineWidget({ conf }: { conf: WidgetConf }) {
+  const i = useI18n()
+  const x = useIntel()
+  const m = useMedia()
+  const b = BUILDER_TEXT[i.lang]
+  const split = conf.split ?? ''
+  const extra = { step: conf.step ?? 'day', split, compare: split === 'compare' ? (conf.compare ?? []).join(',') : '' }
+  const { data, error } = useFetch<Timeline>(`/api/news/timeline?${widgetParams(conf, extra)}`)
+  const [hover, setHover] = useState<number | null>(null)
+  const [hidden, setHidden] = useState<string[]>([])
+  // Nombre de dates lisibles sous la courbe selon la largeur réelle du widget
+  const axis = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(600)
+  useEffect(() => {
+    const el = axis.current
+    if (!el) return
+    const ro = new ResizeObserver(([e]) => setWidth(e.contentRect.width))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [data])
+  if (error) return <p className="news-status news-status--error">{i.t.loadError}</p>
+  if (!data) return <p className="news-status">{i.t.loading}</p>
+  if (data.series.every((s) => s.total === 0)) return <p className="news-status">{i.t.noData}</p>
+  const style = conf.style ?? 'area'
+  const label = (key: string) =>
+    key === 'total' ? b.total : key === 'other' ? b.other : split === 'channel' ? i.channel(key) : split === 'tone' ? (x.tones[key as Tone] ?? key) : split === 'category' ? i.category(key) : split === 'media' ? (m.types[key as keyof typeof m.types] ?? key) : key
+  const color = (key: string, k: number) =>
+    key === 'other' ? OTHER : split === 'channel' ? (CHANNEL_COLORS[key] ?? SERIES[k]) : split === 'tone' ? (TONE_COLORS[key as Tone] ?? SERIES[k]) : split === 'category' ? colorFor('categories', key, k) : SERIES[k % SERIES.length]
+  const shown = data.series.map((s, k) => ({ ...s, color: color(s.key, k) })).filter((s) => !hidden.includes(s.key))
+  const n = data.buckets.length
+  const W = 600
+  const H = 200
+  const stacked = style === 'stacked' || style === 'bars'
+  // Bases cumulées pour l'empilement
+  const base = shown.map(() => new Array(n).fill(0))
+  if (stacked) for (let s = 1; s < shown.length; s++) for (let k = 0; k < n; k++) base[s][k] = base[s - 1][k] + shown[s - 1].values[k]
+  const top = (s: number, k: number) => (stacked ? base[s][k] : 0) + shown[s].values[k]
+  const max = Math.max(1, ...shown.flatMap((_, s) => data.buckets.map((__, k) => top(s, k))))
+  const X = (k: number) => (n === 1 ? W / 2 : (k / (n - 1)) * W)
+  const Y = (v: number) => H - (v / max) * (H - 8)
+  const slot = W / n
+  const tick = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(width / 95))))
+  const readout =
+    hover !== null
+      ? `${bucketLabel(data.buckets[hover], data.step, i.day)} : ${shown.map((s) => `${label(s.key)} ${i.num(s.values[hover])}`).join(' · ')}`
+      : `${b.steps[data.step]} · ${b.total} ${i.num(shown.reduce((t, s) => t + s.total, 0))}`
+  return (
+    <div className="mms-tl">
+      <p className="mms-chart__readout" dir="auto">
+        {readout}
+      </p>
+      <svg
+        className="mms-tl__plot"
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={readout}
+        onMouseLeave={() => setHover(null)}
+        onMouseMove={(e) => {
+          const r = e.currentTarget.getBoundingClientRect()
+          const k = Math.round(((e.clientX - r.left) / r.width) * (style === 'bars' ? n - 0.5 : n - 1) - (style === 'bars' ? 0.25 : 0))
+          setHover(Math.min(Math.max(k, 0), n - 1))
+        }}
+      >
+        {[0.25, 0.5, 0.75].map((f) => (
+          <line key={f} x1="0" x2={W} y1={H - f * (H - 8)} y2={H - f * (H - 8)} className="mms-tl__grid" />
+        ))}
+        {style === 'bars'
+          ? shown.map((s, si) =>
+              s.values.map((v, k) =>
+                v ? <rect key={`${s.key}-${k}`} x={k * slot + slot * 0.15} width={slot * 0.7} y={Y(top(si, k))} height={Y(base[si][k]) - Y(top(si, k))} fill={s.color} opacity={hover === null || hover === k ? 1 : 0.5} /> : null,
+              ),
+            )
+          : shown.map((s, si) => {
+              const line = s.values.map((_, k) => `${X(k)},${Y(top(si, k))}`).join(' ')
+              const floor = s.values.map((_, k) => `${X(n - 1 - k)},${Y(stacked ? base[si][n - 1 - k] : 0)}`).join(' ')
+              return (
+                <g key={s.key}>
+                  {style !== 'line' && <polygon points={`${line} ${floor}`} fill={s.color} opacity={stacked ? 0.75 : 0.22} />}
+                  <polyline points={line} fill="none" stroke={s.color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+                </g>
+              )
+            })}
+        {hover !== null && style !== 'bars' && <line x1={X(hover)} x2={X(hover)} y1="0" y2={H} className="mms-tl__cursor" />}
+      </svg>
+      <div className="mms-tl__axis" dir="ltr" ref={axis}>
+        {data.buckets.map((bk, k) => (
+          <span key={bk} style={{ insetInlineStart: `${style === 'bars' ? (k + 0.5) * (100 / n) : n === 1 ? 50 : (k / (n - 1)) * 100}%` }}>
+            {k % tick === 0 ? bucketLabel(bk, data.step, i.day) : ''}
+          </span>
+        ))}
+      </div>
+      {(data.series.length > 1 || hidden.length > 0) && (
+        <ul className="mms-tl__legend">
+          {data.series.map((s, k) => (
+            <li key={s.key}>
+              <button type="button" aria-pressed={!hidden.includes(s.key)} onClick={() => setHidden((h) => (h.includes(s.key) ? h.filter((v) => v !== s.key) : [...h, s.key]))}>
+                <i style={{ background: color(s.key, k) }} />
+                <span dir="auto">{label(s.key)}</span> <b>{i.num(s.total)}</b>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/** Mosaïque de rectangles proportionnels (découpe en deux moitiés de poids voisins, dans le sens le plus long) */
+function layoutTree(rows: Count[], x: number, y: number, w: number, h: number, out: { r: Count; k: number; x: number; y: number; w: number; h: number }[], offset = 0) {
+  if (!rows.length) return out
+  if (rows.length === 1) {
+    out.push({ r: rows[0], k: offset, x, y, w, h })
+    return out
+  }
+  const total = rows.reduce((t, r) => t + r.count, 0) || 1
+  let acc = 0
+  let cut = 1
+  for (let k = 0; k < rows.length - 1; k++) {
+    acc += rows[k].count
+    cut = k + 1
+    if (acc >= total / 2) break
+  }
+  const left = rows.slice(0, cut)
+  const share = left.reduce((t, r) => t + r.count, 0) / total
+  if (w >= h) {
+    layoutTree(left, x, y, w * share, h, out, offset)
+    layoutTree(rows.slice(cut), x + w * share, y, w * (1 - share), h, out, offset + cut)
+  } else {
+    layoutTree(left, x, y, w, h * share, out, offset)
+    layoutTree(rows.slice(cut), x, y + h * share, w, h * (1 - share), out, offset + cut)
+  }
+  return out
+}
+
+/** Texte foncé sur couleur claire, blanc sur couleur sombre */
+function inkOn(hex: string) {
+  const v = /^#([0-9a-f]{6})$/i.exec(hex)?.[1]
+  if (!v) return '#06170f'
+  const [r, g, b] = [0, 2, 4].map((k) => parseInt(v.slice(k, k + 2), 16))
+  return 0.299 * r + 0.587 * g + 0.114 * b > 140 ? '#06170f' : '#ffffff'
+}
+
+function Treemap({ rows, dim, onPick }: { rows: Count[]; dim: Dim; onPick?: (name: string) => void }) {
+  const i = useI18n()
+  const label = useLabel(dim)
+  const [hover, setHover] = useState<string | null>(null)
+  const shown = fold(rows, 12)
+  const total = shown.reduce((t, r) => t + r.count, 0) || 1
+  const cells = layoutTree(shown, 0, 0, 100, 100, [])
+  const active = shown.find((r) => r.name === hover)
+  return (
+    <div className="mms-tree">
+      <p className="mms-chart__readout">{active ? `${label(active.name)} : ${i.num(active.count)} (${Math.round((active.count / total) * 100)}%)` : ' '}</p>
+      <div className="mms-tree__plot" onMouseLeave={() => setHover(null)}>
+        {cells.map(({ r, k, x, y, w, h }) => (
+          <button
+            key={r.name}
+            type="button"
+            className="mms-tree__cell"
+            style={{ left: `${x}%`, top: `${y}%`, width: `${w}%`, height: `${h}%`, background: colorFor(dim, r.name, k), color: inkOn(colorFor(dim, r.name, k)), opacity: hover === null || hover === r.name ? 1 : 0.55, cursor: onPick && r.name !== '__other' ? 'pointer' : 'default' }}
+            onMouseEnter={() => setHover(r.name)}
+            onFocus={() => setHover(r.name)}
+            onClick={() => onPick?.(r.name)}
+            aria-label={`${label(r.name)}: ${r.count}`}
+          >
+            {w * h > 90 && (
+              <span dir="auto">
+                {label(r.name)} <b>{i.num(r.count)}</b>
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Fil d'actualités d'un canal ou d'une recherche enregistrée, qui peut défiler tout seul sur un écran mural */
+function FeedWidget({ conf }: { conf: WidgetConf }) {
+  const i = useI18n()
+  const { data, error } = useFetch<NewsResponse>(`/api/news?${widgetParams(conf, { size: '20', channel: conf.channel ?? '' })}`)
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = box.current
+    if (!el || document.documentElement.dataset.autoscroll !== '1') return
+    const timer = window.setInterval(() => {
+      const cell = el.closest('.mms-cell__body') ?? el
+      if (cell.scrollTop + cell.clientHeight >= cell.scrollHeight - 2) cell.scrollTop = 0
+      else cell.scrollTop += 1
+    }, 60)
+    return () => window.clearInterval(timer)
+  }, [data])
+  if (error) return <p className="news-status news-status--error">{i.t.loadError}</p>
+  if (!data) return <p className="news-status">{i.t.loading}</p>
+  if (data.items.length === 0) return <p className="news-status">{i.t.noNews}</p>
+  return (
+    <div className="mms-feed" ref={box}>
+      {data.items.map((it) => (
+        <NewsCard key={it.id} item={it} variant="compact" />
+      ))}
+    </div>
+  )
+}
+
+/** Texte libre ou lien d'image, pour titrer une section ou afficher une consigne sur l'écran */
+function TextWidget({ conf }: { conf: WidgetConf }) {
+  const text = (conf.text ?? '').trim()
+  const image = /^https:\/\/\S+\.(?:png|jpe?g|gif|webp|svg)(?:\?\S*)?$/i.test(text) ? text : ''
+  if (image) return <img className="mms-textw__img" src={image} alt={conf.title} />
+  return (
+    <div className="mms-textw" dir="auto">
+      {text.split(/\n{2,}/).map((p, k) => (
+        <p key={k}>{p}</p>
+      ))}
+    </div>
+  )
 }

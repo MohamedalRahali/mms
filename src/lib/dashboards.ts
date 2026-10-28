@@ -2,8 +2,11 @@ import { type Flux } from './news'
 
 /** Tableaux de bord composés par le client : widgets placés sur une grille de 12 colonnes */
 
-export type WidgetType = 'news' | 'bars' | 'columns' | 'pie' | 'line' | 'kpi' | 'table' | 'cloud' | 'tone' | 'emerging' | 'stories' | 'alerts' | 'mood'
-export type Dim = 'channels' | 'categories' | 'sources' | 'flux' | 'tones' | 'people' | 'orgs' | 'places'
+export type WidgetType = 'news' | 'bars' | 'columns' | 'pie' | 'line' | 'kpi' | 'table' | 'cloud' | 'tone' | 'emerging' | 'stories' | 'alerts' | 'mood' | 'timeline' | 'treemap' | 'feed' | 'text'
+export type Dim = 'channels' | 'categories' | 'sources' | 'flux' | 'tones' | 'people' | 'orgs' | 'places' | 'languages' | 'media' | 'countries' | 'regions'
+export type Step = 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year'
+export type Split = '' | 'channel' | 'tone' | 'media' | 'category' | 'compare'
+export type ChartStyle = 'area' | 'stacked' | 'line' | 'bars'
 export type Metric = 'total' | 'broadcasts' | 'sources' | 'average'
 
 export type WidgetConf = {
@@ -15,6 +18,15 @@ export type WidgetConf = {
   dim: Dim
   metric: Metric
   category: string
+  // Source de données : recherche enregistrée (veille) et/ou mots-clés ; comparaison de veilles pour la courbe
+  q?: string
+  watch?: string
+  compare?: string[]
+  channel?: string
+  step?: Step
+  split?: Split
+  style?: ChartStyle
+  text?: string
   x: number
   y: number
   w: number
@@ -27,8 +39,11 @@ export const COLS = 12
 export const ROW_PX = 40
 export const GAP_PX = 16
 
-export const WIDGET_TYPES: WidgetType[] = ['news', 'bars', 'columns', 'pie', 'line', 'tone', 'kpi', 'table', 'cloud', 'emerging', 'stories', 'alerts', 'mood']
-export const DIMS: Dim[] = ['channels', 'categories', 'sources', 'tones', 'people', 'orgs', 'places', 'flux']
+export const WIDGET_TYPES: WidgetType[] = ['news', 'feed', 'bars', 'columns', 'pie', 'line', 'timeline', 'tone', 'kpi', 'table', 'cloud', 'treemap', 'text', 'emerging', 'stories', 'alerts', 'mood']
+export const DIMS: Dim[] = ['channels', 'categories', 'sources', 'tones', 'people', 'orgs', 'places', 'languages', 'media', 'countries', 'regions', 'flux']
+export const STEPS: Step[] = ['hour', 'day', 'week', 'month', 'quarter', 'year']
+export const SPLITS: Split[] = ['', 'channel', 'tone', 'media', 'category', 'compare']
+export const STYLES: ChartStyle[] = ['area', 'stacked', 'line', 'bars']
 export const METRICS: Metric[] = ['total', 'broadcasts', 'sources', 'average']
 export const PERIODS = [1, 7, 30, 90]
 
@@ -47,6 +62,10 @@ export const DEFAULT_SIZE: Record<WidgetType, [number, number]> = {
   stories: [6, 10],
   alerts: [12, 5],
   mood: [4, 7],
+  timeline: [8, 8],
+  treemap: [6, 8],
+  feed: [4, 12],
+  text: [4, 4],
 }
 
 export const newId = () => Math.random().toString(36).slice(2, 10)
@@ -157,6 +176,10 @@ export const BUILDER_TEXT = {
     apply: 'تطبيق',
     days: (n: number) => (n === 1 ? 'آخر 24 ساعة' : `آخر ${n} يوماً`),
     types: {
+      timeline: 'منحنى مفصّل',
+      treemap: 'مربعات نسبية',
+      feed: 'تدفق الأخبار',
+      text: 'نص أو لافتة',
       news: 'قائمة الأخبار',
       bars: 'أشرطة أفقية',
       columns: 'أعمدة',
@@ -180,7 +203,27 @@ export const BUILDER_TEXT = {
       people: 'الشخصيات',
       orgs: 'المؤسسات',
       places: 'الأماكن',
+      languages: 'اللغات',
+      media: 'أنواع الوسائط',
+      countries: 'البلدان',
+      regions: 'مناطق ليبيا',
     },
+    dataSource: 'مصدر البيانات',
+    allNews: 'كل الأخبار',
+    keywords: 'كلمات مفتاحية',
+    step: 'الدقة الزمنية',
+    steps: { hour: 'بالساعة', day: 'يومياً', week: 'أسبوعياً', month: 'شهرياً', quarter: 'فصلياً', year: 'سنوياً' } as Record<string, string>,
+    split: 'التقسيم',
+    splits: { '': 'بدون تقسيم', channel: 'حسب القناة', tone: 'حسب النبرة', media: 'حسب نوع الوسيلة', category: 'حسب الموضوع', compare: 'مقارنة عمليات رصد' } as Record<string, string>,
+    style: 'شكل المنحنى',
+    styles: { area: 'مساحات', stacked: 'مساحات متراكمة', line: 'خطوط', bars: 'أعمدة' } as Record<string, string>,
+    compare: 'عمليات الرصد المقارنة (4 كحد أقصى)',
+    channelFilter: 'القناة',
+    allChannels: 'كل القنوات',
+    textBody: 'النص',
+    device: 'المعاينة على',
+    devices: { desktop: 'حاسوب', tablet: 'لوح', mobile: 'هاتف' } as Record<string, string>,
+    total: 'المجموع',
     metrics: { total: 'عدد الأخبار', broadcasts: 'مرات البث والنشر', sources: 'عدد المصادر', average: 'المعدل اليومي' },
     other: 'أخرى',
     perDay: 'عدد الأخبار في اليوم',
@@ -215,6 +258,10 @@ export const BUILDER_TEXT = {
     apply: 'Apply',
     days: (n: number) => (n === 1 ? 'Last 24 hours' : `Last ${n} days`),
     types: {
+      timeline: 'Detailed timeline',
+      treemap: 'Treemap',
+      feed: 'News feed',
+      text: 'Text or banner',
       news: 'News list',
       bars: 'Horizontal bars',
       columns: 'Columns',
@@ -238,7 +285,27 @@ export const BUILDER_TEXT = {
       people: 'People',
       orgs: 'Organizations',
       places: 'Places',
+      languages: 'Languages',
+      media: 'Media types',
+      countries: 'Countries',
+      regions: 'Regions of Libya',
     },
+    dataSource: 'Data source',
+    allNews: 'All news',
+    keywords: 'Keywords',
+    step: 'Time step',
+    steps: { hour: 'Hourly', day: 'Daily', week: 'Weekly', month: 'Monthly', quarter: 'Quarterly', year: 'Yearly' } as Record<string, string>,
+    split: 'Split',
+    splits: { '': 'No split', channel: 'By channel', tone: 'By tone', media: 'By media type', category: 'By topic', compare: 'Compare watches' } as Record<string, string>,
+    style: 'Chart style',
+    styles: { area: 'Areas', stacked: 'Stacked areas', line: 'Lines', bars: 'Columns' } as Record<string, string>,
+    compare: 'Watches to compare (4 at most)',
+    channelFilter: 'Channel',
+    allChannels: 'All channels',
+    textBody: 'Text',
+    device: 'Preview on',
+    devices: { desktop: 'Desktop', tablet: 'Tablet', mobile: 'Phone' } as Record<string, string>,
+    total: 'Total',
     metrics: { total: 'News items', broadcasts: 'Broadcasts and posts', sources: 'Sources', average: 'Average per day' },
     other: 'Other',
     perDay: 'News per day',

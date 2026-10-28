@@ -30,9 +30,10 @@ function CategoryGroup({ name, items }: { name: string; items: NewsItem[] }) {
 }
 
 /** Résumé d'une veille, regroupé par thème comme le NewsBoard */
-export function NewsDigest({ flux, days, category }: { flux: Flux | ''; days: number; category?: string }) {
+export function NewsDigest({ flux, days, category, extra = {} }: { flux: Flux | ''; days: number; category?: string; extra?: Record<string, string> }) {
   const i = useI18n()
   const params = new URLSearchParams({ days: String(days), size: '40' })
+  for (const [k, v] of Object.entries(extra)) if (v) params.set(k, v)
   if (flux) params.set('flux', flux)
   if (category) params.set('category', category)
   const { data, error } = useFetch<NewsResponse>(`/api/news?${params.toString()}`)

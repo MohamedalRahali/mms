@@ -26,8 +26,12 @@ import {
   newId,
   PERIODS,
   ROW_PX,
+  SPLITS,
+  STEPS,
+  STYLES,
   WIDGET_TYPES,
 } from '../lib/dashboards'
+import { type WatchOption } from '../lib/watches'
 
 /**
  * Tableaux de bord que le client compose lui-même, comme le mode édition de NewsBoard :
@@ -57,6 +61,10 @@ const TYPE_ICON: Record<WidgetType, string> = {
   stories: 'M4 4h10v4H4zm0 6h16v4H4zm0 6h12v4H4zm12-12h4v4h-4z',
   alerts: 'M12 2L1 21h22L12 2zm1 15h-2v-2h2v2zm0-4h-2V9h2v4z',
   mood: 'M12 4a10 10 0 0 0-10 10h3a7 7 0 0 1 14 0h3A10 10 0 0 0 12 4zm-1 10l4-5-1 6a1.6 1.6 0 1 1-3-1z',
+  timeline: 'M3 19h18v2H3zm0-3l4-6 4 3 4-7 6 5v3l-5-4-4 7-4-3-5 7z',
+  treemap: 'M3 3h11v11H3zm13 0h5v6h-5zm0 8h5v10h-5zM3 16h11v5H3z',
+  feed: 'M4 4h16v4H4zm0 6h16v4H4zm0 6h16v4H4z',
+  text: 'M5 4h14v3h-5.5v13h-3V7H5z',
 }
 
 function Svg({ d, size = 22 }: { d: string; size?: number }) {
@@ -159,7 +167,7 @@ function GridWidget(props: {
           </div>
         ) : (
           <span className="mms-wtools">
-            {canAlert && <SaveSearchButton filters={{ ...EMPTY_FILTERS, category: conf.category, flux: conf.flux } as Filters} email={auth?.user.email ?? ''} askKeyword compact context={title} />}
+            {canAlert && conf.type !== 'text' && <SaveSearchButton filters={{ ...EMPTY_FILTERS, q: conf.q ?? '', category: conf.category, flux: conf.flux, channel: conf.channel ?? '' } as Filters} email={auth?.user.email ?? ''} askKeyword compact context={title} />}
             <ViewMenu expanded={expanded} onExpand={() => setExpanded(!expanded)} />
           </span>
         )}
@@ -179,7 +187,11 @@ function WidgetEditor({ initial, onApply, onClose }: { initial: WidgetConf; onAp
   const [conf, setConf] = useState(initial)
   const facets = useFetch<Facets>('/api/news/facets').data
   const set = (patch: Partial<WidgetConf>) => setConf((c) => ({ ...c, ...patch }))
-  const usesDim = !['news', 'line', 'kpi', 'tone', 'emerging', 'stories', 'alerts', 'mood'].includes(conf.type)
+  const usesDim = !['news', 'line', 'kpi', 'tone', 'emerging', 'stories', 'alerts', 'mood', 'timeline', 'feed', 'text'].includes(conf.type)
+  // Source de données : toutes les actualités ou une recherche enregistrée (veille), affinée par des mots-clés
+  const watches = useFetch<{ watches: WatchOption[] }>('/api/news/watches').data?.watches ?? []
+  const usesSource = !['text', ...RADAR_TYPES].includes(conf.type)
+  const compare = conf.compare ?? []
   // Widgets du radar proposés seulement si le module « الرادار الذكي » est ouvert au profil
   const mayRadar = hasModule(useAuth()?.user, 'radar')
   useEffect(() => {
@@ -211,7 +223,32 @@ function WidgetEditor({ initial, onApply, onClose }: { initial: WidgetConf; onAp
               <span>{b.widgetTitle}</span>
               <input value={conf.title} onChange={(e) => set({ title: e.target.value })} dir="auto" />
             </label>
-            <div className="mms-editor__row">
+            {conf.type === 'text' && (
+              <label>
+                <span>{b.textBody}</span>
+                <textarea className="mms-editor__text" value={conf.text ?? ''} onChange={(e) => set({ text: e.target.value })} maxLength={1000} rows={5} dir="auto" />
+              </label>
+            )}
+            {usesSource && (
+              <div className="mms-editor__row">
+                <label>
+                  <span>{b.dataSource}</span>
+                  <select value={conf.watch ?? ''} onChange={(e) => set({ watch: e.target.value })}>
+                    <option value="">{b.allNews}</option>
+                    {watches.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        🔔 {w.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>{b.keywords}</span>
+                  <input value={conf.q ?? ''} onChange={(e) => set({ q: e.target.value })} maxLength={300} dir="auto" placeholder="AND / OR / NOT" />
+                </label>
+              </div>
+            )}
+            {conf.type !== 'text' && <div className="mms-editor__row">
               <label>
                 <span>{b.source}</span>
                 <select value={conf.flux} onChange={(e) => set({ flux: e.target.value as Flux | '' })}>
@@ -233,7 +270,72 @@ function WidgetEditor({ initial, onApply, onClose }: { initial: WidgetConf; onAp
                   ))}
                 </select>
               </label>
-            </div>
+            </div>}
+            {conf.type === 'timeline' && (
+              <>
+                <div className="mms-editor__row">
+                  <label>
+                    <span>{b.step}</span>
+                    <select value={conf.step ?? 'day'} onChange={(e) => set({ step: e.target.value as WidgetConf['step'] })}>
+                      {STEPS.map((s) => (
+                        <option key={s} value={s}>
+                          {b.steps[s]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>{b.style}</span>
+                    <select value={conf.style ?? 'area'} onChange={(e) => set({ style: e.target.value as WidgetConf['style'] })}>
+                      {STYLES.map((s) => (
+                        <option key={s} value={s}>
+                          {b.styles[s]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <label>
+                  <span>{b.split}</span>
+                  <select value={conf.split ?? ''} onChange={(e) => set({ split: e.target.value as WidgetConf['split'] })}>
+                    {SPLITS.map((s) => (
+                      <option key={s} value={s}>
+                        {b.splits[s]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {conf.split === 'compare' && (
+                  <fieldset className="mms-editor__checks">
+                    <legend>{b.compare}</legend>
+                    {watches.map((w) => (
+                      <label key={w.id}>
+                        <input
+                          type="checkbox"
+                          checked={compare.includes(w.id)}
+                          disabled={!compare.includes(w.id) && compare.length >= 4}
+                          onChange={(e) => set({ compare: e.target.checked ? [...compare, w.id] : compare.filter((id) => id !== w.id) })}
+                        />
+                        <span dir="auto">{w.name}</span>
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+              </>
+            )}
+            {conf.type === 'feed' && (
+              <label>
+                <span>{b.channelFilter}</span>
+                <select value={conf.channel ?? ''} onChange={(e) => set({ channel: e.target.value })}>
+                  <option value="">{b.allChannels}</option>
+                  {facets?.channels.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      {i.channel(c.name)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {usesDim && (
               <label>
                 <span>{b.dim}</span>
@@ -321,6 +423,7 @@ export function Builder({ flux }: { flux: Flux | '' }) {
   const gridRef = useRef<HTMLDivElement>(null)
   const [slot, setSlot] = useState<HTMLElement | null>(null)
   const [sharing, setSharing] = useState(false)
+  const [device, setDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop')
   const brand = useBrand()
 
   useEffect(() => setSlot(document.getElementById('mms-appbar-slot')), [])
@@ -530,6 +633,13 @@ export function Builder({ flux }: { flux: Flux | '' }) {
                 {b.deleteBoard}
               </button>
             )}
+            <div className="seg mms-devices" role="group" aria-label={b.device}>
+              {(['desktop', 'tablet', 'mobile'] as const).map((d) => (
+                <button key={d} type="button" className={device === d ? 'seg__btn is-active' : 'seg__btn'} aria-pressed={device === d} onClick={() => setDevice(d)}>
+                  {b.devices[d]}
+                </button>
+              ))}
+            </div>
             <p className="news-status">{b.editHint}</p>
           </div>
         )}
@@ -539,12 +649,17 @@ export function Builder({ flux }: { flux: Flux | '' }) {
       {board.widgets.length === 0 ? (
         <p className="mms-note">{b.empty}</p>
       ) : (
-        <div ref={gridRef} className={editing ? 'mms-grid is-editing' : 'mms-grid'} style={{ gridAutoRows: `${ROW_PX}px`, gap: `${GAP_PX}px` }}>
+        <div className={editing && device !== 'desktop' ? `mms-device mms-device--${device}` : undefined}>
+        <div
+          ref={gridRef}
+          className={editing && device !== 'desktop' ? 'mms-grid is-phone' : editing ? 'mms-grid is-editing' : 'mms-grid'}
+          style={{ gridAutoRows: `${ROW_PX}px`, gap: `${GAP_PX}px` }}
+        >
           {ordered.map((w) => (
             <GridWidget
               key={w.id}
               conf={scoped(w)}
-              editing={editing}
+              editing={editing && device === 'desktop'}
               dragging={drag}
               onGrab={(e, mode) => grab(e, w, mode)}
               onEdit={() => setEditor({ conf: w, isNew: false })}
@@ -552,6 +667,7 @@ export function Builder({ flux }: { flux: Flux | '' }) {
               onRemove={() => setWidgets((ws) => compact(ws.filter((x) => x.id !== w.id)))}
             />
           ))}
+        </div>
         </div>
       )}
 

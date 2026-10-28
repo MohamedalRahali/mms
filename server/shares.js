@@ -48,7 +48,18 @@ function fail(code, status = 400) {
 }
 
 /** Nouveau lien ; renvoie la ligne publique et le jeton (montré une seule fois) */
-export function createShare({ boardId, boardName, days, by }) {
+/** Options d'affichage du lien public : titre, thème, langue, défilement automatique des fils, pied de page */
+export function cleanShareOptions(o) {
+  return {
+    title: String(o?.title || '').trim().slice(0, 120),
+    theme: o?.theme === 'light' ? 'light' : o?.theme === 'dark' ? 'dark' : '',
+    lang: o?.lang === 'en' ? 'en' : 'ar',
+    autoscroll: o?.autoscroll === true,
+    hideFooter: o?.hideFooter === true,
+  }
+}
+
+export function createShare({ boardId, boardName, days, by, options }) {
   const id = String(boardId || '').slice(0, 40)
   if (!id) throw fail('NO_BOARD')
   // Les liens expirés ou révoqués depuis plus de 30 jours sont oubliés
@@ -67,6 +78,7 @@ export function createShare({ boardId, boardName, days, by }) {
     expiresAt: new Date(now + d * 86_400_000).toISOString(),
     revokedAt: null,
     views: 0,
+    options: cleanShareOptions(options),
   }
   shares.push(row)
   save()
@@ -104,13 +116,33 @@ export function countView(s) {
 }
 
 const RADAR_TYPES = { emerging: 'emerging', stories: 'stories', alerts: 'alerts', mood: 'sentiment' }
-const STATS_TYPES = new Set(['bars', 'columns', 'pie', 'line', 'kpi', 'table', 'cloud', 'tone'])
+
+/** Paramètres d'un appel de données, construits seulement à partir du widget (rien n'est repris de la requête, sauf la page radar) */
+function queryOfWidget(w, route, q) {
+  const common = { days: String(w.days), ...(w.flux ? { flux: w.flux } : {}), ...(w.q ? { q: w.q } : {}), ...(w.watch ? { watch: w.watch } : {}), ...(w.category ? { category: w.category } : {}) }
+  if (route === 'news/stats' && STATS_TYPES.has(w.type) && w.type !== 'timeline') return common
+  if (route === 'news/stats' && w.type === 'treemap') return common
+  if (route === 'news/timeline' && w.type === 'timeline') return { ...common, step: w.step || 'day', split: w.split || '', ...(w.compare?.length ? { compare: w.compare.join(',') } : {}) }
+  if (route === 'news' && (w.type === 'news' || w.type === 'feed')) return { ...common, size: w.type === 'feed' ? '20' : '40', ...(w.channel ? { channel: w.channel } : {}) }
+  const m = /^radar\/(emerging|stories|sentiment|alerts)$/.exec(route)
+  if (m && RADAR_TYPES[w.type] === m[1]) {
+    const out = w.flux ? { flux: w.flux } : {}
+    if (q.hours) out.hours = String(Math.min(Math.max(Number(q.hours) || 24, 1), 336))
+    if (q.days) out.days = String(Math.min(Math.max(Number(q.days) || 14, 1), 90))
+    return out
+  }
+  return null
+}
+const STATS_TYPES = new Set(['bars', 'columns', 'pie', 'line', 'kpi', 'table', 'cloud', 'tone', 'treemap'])
 
 /**
  * Appel de données permis par un tableau partagé, ou null. route : 'news/stats', 'news', 'radar/<vue>'.
  * Seuls les paramètres d'un widget du tableau sont gardés (période, veille, thème) ; tout le reste est ignoré.
  */
 export function publicShareQuery(widgets, route, q) {
+  const list0 = Array.isArray(widgets) ? widgets : []
+  const byId = q.w ? list0.find((x) => x.id === String(q.w)) : null
+  if (byId) return queryOfWidget(byId, route, q)
   const flux = q.flux === 'libye' ? 'libye' : ''
   const days = Number(q.days) || 0
   const list = Array.isArray(widgets) ? widgets : []
