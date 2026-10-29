@@ -4,6 +4,12 @@ import { createContext, useContext } from 'react'
 
 export type Lang = 'ar' | 'en'
 
+/** Sous-thèmes de « دولي » (server/themes.js) */
+const INTL: Record<Lang, Record<string, string>> = {
+  ar: { orgs: 'منظمات دولية', maghreb: 'المغرب العربي ومصر', africa: 'أفريقيا والساحل', arab: 'المشرق والخليج', europe: 'أوروبا وتركيا وروسيا', americas: 'الأمريكتان', asia: 'آسيا' },
+  en: { orgs: 'International organizations', maghreb: 'Maghreb & Egypt', africa: 'Africa & Sahel', arab: 'Middle East & Gulf', europe: 'Europe, Turkey & Russia', americas: 'Americas', asia: 'Asia' },
+}
+
 const CATEGORIES: Record<Lang, Record<string, string>> = {
   ar: {
     politique: 'سياسي',
@@ -479,6 +485,7 @@ export function makeI18n(lang: Lang) {
     dir: (lang === 'ar' ? 'rtl' : 'ltr') as 'rtl' | 'ltr',
     t: { ...STRINGS[lang], ...EXTRA[lang] } as Strings,
     category: (c: string) => CATEGORIES[lang][c] || capitalize(c),
+    intl: (k: string) => INTL[lang][k] || k,
     channel: (c: string) => CHANNELS[lang][c] || capitalize(c),
     language: (l: string) => LANGUAGES[lang][l] || l,
     flux: (f: string) => FLUX[lang][f] || f,

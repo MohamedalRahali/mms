@@ -50,6 +50,7 @@ export type NewsItem = {
   reach?: number
   // Fiabilité de la source (réglage du Super Admin, sinon déduite) : affichée sur la carte et dans les rapports
   reliability?: 'high' | 'medium' | 'low'
+  intl?: string
   processed?: { by: string; at: string } | null
   similar?: SimilarItem[]
   similarMore?: number
@@ -97,6 +98,7 @@ export type Facets = {
   media?: Count[]
   subTypes?: Count[]
   countries?: Count[]
+  intl?: Count[]
 }
 
 export type Stats = {
@@ -139,6 +141,8 @@ export type Filters = {
   q: string
   days: string
   category: string
+  // Sous-thème de « دولي » (zone : maghreb, europe…)
+  intl: string
   channel: string
   media: string
   sub: string
@@ -160,6 +164,7 @@ export const EMPTY_FILTERS: Filters = {
   q: '',
   days: '',
   category: '',
+  intl: '',
   channel: '',
   media: '',
   sub: '',

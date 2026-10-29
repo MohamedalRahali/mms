@@ -34,6 +34,7 @@ import { cachedBrief, initBrief, itemBrief } from './brief.js'
 import { mountGeo } from './geo.js'
 import { mountCatalog } from './catalog.js'
 import { canSendAlert, initAlertFlow, mountAlertFlow, openWatchAlert, withFlow } from './alertFlow.js'
+import { intlRegion } from './themes.js'
 import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionOf, regionStats, resolveEntities } from './entities.js'
 import { initPinboards, mountPinboards, pinnedKeys } from './pinboards.js'
 import { mountRasd } from './rasd.js'
@@ -90,6 +91,7 @@ function applyFilters(items, q) {
     (it) =>
       (!q.flux || it.flux === q.flux) &&
       (!q.category || it.category === q.category) &&
+      (!q.intl || it.intl === q.intl) &&
       (!q.channel || it.channel === q.channel) &&
       (!q.media || it.media === q.media) &&
       (!q.sub || it.subType === q.sub) &&
@@ -198,6 +200,10 @@ const applyEntities = () =>
       it.places = r.places
       // Pertinence Libye, calculée une fois (alertes du radar, y compris dans le thread de calcul) ; hors JSON
       Object.defineProperty(it, 'ly', { value: libyaRelevant(it), enumerable: false, configurable: true, writable: true })
+      // Sous-thème de « دولي » (zone concernée), d'après les lieux reconnus et le texte
+      const zone = intlRegion(it)
+      if (zone) it.intl = zone
+      else delete it.intl
     }
   })
 applyEntities()
@@ -497,6 +503,10 @@ app.get('/api/news/facets', (_req, res) => {
       'subType',
     ),
     categories: counts(items, 'category'),
+    intl: counts(
+      items.filter((it) => it.intl),
+      'intl',
+    ),
     channels: counts(items, 'channel'),
     languages: counts(items, 'lang'),
     sources: counts(items, 'origin').slice(0, 80),

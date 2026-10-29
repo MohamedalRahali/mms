@@ -150,7 +150,7 @@ export function NewsList({ flux, initialWatch = '', initialFilters, bare = false
             </option>
           ))}
         </select>
-        <select value={filters.category} onChange={(e) => update({ category: e.target.value })} aria-label={i.lang === 'ar' ? 'الموضوع' : 'Category'}>
+        <select value={filters.category} onChange={(e) => update({ category: e.target.value, ...(e.target.value !== 'international' ? { intl: '' } : {}) })} aria-label={i.lang === 'ar' ? 'الموضوع' : 'Category'}>
           <option value="">{t.allCategories}</option>
           {facets?.categories.map((c) => (
             <option key={c.name} value={c.name}>
@@ -158,6 +158,16 @@ export function NewsList({ flux, initialWatch = '', initialFilters, bare = false
             </option>
           ))}
         </select>
+        {(filters.category === 'international' || filters.intl) && Boolean(facets?.intl?.length) && (
+          <select className={filters.intl ? 'is-on' : ''} value={filters.intl} onChange={(e) => update({ intl: e.target.value })} aria-label={i.lang === 'ar' ? 'المنطقة (دولي)' : 'Region (international)'}>
+            <option value="">{i.lang === 'ar' ? 'كل المناطق' : 'All regions'}</option>
+            {facets?.intl?.map((c) => (
+              <option key={c.name} value={c.name}>
+                {i.intl(c.name)} ({i.num(c.count)})
+              </option>
+            ))}
+          </select>
+        )}
         <select value={filters.channel} onChange={(e) => update({ channel: e.target.value })} aria-label={i.lang === 'ar' ? 'القناة' : 'Channel'}>
           <option value="">{t.allChannels}</option>
           {facets?.channels.map((c) => (

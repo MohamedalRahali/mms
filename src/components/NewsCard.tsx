@@ -67,7 +67,10 @@ function NewsCover({ item }: { item: NewsItem }) {
       <svg className="news-cover__icon" viewBox="0 0 24 24">
         <path d={icon} />
       </svg>
-      <span className="news-cover__cat">{i.category(item.category)}</span>
+      <span className="news-cover__cat">
+        {i.category(item.category)}
+        {item.intl && ` · ${i.intl(item.intl)}`}
+      </span>
       <span className="news-cover__src" dir="auto">
         {item.origin}
       </span>
@@ -197,7 +200,12 @@ function FullCard({ item, variant, brief }: { item: NewsItem; variant: 'list' | 
           <span>{i.channel(item.channel)}</span>
           <MediaBadge item={item} />
           {item.lang && <span>{i.language(item.lang)}</span>}
-          {variant === 'list' && <span className="news-badge">{i.category(item.category)}</span>}
+          {variant === 'list' && (
+            <span className="news-badge">
+              {i.category(item.category)}
+              {item.intl && ` · ${i.intl(item.intl)}`}
+            </span>
+          )}
           <ToneBadge tone={item.tone} />
           {important && <span className={`mms-importance mms-importance--${item.importance}`}>{x.importance[item.importance ?? 2]}</span>}
           {item.broadcasts > 1 && <span className="news-badge news-badge--rep">{i.t.broadcastTimes(item.broadcasts)}</span>}
