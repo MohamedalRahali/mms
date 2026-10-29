@@ -3,6 +3,7 @@ import path from 'node:path'
 import { normalize } from './watches.js'
 import { findSpikes, spikeItems } from './intel.js'
 import { libyaRelevant, lookup } from './entities.js'
+import { collectionStartDay } from './history.js'
 
 /**
  * « Radar intelligent » de MMS : ce que la veille fait remonter sans qu'on ait à le chercher.
@@ -426,17 +427,8 @@ export function sentimentBarometer(items, { days = 14, now = Date.now() } = {}) 
  */
 export const MIN_HISTORY_DAYS = 14
 export function historyOf(items, now = Date.now()) {
-  const perDay = new Map()
-  for (const it of items) {
-    const d = dayKey.format(new Date(it.date))
-    perDay.set(d, (perDay.get(d) || 0) + 1)
-  }
-  const max = Math.max(0, ...perDay.values())
-  const floor = Math.max(5, max * 0.05)
-  const since = [...perDay.entries()]
-    .filter(([, n]) => n >= floor)
-    .map(([d]) => d)
-    .sort()[0]
+  // Même règle que les variations en % (server/history.js)
+  const since = collectionStartDay(items)
   const days = since ? Math.max(Math.round((now - Date.parse(`${since}T12:00:00Z`)) / DAY), 0) + 1 : 0
   return { since: since || null, days, enough: days >= MIN_HISTORY_DAYS, min: MIN_HISTORY_DAYS }
 }

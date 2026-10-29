@@ -361,21 +361,57 @@ test('variations en % justes avec un historique partiel (audit v3) : jours couve
   const { coverageOf, fairChange } = await import('../server/insights.js')
   const DAY = 86_400_000
   const NOW = Date.parse('2026-10-29T10:00:00Z')
-  // Collecte commencée il y a 9 jours : période de 7 j entière, période précédente couverte 2 jours sur 7
-  const items = [{ date: new Date(NOW - 9 * DAY).toISOString() }]
-  const cov = coverageOf(items, 7, NOW)
-  assert.deepEqual([cov.current, cov.previous, cov.partial], [7, 2, true])
-  // 700 actualités cette semaine, 200 sur les 2 jours couverts avant : 100/jour contre 100/jour = 0 %, pas +250 %
-  assert.equal(fairChange(700, 200, cov), 0)
-  assert.equal(fairChange(1050, 200, cov), 50)
+  // n jours de collecte à plein régime (100 fiches par jour), plus des articles anciens isolés (dates de 2012, 2021)
+  const days = (n, per = 100) => Array.from({ length: n * per }, (_, k) => ({ date: new Date(NOW - Math.floor(k / per) * DAY - 3_600_000).toISOString() }))
+  const stray = [{ date: '2012-11-23T10:00:00Z' }, { date: '2021-07-26T10:00:00Z' }]
+  // Collecte à plein régime depuis 12 jours : période précédente couverte 5 jours sur 7 ; les articles anciens ne comptent pas
+  const cov = coverageOf([...days(12), ...stray], 7, NOW)
+  assert.equal(cov.current, 7)
+  assert.ok(cov.previous >= 4.5 && cov.previous <= 5.5, String(cov.previous))
+  assert.equal(cov.partial, true)
+  // 700 cette semaine, 500 sur les 5 jours couverts avant : 100/jour contre 100/jour = 0 %, pas +40 %
+  assert.equal(fairChange(700, 500, { ...cov, previous: 5 }), 0)
+  assert.equal(fairChange(1050, 500, { ...cov, previous: 5 }), 50)
+  // Période précédente couverte à moins de moitié (montée en charge de la collecte) : moyenne par jour couvert ; mode « hide » : « جديد »
+  const young = coverageOf([...days(9), ...stray], 7, NOW)
+  assert.ok(young.previous >= 1.5 && young.previous <= 2.5, String(young.previous))
+  assert.equal(fairChange(700, 200, { ...young, previous: 2 }), 0)
+  process.env.MMS_PCT_PARTIAL = 'hide'
+  assert.equal(fairChange(700, 200, { ...young, previous: 2 }), 'new')
+  delete process.env.MMS_PCT_PARTIAL
   // Base trop petite ou absente : « جديد » au lieu de +23 122 %
-  assert.equal(fairChange(7431, 1, cov), 'new')
+  assert.equal(fairChange(7431, 1, { ...cov, previous: 5 }), 'new')
   assert.equal(fairChange(10, 0, { days: 7, current: 7, previous: 0, partial: true }), 'new')
-  assert.equal(fairChange(0, 0, cov), null)
+  assert.equal(fairChange(0, 0, { ...cov, previous: 5 }), null)
   // Historique complet : calcul habituel
-  const full = coverageOf([{ date: new Date(NOW - 30 * DAY).toISOString() }], 7, NOW)
+  const full = coverageOf(days(30), 7, NOW)
   assert.equal(full.partial, false)
   assert.equal(fairChange(120, 100, full), 20)
+})
+
+test('début de la collecte : jours de montée en charge et articles anciens ignorés', async () => {
+  const { collectionStartDay } = await import('../server/history.js')
+  const at = (d, n) => Array.from({ length: n }, () => ({ date: `${d}T10:00:00Z` }))
+  // Données réelles du 29/10 : 18 à 43 fiches par jour avant le 20/10, puis 442, puis plus de 1 000 par jour
+  const items = [...at('2012-11-23', 1), ...at('2026-10-15', 43), ...at('2026-10-20', 138), ...at('2026-10-21', 442), ...at('2026-10-22', 1998), ...at('2026-10-23', 1098), ...at('2026-10-24', 969), ...at('2026-10-25', 1348), ...at('2026-10-26', 1611), ...at('2026-10-27', 1117), ...at('2026-10-28', 1071)]
+  assert.equal(collectionStartDay(items), '2026-10-21')
+})
+
+test('aucun composant ne calcule sa propre variation en % (règle commune lib/fair.ts)', async () => {
+  const fs = await import('node:fs')
+  const path = await import('node:path')
+  const files = []
+  const walk = (d) => {
+    for (const f of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, f.name)
+      if (f.isDirectory()) walk(p)
+      else if (/\.(tsx?|js)$/.test(f.name)) files.push(p)
+    }
+  }
+  walk(path.join(import.meta.dirname, '..', 'src'))
+  const own = /\(\(\s*(cur|current|now|value)\w*\s*-\s*(prev|previous|base|ref|before)\w*\s*\)\s*\/\s*(prev|previous|base|ref|before)\w*\s*\)\s*\*\s*100/
+  const offenders = files.filter((f) => !f.endsWith(path.join('lib', 'fair.ts')) && own.test(fs.readFileSync(f, 'utf8')))
+  assert.deepEqual(offenders, [])
 })
 
 test('audit v3 : bots et comptes personnels écartés, noms Reddit unifiés, prénoms seuls et alias', async () => {

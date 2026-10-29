@@ -1,5 +1,6 @@
 import { compileQuery, searchText } from './query.js'
 import { sourceSplit, uniqueItems } from './dedupe.js'
+import { collectionStart } from './history.js'
 import { normalize } from './watches.js'
 import { countList, findSpikes } from './intel.js'
 
@@ -115,11 +116,8 @@ function pair(cur, prev, limit = 12) {
  * précédente n'est couverte qu'en partie, la comparaison se fait à jours égaux : moyenne par jour couvert.
  */
 export function coverageOf(items, days, now = Date.now()) {
-  let start = Infinity
-  for (const it of items) {
-    const t = Date.parse(it.date)
-    if (t < start) start = t
-  }
+  // Début de la collecte à plein régime (server/history.js), pas l'article le plus ancien
+  const start = collectionStart(items) ?? now
   const span = (a, b) => Math.max(0, Math.min(b - Math.max(a, start), b - a)) / DAY_MS
   const current = Math.round(span(now - days * DAY_MS, now) * 10) / 10
   const previous = Math.round(span(now - 2 * days * DAY_MS, now - days * DAY_MS) * 10) / 10
@@ -131,7 +129,10 @@ export function coverageOf(items, days, now = Date.now()) {
  * null : pas de comparaison possible ; 'new' : base trop petite (moins de 5 ou moins d'un jour couvert).
  */
 export function fairChange(cur, prev, cov) {
+  // Période précédente couverte à moins de moitié : par défaut, % calculé sur la moyenne par jour des jours couverts
+  // (depuis le début de la collecte à plein régime, base indiquée à l'écran) ; MMS_PCT_PARTIAL=hide : « جديد » à la place
   if (!cov || cov.previous < 1 || cov.current <= 0) return cur ? 'new' : null
+  if (process.env.MMS_PCT_PARTIAL === 'hide' && cov.previous < cov.days / 2) return cur ? 'new' : null
   const base = prev * (cov.current / cov.previous)
   if (base < 5) return cur ? 'new' : null
   return Math.round(((cur - base) / base) * 100)

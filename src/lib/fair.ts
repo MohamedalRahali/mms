@@ -4,6 +4,8 @@
  * le serveur (server/insights.js fairChange). 'new' : base trop petite pour un pourcentage parlant.
  */
 export type Coverage = { days: number; current: number; previous: number; partial: boolean }
+/** Période précédente en partie couverte : 'average' (moyenne par jour couvert, base affichée) ou 'hide' (« جديد ») */
+export const PARTIAL_MODE: 'average' | 'hide' = 'average'
 const DAY = 86_400_000
 
 /** Jours couverts de la période en cours et de la précédente, à partir du début des données (since) */
@@ -19,7 +21,10 @@ export function coverageFrom(days: number, since: string | null | undefined, now
 
 export function fairChange(cur: number, prev: number, cov: Coverage | null | undefined): number | 'new' | null {
   if (!cov) return prev ? Math.round(((cur - prev) / prev) * 100) : cur ? 'new' : null
+  // Période précédente couverte à moins de moitié : % sur la moyenne par jour des jours couverts (base indiquée à
+  // l'écran) ; PARTIAL_MODE = 'hide' : « جديد » à la place (choix du client)
   if (cov.previous < 1 || cov.current <= 0) return cur ? 'new' : null
+  if (PARTIAL_MODE === 'hide' && cov.previous < cov.days / 2) return cur ? 'new' : null
   const base = prev * (cov.current / cov.previous)
   if (base < 5) return cur ? 'new' : null
   return Math.round(((cur - base) / base) * 100)

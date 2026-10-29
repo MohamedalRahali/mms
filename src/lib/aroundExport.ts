@@ -1,6 +1,7 @@
 import type { AgentStats, AroundText, Turn } from './around'
 import { type Block, parseInline, parseMd, plain } from './aroundMd'
 import { brandNow } from './brand'
+import { fairChange } from './fair'
 
 /** Logo des exports de l'assistant : celui du client en marque blanche (ou aucun), sinon celui d'Around */
 const exportLogo = () => {
@@ -22,7 +23,11 @@ const GOLD = 'a77d12'
 
 const esc = (s: string) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
 
-const pct = (cur: number, prev: number) => (prev ? `${cur >= prev ? '+' : ''}${Math.round(((cur - prev) / prev) * 1000) / 10}%` : '—')
+// Variation en % : règle commune (lib/fair.ts) ; base trop petite → « جديد »/new au lieu d'un % gonflé
+const pct = (cur: number, prev: number) => {
+  const c = fairChange(cur, prev, { days: 1, current: 1, previous: 1, partial: false })
+  return c === 'new' ? 'جديد / new' : c == null ? '—' : `${c >= 0 ? '+' : ''}${c}%`
+}
 
 export function kpiRows(s: AgentStats, a: AroundText) {
   return [

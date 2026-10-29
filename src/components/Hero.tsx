@@ -2,6 +2,8 @@ import { useContext, useEffect, useRef, type MouseEvent as RMouseEvent } from 'r
 import { type Count, type Flux, type NewsResponse, type Stats, DrillContext, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { useCountUp } from '../lib/motion'
+import { fairChange } from '../lib/fair'
+import { useHistory } from '../lib/history'
 import { type V, arc, fromLatLon, rotate } from './Globe'
 
 /**
@@ -20,6 +22,7 @@ const HERO_TEXT = {
     kWeek: 'حجم الأسبوع',
     vsAvg: (p: string) => `${p} مقارنة بالمتوسط`,
     vsPrev: (p: string) => `${p} مقارنة بالأسبوع السابق`,
+    vsSince: (p: string, d: string) => `${p} مقارنة بالمتوسط اليومي منذ ${d}`,
     noBase: 'بيانات غير كافية للمقارنة',
     over: 'أكثر من',
     ofTone: 'من الأخبار المصنّفة',
@@ -36,6 +39,7 @@ const HERO_TEXT = {
     kWeek: 'Weekly volume',
     vsAvg: (p: string) => `${p} vs average`,
     vsPrev: (p: string) => `${p} vs previous week`,
+    vsSince: (p: string, d: string) => `${p} vs the daily average since ${d}`,
     noBase: 'Not enough data to compare',
     over: 'over',
     ofTone: 'of rated news',
@@ -84,16 +88,14 @@ const CITY: Record<string, [number, number, string]> = {
 const pct = (n: number) => `${n > 0 ? '+' : ''}${Math.round(n)}%`
 
 /**
- * Écart (en %) entre une valeur et la moyenne des jours de référence qui ont des données, ramenée à `scale` jours.
- * null quand la comparaison n'a pas de sens : moins de 5 jours d'historique (collecte récente) ou base inférieure à 30 % de la valeur.
+ * Variation en % de l'accueil : règle commune (lib/fair.ts), jours de référence pris seulement depuis le début de la
+ * collecte à plein régime (history.since). null : pas de comparaison possible (collecte trop récente, base trop faible).
  */
-function compare(current: number, base: number[], scale: number) {
-  const active = base.filter((n) => n > 0)
-  if (active.length < 5) return null
-  // Moyenne des seuls jours avec des données (même règle que lib/fair.ts : jours couverts égaux)
-  const ref = (active.reduce((a, b) => a + b, 0) / active.length) * scale
-  if (ref < 5) return null
-  return ((current - ref) / ref) * 100
+function compare(current: number, base: { date: string; count: number }[], days: number, since: string | null | undefined) {
+  if (!since) return null
+  const covered = base.filter((d) => d.date >= since)
+  const c = fairChange(current, covered.reduce((a, d) => a + d.count, 0), { days, current: days, previous: covered.length, partial: covered.length < base.length })
+  return typeof c === 'number' ? { pct: c, partial: covered.length < base.length } : null
 }
 
 function Spark({ values }: { values: number[] }) {
@@ -437,11 +439,14 @@ export function CommandHero({ flux }: { flux: Flux | '' }) {
   // Comparaison sur les seuls jours où la collecte a des données (au moins 5 jours) : pas de faux pic au démarrage
 
   // Publications sans doublons (même adresse ou même titre) : chiffres de l'accueil non gonflés
-  const per = (fortnight?.perDayUnique ?? fortnight?.perDay)?.map((d) => d.count) ?? []
+  const since = useHistory()?.since
+  const perRows = fortnight?.perDayUnique ?? fortnight?.perDay ?? []
+  const per = perRows.map((d) => d.count)
   const last7 = per.slice(-7).reduce((a, b) => a + b, 0)
   // 24 h comparées aux 7 jours complets d'avant (aujourd'hui exclu) ; la semaine aux 7 jours précédents
-  const vsAvg = compare(day?.unique ?? day?.total ?? 0, per.slice(-8, -1), 1)
-  const vsPrev = compare(last7, per.slice(-14, -7), 7)
+  // 24 h contre la moyenne des 7 jours complets d'avant ; semaine contre les 7 jours précédents (jours couverts seulement)
+  const vsAvg = compare(day?.unique ?? day?.total ?? 0, perRows.slice(-8, -1), 1, since)
+  const vsPrev = compare(last7, perRows.slice(-14, -7), 7, since)
   const shown = (n: number) => (n > 300 ? `${x.over} +300%` : pct(n))
   const tones = day?.tones ?? []
   const rated = tones.reduce((a, b) => a + b.count, 0)
@@ -457,8 +462,8 @@ export function CommandHero({ flux }: { flux: Flux | '' }) {
           label={x.k24}
           value={total24}
           spark={per}
-          trend={vsAvg ?? undefined}
-          note={!fortnight ? undefined : vsAvg == null ? x.noBase : x.vsAvg(shown(vsAvg))}
+          trend={vsAvg?.pct ?? undefined}
+          note={!fortnight ? undefined : vsAvg == null ? x.noBase : vsAvg.partial && since ? x.vsSince(shown(vsAvg.pct), i.day(since)) : x.vsAvg(shown(vsAvg.pct))}
         />
         <Kpi index={1} label={x.kSources} value={day?.mediaSources ?? day?.sourcesCount ?? 0} spark={week?.perDay.map((d) => d.count)} note={day?.accounts ? x.kAccounts(i.num(day.accounts)) : undefined} />
         <Kpi index={2} label={x.kNeg} value={negPct} suffix="%" note={rated ? `${i.num(rated)} ${x.ofTone}` : undefined} tone="neg" />
@@ -466,8 +471,8 @@ export function CommandHero({ flux }: { flux: Flux | '' }) {
           index={3}
           label={x.kWeek}
           value={last7}
-          trend={vsPrev ?? undefined}
-          note={!fortnight ? undefined : vsPrev == null ? x.noBase : x.vsPrev(shown(vsPrev))}
+          trend={vsPrev?.pct ?? undefined}
+          note={!fortnight ? undefined : vsPrev == null ? x.noBase : vsPrev.partial && since ? x.vsSince(shown(vsPrev.pct), i.day(since)) : x.vsPrev(shown(vsPrev.pct))}
           tone="pos"
         />
       </div>
