@@ -14,6 +14,7 @@ import { SavedSearches } from './SavedSearches'
 import { type Overview, type ResultTab, ChartsTab, GroupHeader, ListToolbar, NetworkChips, PeopleTab, ResultTabs, SaveSearchButton, SourcesTab, groupLabel, useListText } from './Listing'
 import { countryName, flagOf, useListPrefs } from '../lib/listing'
 import { PinboardsDialog } from './Pinboards'
+import { AddItemButton } from './ItemEdit'
 import { type Health } from '../lib/news'
 
 // bare : la recherche et les filtres sont pilotés par la page appelante (مجمع البحث) ; seuls les résultats sont affichés
@@ -282,6 +283,7 @@ export function NewsList({ flux, initialWatch = '', initialFilters, bare = false
         <button type="button" className="news-btn news-btn--ghost mms-savewatch" onClick={() => setPins(true)}>
           📌 {l.pinboards}
         </button>
+        <AddItemButton />
         <NetworkChips value={filters.channel} counts={facets?.channels} onPick={(channel) => update({ channel })} />
       </div>
       <SavedSearches

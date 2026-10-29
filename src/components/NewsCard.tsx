@@ -10,6 +10,7 @@ import { MediaBadge, MediaContext, MediaReactions, MediaTranscript } from './Med
 import { PickBox } from './ReportPick'
 import { BriefButton, CountryFlag, NetworkIcon, ProcessedToggle, SimilarFold } from './Listing'
 import { PinButton } from './Pinboards'
+import { EditItemButton } from './ItemEdit'
 import { TranslateButton } from './Translate'
 import { isNetwork } from '../lib/listing'
 
@@ -144,6 +145,7 @@ function FullCard({ item, variant, brief }: { item: NewsItem; variant: 'list' | 
           <span className="news-card__tools">
             {variant === 'list' && <ProcessedToggle item={item} />}
             {variant === 'list' && <PinButton item={item} />}
+            {variant === 'list' && <EditItemButton item={item} />}
             <PickBox item={item} />
             <button
               type="button"

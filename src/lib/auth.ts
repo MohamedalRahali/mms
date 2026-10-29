@@ -21,7 +21,7 @@ export type ModuleKey =
   | 'alerts'
   | 'favorites'
   | 'geo'
-export type ActionKey = 'export' | 'ai_ask' | 'ai_run' | 'edit_dashboards' | 'manage_watches' | 'tags' | 'send_email' | 'schedule' | 'diffusion' | 'mark_processed' | 'share_dashboards'
+export type ActionKey = 'export' | 'ai_ask' | 'ai_run' | 'edit_dashboards' | 'manage_watches' | 'tags' | 'send_email' | 'schedule' | 'diffusion' | 'mark_processed' | 'share_dashboards' | 'edit_items' | 'publish_public'
 export type Perms = { profile: string; profileName: string; modules: ModuleKey[]; actions: ActionKey[] }
 export type MfaInfo = { enabled: boolean; required: boolean; setup: boolean; recoveryLeft: number }
 export type User = { email: string; name: string; role?: Role; perms?: Perms; mfa?: MfaInfo; avatar?: string }
@@ -32,8 +32,8 @@ export const can = (user: User | undefined | null, min: Role) => RANK[user?.role
 
 // Sans permissions reçues du serveur (ancienne version), mêmes droits qu'avant : par rôle
 const ROLE_ACTIONS: Record<Role, ActionKey[]> = {
-  admin: ['export', 'ai_ask', 'ai_run', 'edit_dashboards', 'manage_watches', 'tags', 'send_email', 'schedule', 'diffusion', 'mark_processed', 'share_dashboards'],
-  analyst: ['export', 'ai_ask', 'ai_run', 'edit_dashboards', 'manage_watches', 'tags', 'send_email', 'mark_processed', 'share_dashboards'],
+  admin: ['export', 'ai_ask', 'ai_run', 'edit_dashboards', 'manage_watches', 'tags', 'send_email', 'schedule', 'diffusion', 'mark_processed', 'share_dashboards', 'edit_items', 'publish_public'],
+  analyst: ['export', 'ai_ask', 'ai_run', 'edit_dashboards', 'manage_watches', 'tags', 'send_email', 'mark_processed', 'share_dashboards', 'edit_items'],
   viewer: ['export', 'ai_ask', 'send_email'],
 }
 /** Le profil du compte ouvre-t-il ce module ? */

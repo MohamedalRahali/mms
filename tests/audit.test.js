@@ -426,3 +426,43 @@ test('photo de profil : seuls PNG, JPEG et WebP réels sont acceptés (SVG, HTML
   assert.match(avatarKey('A@X.test'), /^[a-f0-9]{24}$/)
   assert.equal(avatarKey('A@X.test'), avatarKey('a@x.test'), 'même clé quelle que soit la casse')
 })
+
+test('corrections et ajouts : tonalité et thème corrigés, article manuel validé, approbation publique', async () => {
+  const ie = await import('../server/itemEdits.js')
+  let changed = 0
+  ie.initItemEdits(fs.mkdtempSync(path.join(os.tmpdir(), 'mms-edits-')), { changed: () => changed++ })
+  const known = (id) => id === 'a'
+  const NOW = Date.parse('2026-10-29T10:00:00Z')
+  ie.editItem('a', { tone: 'negative', category: 'énergie' }, 'x@y', known)
+  assert.throws(() => ie.editItem('a', { tone: 'furieux' }, 'x@y', known), /BAD_TONE/)
+  assert.throws(() => ie.editItem('zz', { tone: 'negative' }, 'x@y', known), /NOT_FOUND/)
+  assert.throws(() => ie.addManual({ title: '', origin: 'جريدة', date: new Date(NOW).toISOString() }, 'x@y', NOW), /NO_TITLE/)
+  assert.throws(() => ie.addManual({ title: 'خبر', origin: 'جريدة', date: '2040-01-01' }, 'x@y', NOW), /BAD_DATE/)
+  assert.throws(() => ie.addManual({ title: 'خبر', origin: 'جريدة', date: new Date(NOW).toISOString(), url: 'javascript:alert(1)' }, 'x@y', NOW), /BAD_URL/)
+  const m = ie.addManual({ title: 'خبر <b>مضاف</b>', origin: 'صحيفة الوسط الورقية', date: new Date(NOW).toISOString(), url: 'https://x.test/a', tone: 'positive', media: 'article' }, 'x@y', NOW)
+  assert.equal(m.title, 'خبر bمضاف/b', 'balises retirées')
+  ie.setPublic('a', true, 'admin@y', known)
+  const items = [{ id: 'a', tone: 'neutral', category: 'politique' }]
+  ie.applyItemEdits(items)
+  assert.deepEqual([items[0].tone, items[0].category, items[0].public], ['negative', 'énergie', true])
+  assert.equal(items.length, 2, 'article manuel ajouté à la liste')
+  assert.equal(items[1].manual, true)
+  assert.throws(() => ie.deleteManual(m.id, 'autre@y', false), /FORBIDDEN/)
+  assert.equal(ie.deleteManual(m.id, 'x@y', false), true)
+  assert.ok(changed >= 4, 'la liste est relue après chaque modification')
+})
+
+test('vitrine publique : seulement les fiches approuvées, seulement les champs publics', async () => {
+  const { portalNews, portalItem } = await import('../server/portal.js')
+  const it = (id, pub, extra = {}) => ({ id, public: pub, title: `خبر ${id}`, summary: 'ملخص', origin: 'وال', date: '2026-10-29T08:00:00Z', url: 'https://x.test/' + id, image: 'javascript:alert(1)', category: 'politique', lang: 'ar', tone: 'negative', people: ['س'], transcription: 'سري', createdBy: 'a@b', ...extra })
+  const items = [it('a', true), it('b', false), it('c', true, { category: 'sport', date: '2026-10-20T08:00:00Z' }), it('d', undefined)]
+  const all = portalNews(items, {})
+  assert.deepEqual(all.items.map((x) => x.id), ['a', 'c'])
+  assert.deepEqual(Object.keys(all.items[0]).sort(), ['category', 'date', 'id', 'image', 'lang', 'source', 'summary', 'title', 'url'])
+  assert.equal(all.items[0].image, '', 'adresse d’image non http écartée')
+  assert.equal(portalNews(items, { category: 'sport' }).total, 1)
+  assert.equal(portalNews(items, { from: '2026-10-25' }).total, 1)
+  assert.equal(portalNews(items, { q: 'خبر c' }).total, 1)
+  assert.deepEqual(all.facets.categories.map((c) => c.name).sort(), ['politique', 'sport'])
+  assert.equal(portalItem(it('e', true, { summary: 'س'.repeat(900) })).summary.length, 600)
+})

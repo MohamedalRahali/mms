@@ -38,6 +38,10 @@ export type NewsItem = {
   author?: string
   parent?: { id: string; url: string; title: string }
   thread?: { forum: string; topic: string; topicUrl: string; messageId: string; replyTo: string }
+  // Corrections de l'équipe, article ajouté à la main, approuvé pour la vitrine publique (server/itemEdits.js)
+  edited?: { by: string; at: string }
+  manual?: boolean
+  public?: boolean
   comments?: number
   replies?: number
   reactions?: Reaction[]

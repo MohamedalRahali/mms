@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { demoItems } from './demo.js'
 import { canonicalOrigin, excludedBySource } from './sourcePolicy.js'
+import { applyItemEdits } from './itemEdits.js'
 
 /**
  * Lit les sorties des veilles et les ramène à un seul format d'actualité :
@@ -353,6 +354,8 @@ export function getItems() {
   previous = next
   const demo = process.env.MMS_DEMO === '1'
   if (demo) items.push(...demoItems())
+  // Corrections de l'équipe (tonalité, thème), articles ajoutés à la main, approbations pour la vitrine publique
+  applyItemEdits(items)
   if (resolver) resolver(items)
   items.sort((a, b) => b.date.localeCompare(a.date))
   // Commentaires à part : seuls ceux dont la publication est dans MMS sont gardés

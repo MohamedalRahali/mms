@@ -44,11 +44,13 @@ export const ACTIONS = [
   ['diffusion', 'إدارة مصادر البث (التلفزيون والإذاعات)'],
   ['mark_processed', 'تحديد الأخبار كمُعالَجة'],
   ['share_dashboards', 'مشاركة لوحات القيادة برابط للقراءة فقط'],
+  ['edit_items', 'تصحيح نبرة الأخبار ومواضيعها وإضافة أخبار يدوياً'],
+  ['publish_public', 'الموافقة على نشر الأخبار في الواجهة العامة'],
 ]
 
 // Actions ajoutées après la première version des réglages : accordées aux profils de base déjà enregistrés
 // selon leur rôle (comme les nouveaux modules), jamais aux profils créés par le Super Admin
-const LATER_ACTIONS = ['mark_processed', 'share_dashboards']
+const LATER_ACTIONS = ['mark_processed', 'share_dashboards', 'edit_items', 'publish_public']
 
 const MODULE_KEYS = MODULES.map(([k]) => k)
 const ACTION_KEYS = ACTIONS.map(([k]) => k)
@@ -58,7 +60,7 @@ const ROLE_NAMES = { admin: 'مدير', analyst: 'محلل', viewer: 'قارئ' 
 // Mêmes droits qu'avant les permissions détaillées (minRole de server/index.js et diffusion.js)
 const DEFAULT_ACTIONS = {
   admin: ACTION_KEYS,
-  analyst: ['export', 'ai_ask', 'ai_run', 'edit_dashboards', 'manage_watches', 'tags', 'send_email', 'mark_processed', 'share_dashboards'],
+  analyst: ['export', 'ai_ask', 'ai_run', 'edit_dashboards', 'manage_watches', 'tags', 'send_email', 'mark_processed', 'share_dashboards', 'edit_items'],
   viewer: ['export', 'ai_ask', 'send_email'],
 }
 
@@ -153,6 +155,7 @@ const MODULE_RULES = [
   [/^\/pinboards(\/|$)/, ['news', 'media', 'dashboard']],
   [/^\/recordings(\/|$)/, ['media']],
   [/^\/rasd(\/|$)/, ['media']],
+  [/^\/items(\/|$)/, ['news', 'media']],
   [/^\/report$/, ['report']],
 ]
 
@@ -176,6 +179,9 @@ function actionFor(method, p) {
   if (write && p.startsWith('/recordings')) return 'tags'
   // الرصد المبرمج : estimation ouverte aux mêmes profils que la création (analystes et administrateurs)
   if (write && p.startsWith('/rasd')) return 'tags'
+  // Vitrine publique : approbation réservée (administrateurs par défaut) ; corrections et ajouts : analystes et administrateurs
+  if (write && /^\/items\/[^/]+\/public$/.test(p)) return 'publish_public'
+  if (write && p.startsWith('/items')) return 'edit_items'
   if (write && /^\/reports\/[^/]+\/email$/.test(p)) return 'send_email'
   if ((write && p.startsWith('/briefing/schedule')) || p === '/briefing/send') return 'schedule'
   if (write && p.startsWith('/diffusion')) return 'diffusion'

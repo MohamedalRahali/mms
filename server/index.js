@@ -38,6 +38,9 @@ import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, region
 import { initPinboards, mountPinboards, pinnedKeys } from './pinboards.js'
 import { mountRasd } from './rasd.js'
 import { avatarUrl, initProfile, mountProfile } from './profile.js'
+import { initItemEdits, mountItemEdits } from './itemEdits.js'
+import { mountPortal } from './portal.js'
+import { refreshSourcePolicy } from './store.js'
 import { initSourcePolicy } from './sourcePolicy.js'
 import { dispatchHistory, initDispatchLog, logDispatch } from './dispatchLog.js'
 import { SPLITS, STEPS, timeline } from './timeline.js'
@@ -248,6 +251,12 @@ app.get('/api/public/share/:token', publicLimit, (req, res) => {
   res.setHeader('X-Robots-Tag', 'noindex')
   res.json({ board: { id: board.id, name: board.name || share.boardName, widgets: board.widgets }, expiresAt: share.expiresAt, brand: brandOf(), options: share.options || {} })
 })
+// Vitrine publique d'actualités (/portal) : fiches approuvées pour le public seulement, champs publics seulement
+app.use('/portal', (_req, res, next) => {
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  next()
+})
+mountPortal(app, { getItems, publicLimit })
 // Données des widgets du tableau partagé : seulement les appels qu'un de ses widgets ferait, avec ses paramètres
 app.get(/^\/api\/public\/share\/([A-Za-z0-9_-]{43})\/(news\/stats|news\/timeline|news|radar\/(?:emerging|stories|sentiment|alerts))$/, publicLimit, async (req, res) => {
   const [token, route] = [req.params[0], req.params[1]]
@@ -911,6 +920,9 @@ mountRasd(app, { getItems, telegramReady, sendTelegram, logDispatch })
 // الإعدادات الشخصية : photo de profil, nom, préférences, mot de passe
 initProfile(path.join(root, 'data'))
 mountProfile(app)
+// Corrections d'articles, articles ajoutés à la main, approbation pour la vitrine publique
+initItemEdits(path.join(root, 'data'), { changed: refreshSourcePolicy })
+mountItemEdits(app, { getItems, isAdmin: (u) => (u?.role || 'admin') === 'admin' })
 // سجل الإرسال : envois des veilles, alertes du radar, briefing et rapports
 app.get('/api/watches/history', (_req, res) => res.json({ rows: dispatchHistory() }))
 
