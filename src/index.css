@@ -4277,3 +4277,83 @@ img.mms-user__avatar--img {
 .news-mini .news-rel__label {
   display: none;
 }
+
+/* Listes de diffusion (MailingLists.tsx) */
+.mms-mlpick {
+  display: block;
+  margin-top: 0.3rem;
+}
+.mms-mlpick select {
+  max-width: 100%;
+  padding: 0.3rem 0.5rem;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+}
+.mms-mldialog {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 1.1rem 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.mms-mldialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+.mms-mldialog header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+.mms-mldialog h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.mms-mldialog__intro {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+.mms-mldialog__list {
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+.mms-mldialog__list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.mms-mldialog__list p {
+  margin: 0.2rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  word-break: break-all;
+}
+.mms-mldialog__list span {
+  display: flex;
+  flex: none;
+  gap: 0.3rem;
+}
+.mms-mldialog__form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+}
+.mms-mldialog__actions {
+  display: flex;
+  gap: 0.5rem;
+}

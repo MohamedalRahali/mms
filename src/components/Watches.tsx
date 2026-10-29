@@ -6,6 +6,7 @@ import { canDo, useAuth } from '../lib/auth'
 import { THEMES, type Watch, WATCH_TEXT, ZONES, themesToRules } from '../lib/watches'
 import { DispatchHistory } from './DispatchHistory'
 import { LoadState } from './LoadState'
+import { MailingListPicker } from './MailingLists'
 import { AlertFields, DEFAULT_ALERT, MergeProposals, WatchAlertRow, WatchAlertTracker } from './WatchAlerts'
 
 /** Écran « الرصد المبرمج » : zone surveillée, thèmes à cocher, période, destinataires, puis liste des veilles */
@@ -188,6 +189,7 @@ function WatchForm({ onCreated }: { onCreated: () => void }) {
           <span>{w.recipients}</span>
           <input value={recipients} onChange={(e) => setRecipients(e.target.value)} dir="ltr" placeholder="name@example.com, ..." />
         </label>
+        <MailingListPicker value={recipients} onChange={setRecipients} />
 
         <AlertFields value={alert} onChange={setAlert} />
 

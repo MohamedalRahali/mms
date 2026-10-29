@@ -11,6 +11,7 @@ import { NewsCard } from './NewsCard'
 import { EngagementChips } from './Engagement'
 import { PageHead } from './Extras'
 import { LoadState } from './LoadState'
+import { MailingListPicker } from './MailingLists'
 
 /**
  * Fonctions de niveau Meltwater : assistant de requête booléenne, engagement des posts,
@@ -574,6 +575,7 @@ function ScheduleForm() {
       <label className="mms-schedule__wide">
         <span>{p.brRecipients}</span>
         <input value={recipients} onChange={(e) => setRecipients(e.target.value)} dir="ltr" placeholder="name@npdc.gov.ly, …" />
+        <MailingListPicker value={recipients} onChange={setRecipients} />
       </label>
       <label className="mms-check">
         <input type="checkbox" checked={form.telegram} onChange={(e) => set({ telegram: e.target.checked })} />

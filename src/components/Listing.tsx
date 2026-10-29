@@ -10,6 +10,7 @@ import { type GroupBy, type ListPrefs, type Network, LIST_TEXT, NETWORKS, NETWOR
 import { BuzzBars } from './Dashboard'
 import { Donut, Line, ToneTrend, colorFor } from './Charts'
 import './listing.css'
+import { MailingListPicker } from './MailingLists'
 
 /** Liste des actualités enrichie : barre de présentation, onglets, en-têtes de groupe, colonnes, statut, résumé IA */
 
@@ -538,6 +539,7 @@ export function SaveSearchButton({ filters, email, askKeyword = false, compact =
               <span>{l.recipients}</span>
               <input value={to} onChange={(e) => setTo(e.target.value)} dir="ltr" inputMode="email" maxLength={600} />
             </label>
+            <MailingListPicker value={to} onChange={setTo} />
             {msg && (
               <p className="news-status" role="status">
                 {msg}

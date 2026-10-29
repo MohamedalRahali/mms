@@ -11,7 +11,7 @@ import { currentUser, initAuth, loginRoute, logoutRoute, mfaDisableRoute, mfaEna
 import { initMfaPolicy } from './mfa.js'
 import { initMailPolicy } from './mailPolicy.js'
 import { initPermissions, permissionGate, permsOf } from './permissions.js'
-import { logSecurity } from './monitor.js'
+import { logAudit, logSecurity } from './monitor.js'
 import { compileQuery, queryError, searchText } from './query.js'
 import { buildBriefing, comparePeriods, engagementTotals, interactions, retrieve, shareOfVoice, topEngaged } from './insights.js'
 import { briefingConf, briefingKey, briefingWithSummary, sendBriefing, setBriefingConf, startBriefing } from './briefing.js'
@@ -37,6 +37,7 @@ import { canSendAlert, initAlertFlow, mountAlertFlow, openWatchAlert, withFlow }
 import { intlRegion } from './themes.js'
 import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionOf, regionStats, resolveEntities } from './entities.js'
 import { initPinboards, mountPinboards, pinnedKeys } from './pinboards.js'
+import { initMailingLists, mountMailingLists } from './mailingLists.js'
 import { mountRasd } from './rasd.js'
 import { avatarUrl, initProfile, mountProfile } from './profile.js'
 import { initItemEdits, mountItemEdits } from './itemEdits.js'
@@ -937,6 +938,11 @@ mountAlertFlow(app)
 // لوحات التثبيت : collections d'articles épinglés, communes à l'équipe
 initPinboards(path.join(root, 'data'))
 mountPinboards(app, { getItems })
+initMailingLists(path.join(root, 'data'))
+mountMailingLists(app, {
+  // Journal d'audit de la console Super Admin : qui a créé, modifié ou supprimé une liste
+  audit: (req, action, target, detail) => logAudit(req.user.email, String(req.ip || '').replace(/^::ffff:/, ''), action, target, detail),
+})
 mountRasd(app, { getItems, telegramReady, sendTelegram, logDispatch })
 // الإعدادات الشخصية : photo de profil, nom, préférences, mot de passe
 initProfile(path.join(root, 'data'))

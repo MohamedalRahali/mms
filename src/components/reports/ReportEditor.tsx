@@ -9,6 +9,7 @@ import { useI18n } from '../../lib/i18n'
 import { canDo, useAuth } from '../../lib/auth'
 import { type PmNode, type ReportMeta, PAPER_CSS, MARGINS, blobToBase64, downloadBlob, printReport, reportFilename, toDocx, toPdf } from '../../lib/reportExport'
 import { type ReportText, reportText } from './text'
+import { MailingListPicker } from '../MailingLists'
 
 export type SendEntry = { at: string; status: string; to?: string[]; format?: string; accepted?: string[]; rejected?: string[]; error?: string; posts?: number }
 export type Report = {
@@ -402,6 +403,7 @@ function MailDialog({ t, report, build, onClose, onHistory }: { t: ReportText; r
             <label className="rpt-field">
               <span>{t.to}</span>
               <input type="text" inputMode="email" dir="ltr" autoFocus value={m.to} onChange={(e) => setM({ ...m, to: e.target.value })} placeholder="name@example.ly, …" aria-describedby="rpt-to-hint" />
+              <MailingListPicker value={m.to} onChange={(to) => setM({ ...m, to })} />
               <small id="rpt-to-hint">{t.toHint}</small>
             </label>
             <label className="rpt-field">
