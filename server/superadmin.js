@@ -204,6 +204,7 @@ function deriveActivity(req, user, ip) {
     const f = FILTER_KEYS.filter((k) => q[k]).map((k) => `${k}=${q[k]}`)
     if (f.length) logActivity(user, ip, 'filter', f.join(' · '))
   } else if (req.method === 'GET' && p === '/api/news/export.csv') logActivity(user, ip, 'export', 'CSV')
+  else if (req.method === 'GET' && p === '/api/news/export.json') logActivity(user, ip, 'export', `${String(q.format || 'docx').toUpperCase()}${q.pinboard ? ' · لوحة تثبيت' : ''}`)
   else if (req.method === 'GET' && (p === '/api/report' || p === '/api/briefing')) logActivity(user, ip, 'report', p === '/api/report' ? `يومي ${q.day || ''}` : `تنفيذي ${q.days || 7}`)
   else if (req.method === 'POST' && p.startsWith('/api/ai/')) logActivity(user, ip, 'ai', p.slice(8) + (req.body?.question ? ` : ${req.body.question}` : req.body?.text ? ` : ${req.body.text}` : ''))
   else if (req.method === 'POST' && p === '/api/briefing/summary') logActivity(user, ip, 'ai', 'briefing')

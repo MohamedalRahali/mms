@@ -162,7 +162,7 @@ const MODULE_RULES = [
 /** Action exigée par l'appel, ou '' */
 function actionFor(method, p) {
   const write = method !== 'GET' && method !== 'HEAD'
-  if (p === '/news/export.csv' || /^\/pinboards\/[^/]+\/export\.csv$/.test(p)) return 'export'
+  if (p === '/news/export.csv' || p === '/news/export.json' || /^\/pinboards\/[^/]+\/export\.csv$/.test(p)) return 'export'
   if (write && /^\/ai\/(ask|agent|query|spike|brief)$/.test(p)) return 'ai_ask'
   if (write && p === '/news/processed') return 'mark_processed'
   if (write && p.startsWith('/radar/alerts/')) return 'mark_processed'

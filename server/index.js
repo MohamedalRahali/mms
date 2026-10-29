@@ -566,6 +566,32 @@ app.get('/api/news/export.csv', (req, res) => {
   res.send(`${bom}${mark}\r\n${csv}`)
 })
 
+// Export Word et PDF de la liste (remplace l'export Excel) : mêmes filtres, mêmes droits et mêmes limites par rôle ;
+// le navigateur fabrique le .docx et le PDF (arabe de droite à gauche correctement rendu), le serveur fournit les lignes
+app.get('/api/news/export.json', (req, res) => {
+  const items = poolOf(getItems(), req.query)
+  const watched = req.query.watch ? itemsForWatch(String(req.query.watch), items) : items
+  const limit = { viewer: 500, analyst: 2000 }[req.user.role] || 5000
+  const all = uniqueItems(applyFilters(watched || [], req.query))
+  const found = all.slice(0, limit)
+  res.setHeader('Cache-Control', 'no-store')
+  res.json({
+    total: all.length,
+    shown: found.length,
+    by: req.user.name || req.user.email,
+    at: new Date().toISOString(),
+    items: found.map((it) => ({
+      date: it.date,
+      origin: it.origin,
+      title: String(it.title || '').slice(0, 300),
+      url: /^https?:\/\//i.test(it.url || '') ? it.url : '',
+      category: it.category || '',
+      tone: it.tone || '',
+      summary: String(it.summary || '').slice(0, 400),
+    })),
+  })
+})
+
 // Détection des pics : dernières 24 h comparées aux 7 jours d'avant
 // Historique de la collecte, recalculé à chaque nouvelle version des données
 let historyCache = { items: null, value: null }

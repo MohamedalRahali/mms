@@ -4434,3 +4434,11 @@ img.mms-user__avatar--img {
 .mfa-actions a {
   text-decoration: none;
 }
+
+/* Boutons d'export Word / PDF (ExportButtons.tsx) */
+.mms-exports {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}

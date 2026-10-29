@@ -16,6 +16,7 @@ import { countryName, flagOf, useListPrefs } from '../lib/listing'
 import { PinboardsDialog } from './Pinboards'
 import { AddItemButton } from './ItemEdit'
 import { type Health } from '../lib/news'
+import { ExportButtons } from './ExportButtons'
 
 // bare : la recherche et les filtres sont pilotés par la page appelante (مجمع البحث) ; seuls les résultats sont affichés
 /** Plages rapides (vidéo « NewsBoard Filtering ») : bornes en jours de Tripoli */
@@ -366,9 +367,14 @@ export function NewsList({
           </button>
         )}
         {canDo(auth?.user, 'export') && (
-          <a className="news-btn news-btn--ghost news-filters__export" href={`/api/news/export.csv${query ? `?${query}` : ''}`} download>
-            {x.exportCsv}
-          </a>
+          <ExportButtons
+            query={query}
+            title={i.lang === 'ar' ? 'لوحة الأخبار' : 'News board'}
+            period={filters.from || filters.to ? `${filters.from || '…'} → ${filters.to || '…'}` : (PERIODS.find((p) => p.value === filters.days)?.label ?? t.allTime)}
+            filters={(Object.entries(filters) as [keyof Filters, string][])
+              .filter(([k, v]) => v && !['days', 'from', 'to', 'sort'].includes(k))
+              .map(([k, v]) => `${FILTER_LABELS[i.lang === 'ar' ? 'ar' : 'en'][k] ?? k}: ${k === 'category' ? i.category(v) : v}`)}
+          />
         )}
       </form>
       {hasFilters && (

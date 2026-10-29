@@ -5,6 +5,7 @@ import { canDo, useAuth } from '../lib/auth'
 import { ToneBadge } from './Intel'
 import './listing.css'
 import './pool.css'
+import { ExportButtons } from './ExportButtons'
 
 /** لوحات التثبيت : collections d'articles épinglés, communes à l'équipe (server/pinboards.js) */
 
@@ -360,11 +361,7 @@ export function PinboardsDialog({ onClose }: { onClose: () => void }) {
               <button type="button" className="news-btn" onClick={() => openInNews(open.board.id)}>
                 {t.inNews}
               </button>
-              {canExport && (
-                <a className="news-btn news-btn--ghost" href={`/api/pinboards/${open.board.id}/export.csv`} download>
-                  {t.csv}
-                </a>
-              )}
+              {canExport && <ExportButtons query={`pinboard=${encodeURIComponent(open.board.id)}`} title={open.board.name} period={i.lang === 'ar' ? 'كل الفترة' : 'all time'} filters={[]} />}
               {can && (
                 <button type="button" className="news-btn news-btn--ghost" onClick={() => setForm({ board: open.board })}>
                   {t.edit}
