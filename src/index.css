@@ -4407,3 +4407,30 @@ img.mms-user__avatar--img {
   color: var(--green);
   font-weight: 800;
 }
+
+/* Double authentification : QR code à scanner, actions (Mfa.tsx) */
+.mfa-qr {
+  display: block;
+  width: 220px;
+  height: 220px;
+  margin: 0.6rem auto;
+  padding: 6px;
+  border-radius: 12px;
+  background: #fff;
+  image-rendering: pixelated;
+}
+.mfa-hint {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  text-align: center;
+}
+.mfa-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-bottom: 0.8rem;
+}
+.mfa-actions a {
+  text-decoration: none;
+}

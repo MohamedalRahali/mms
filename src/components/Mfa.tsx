@@ -20,7 +20,12 @@ const TEXT = {
     setupTitle: 'تفعيل التحقق بخطوتين',
     setupRequired: 'التحقق بخطوتين إلزامي لحسابك. فعّله الآن للمتابعة (دقيقة واحدة).',
     step1: '1. ثبّت تطبيق مصادقة على هاتفك (Google Authenticator أو Microsoft Authenticator أو FreeOTP).',
-    step2: '2. أضف حساباً بإدخال هذا المفتاح يدوياً، أو افتح الرابط من الهاتف:',
+    step2: '2. امسح رمز QR بتطبيق المصادقة (Google Authenticator أو Microsoft Authenticator…)، أو أدخل المفتاح يدوياً:',
+    qrAlt: 'رمز QR للتحقق بخطوتين',
+    copyKey: 'نسخ المفتاح',
+    copied: 'تم النسخ',
+    downloadQr: 'تنزيل رمز QR (PNG)',
+    manual: 'الإدخال اليدوي: نوع المفتاح «حسب الوقت»، 6 أرقام، كل 30 ثانية.',
     step3: '3. أدخل الرمز الذي يظهر في التطبيق:',
     start: 'إنشاء المفتاح',
     openApp: 'فتح في تطبيق المصادقة',
@@ -48,7 +53,12 @@ const TEXT = {
     setupTitle: 'Turn on two-step verification',
     setupRequired: 'Two-step verification is required for your account. Turn it on now to continue (one minute).',
     step1: '1. Install an authenticator app on your phone (Google Authenticator, Microsoft Authenticator or FreeOTP).',
-    step2: '2. Add an account by typing this key, or open the link on the phone:',
+    step2: '2. Scan the QR code with your authenticator app (Google Authenticator, Microsoft Authenticator…), or type the key:',
+    qrAlt: 'Two-step verification QR code',
+    copyKey: 'Copy key',
+    copied: 'Copied',
+    downloadQr: 'Download QR code (PNG)',
+    manual: 'Manual entry: time-based key, 6 digits, every 30 seconds.',
     step3: '3. Enter the code shown in the app:',
     start: 'Create the key',
     openApp: 'Open in authenticator app',
@@ -120,7 +130,8 @@ export function MfaCode({ ticket, lang, onLogin, onBack }: { ticket: string; lan
 /** Activation : clé, code de confirmation, puis codes de secours (montrés une fois) */
 export function MfaEnroll({ lang, onDone }: { lang: 'ar' | 'en'; onDone: (mfa: MfaState) => void }) {
   const t = textOf(lang)
-  const [key, setKey] = useState<{ secret: string; uri: string } | null>(null)
+  const [key, setKey] = useState<{ secret: string; uri: string; qr?: string } | null>(null)
+  const [copied, setCopied] = useState(false)
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [codes, setCodes] = useState<string[] | null>(null)
@@ -170,12 +181,33 @@ export function MfaEnroll({ lang, onDone }: { lang: 'ar' | 'en'; onDone: (mfa: M
       ) : (
         <>
           <p>{t.step2}</p>
+          {key.qr && <img className="mfa-qr" src={key.qr} alt={t.qrAlt} width={220} height={220} />}
           <p className="mfa-key" dir="ltr">
             {key.secret.replace(/(.{4})/g, '$1 ').trim()}
           </p>
-          <a className="news-btn news-btn--ghost" href={key.uri}>
-            {t.openApp}
-          </a>
+          <p className="mfa-hint">{t.manual}</p>
+          <div className="mfa-actions">
+            <button
+              type="button"
+              className="news-btn news-btn--ghost"
+              onClick={() =>
+                navigator.clipboard
+                  ?.writeText(key.secret)
+                  .then(() => setCopied(true))
+                  .catch(() => {})
+              }
+            >
+              {copied ? t.copied : t.copyKey}
+            </button>
+            {key.qr && (
+              <a className="news-btn news-btn--ghost" href={key.qr} download="mms-2fa-qr.png">
+                {t.downloadQr}
+              </a>
+            )}
+            <a className="news-btn news-btn--ghost" href={key.uri}>
+              {t.openApp}
+            </a>
+          </div>
           <form onSubmit={enable} className="mfa-enable">
             <label>
               <span>{t.step3}</span>

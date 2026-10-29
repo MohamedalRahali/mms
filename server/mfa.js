@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import { outputName } from './brand.js'
 
 /**
  * Double authentification (التحقق بخطوتين) : codes à 6 chiffres renouvelés toutes les 30 s (TOTP, RFC 6238),
@@ -77,8 +78,10 @@ export function verifyTotp(secret, code, { now = Date.now(), lastStep = -1 } = {
 }
 
 /** Adresse otpauth:// à ouvrir dans l'application d'authentification (ou à saisir à la main avec la clé) */
-export const otpauthUri = (secret, account, issuer = 'MMS Radar') =>
-  `otpauth://totp/${encodeURIComponent(`${issuer}:${account}`)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&digits=${DIGITS}&period=${STEP}`
+// Format standard (Google Authenticator, Microsoft Authenticator, Authy…) : TOTP, SHA1, 6 chiffres, 30 s ; émetteur =
+// nom de l'organisation (هوية المخرجات) s'il est réglé, sinon « MMS Radar »
+export const otpauthUri = (secret, account, issuer = outputName('MMS Radar')) =>
+  `otpauth://totp/${encodeURIComponent(`${issuer}:${account}`)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=${DIGITS}&period=${STEP}`
 
 const hashCode = (code) => crypto.createHash('sha256').update(String(code).replace(/[\s-]/g, '').toUpperCase()).digest('hex')
 

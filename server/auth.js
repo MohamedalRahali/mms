@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { permsOf } from './permissions.js'
 import { mfaRequired, newSecret, otpauthUri, recoveryCodes, useRecovery, verifyTotp } from './mfa.js'
+import QRCode from 'qrcode'
 
 /**
  * Connexion à MMS : comptes dans data/users.json (mots de passe hachés avec scrypt, jamais en clair),
@@ -238,13 +239,17 @@ function sessionUser(req) {
 }
 
 /** Activation, étape 1 : nouvelle clé (pas encore active) et adresse otpauth:// */
-export function mfaSetupRoute(req, res) {
+export async function mfaSetupRoute(req, res) {
   const found = sessionUser(req)
   if (!found) return res.status(401).json({ error: 'AUTH' })
   const { users, user } = found
   user.totpPending = { secret: newSecret(), at: new Date().toISOString() }
   writeUsers(users)
-  res.json({ secret: user.totpPending.secret, uri: otpauthUri(user.totpPending.secret, user.email) })
+  const uri = otpauthUri(user.totpPending.secret, user.email)
+  // QR code fabriqué sur le serveur (aucun service extérieur) : image PNG à scanner avec l'application d'authentification
+  const qr = await QRCode.toDataURL(uri, { errorCorrectionLevel: 'M', margin: 2, width: 260, color: { dark: '#000000', light: '#ffffff' } })
+  res.setHeader('Cache-Control', 'no-store')
+  res.json({ secret: user.totpPending.secret, uri, qr })
 }
 
 /** Activation, étape 2 : le premier code valide active la clé ; 10 codes de secours renvoyés une seule fois */
