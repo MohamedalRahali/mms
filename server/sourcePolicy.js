@@ -14,6 +14,10 @@ import path from 'node:path'
 const DEFAULT_BLOCKED = ['r/AutoNewspaper', 'r/ALJAZEERAauto', 'r/MapPorn', 'r/MilitaryPorn', 'r/WhitePeopleTwitter']
 const BOT_PATTERNS = [/^r\/\w*auto$/i, /^r\/auto\w*newspaper/i, /porn/i, /nsfw/i, /\bbot$/i, /_bot\b/i]
 
+// YouTube : chaînes hors sujet pour une veille d'actualité (récitation, religion, divertissement, musique), d'après le
+// nom de la chaîne seulement : un titre d'actualité qui parle d'un concours de Coran ou d'un « مسلسل » reste gardé
+const YOUTUBE_OFFTOPIC = /قرآن|القران|تلاوة|تلاوات|ترتيل|تجويد|رقية|الرقيه|أناشيد|اناشيد|نشيد|أدعية|ادعية|خطبة الجمعة|كرتون|رسوم متحركة|أغاني|اغاني|أغنية|اغنية|مسلسل|كليب|quran|koran|recitation|ruqya|nasheed|cartoon|kids|lyrics|official music|music video|gaming|vlog/i
+
 let file = ''
 let policy = { blocked: [], forumAllow: [] }
 
@@ -61,6 +65,7 @@ export function excludedBySource(it) {
   if (DEFAULT_BLOCKED.some((b) => lower(b) === lo) || policy.blocked.some((b) => lower(canonicalOrigin(b)) === lo)) return true
   const social = it.channel === 'reddit' || it.media === 'forum' || it.media === 'social'
   if (social && BOT_PATTERNS.some((re) => re.test(o))) return true
+  if (it.channel === 'youtube' && YOUTUBE_OFFTOPIC.test(o)) return true
   // Comptes personnels Reddit (u/…) : pas des médias, ni des forums
   if (it.channel === 'reddit' && lo.startsWith('u/')) return true
   if (policy.forumAllow.length && it.media === 'forum' && !policy.forumAllow.some((f) => lower(canonicalOrigin(f)) === lo)) return true

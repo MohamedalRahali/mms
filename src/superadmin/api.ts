@@ -126,7 +126,7 @@ export const AUDIT_LABEL: Record<string, string> = {
   apikey_create: 'إنشاء مفتاح API',
   apikey_revoke: 'إلغاء مفتاح API',
   share_revoke: 'إلغاء رابط مشاركة',
-  geo_settings: 'إعدادات الحضور في إجابات الذكاء الاصطناعي',
+  geo_settings: 'إعدادات الحضور في إجابات النموذج الداخلي',
   mail_policy: 'النطاقات المسموح بها للبريد',
   alert_review: 'اعتماد التنبيهات الحرجة',
   mfa_policy: 'قاعدة التحقق بخطوتين',

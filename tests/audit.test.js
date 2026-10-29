@@ -387,6 +387,10 @@ test('audit v3 : bots et comptes personnels écartés, noms Reddit unifiés, pr�
   for (const o of ['r/AutoNewspaper', 'r/ALJAZEERAauto', 'r/MapPorn', 'r/MilitaryPorn', 'r/WhitePeopleTwitter', 'r/u_someone']) assert.equal(sp.excludedBySource(r(o)), true, o)
   assert.equal(sp.excludedBySource(r('r/libya')), false)
   assert.equal(sp.excludedBySource({ origin: 'وال', channel: 'site', media: 'article' }), false)
+  // YouTube : chaînes de récitation, de chants ou de divertissement écartées, chaînes d'actualité gardées
+  const yt = (origin, title = '') => ({ origin, title, channel: 'youtube', media: 'broadcast' })
+  for (const [o, t] of [['قناة القرآن الكريم', ''], ['Quran Recitation HD', ''], ['تلاوات خاشعة', ''], ['Kids Cartoon', ''], ['قناة الأغاني', 'أغنية ليبية']]) assert.equal(sp.excludedBySource(yt(o, t)), true, o)
+  for (const [o, t] of [['قناة ليبيا الأحرار', 'نشرة الأخبار'], ['الوسط', 'حوار حول الميزانية'], ['ليبيا الأحرار', 'مسابقة القرآن الكريم في طرابلس']]) assert.equal(sp.excludedBySource(yt(o, t)), false, o)
   // Liste blanche des forums : seuls les forums listés restent
   sp.setSourcePolicy({ blocked: ['r/SomeSpam'], forumAllow: ['r/libya'] })
   assert.equal(sp.excludedBySource(r('r/worldnews')), true)

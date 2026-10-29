@@ -338,7 +338,7 @@ export default function App() {
           { key: 'ai', label: t.sideAi },
           { key: 'sov', label: pro.navSov },
           { key: 'compare', label: pro.navCompare },
-          { key: 'geo', label: lang === 'ar' ? 'الحضور في إجابات الذكاء الاصطناعي' : 'Presence in AI answers' },
+          { key: 'geo', label: lang === 'ar' ? 'الحضور في إجابات النموذج الداخلي' : 'Presence in internal-model answers' },
           { key: 'pool', label: lang === 'ar' ? 'مجمع البحث' : 'Search pool' },
           { key: 'search', label: t.sideSearch },
         ],
