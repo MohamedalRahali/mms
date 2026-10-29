@@ -396,7 +396,17 @@ export function NewsList({
                                 ? (pinboards.find((b) => b.id === v)?.name ?? v)
                                 : k === 'important'
                                   ? '✓'
-                                  : v}
+                                  : k === 'media'
+                                    ? (m.types[v as keyof typeof m.types] ?? v)
+                                    : k === 'sub'
+                                      ? (m.subTypes[v as keyof typeof m.subTypes] ?? v)
+                                      : k === 'lang'
+                                        ? i.language(v)
+                                        : k === 'processed'
+                                          ? v === 'yes'
+                                            ? l.onlyProcessed
+                                            : l.unprocessed
+                                          : v}
                 </b>
                 <button
                   type="button"

@@ -10,6 +10,7 @@ import { MediaIcon } from './MediaParts'
 import { NewsCard } from './NewsCard'
 import { PickPage } from './ReportPick'
 import { ToneBadge } from './Intel'
+import { useIntel } from '../lib/intel'
 
 /** Pages « الوسائط » : tableau de bord et liste propres à chaque type de média (menu latéral) */
 
@@ -468,14 +469,19 @@ function Threads({ threads }: { threads: NonNullable<Overview['threads']> }) {
 function Feed({ type, sub, days, flux }: { type: MediaPageType; sub: string; days: number; flux: Flux | '' }) {
   const i = useI18n()
   const p = MEDIA_PAGE_TEXT[i.lang]
+  const x = useIntel()
+  const drill = useContext(DrillContext)
   const [draft, setDraft] = useState('')
   const [q, setQ] = useState('')
+  const [tones, setTones] = useState<Tone[]>([])
   const [page, setPage] = useState(1)
-  useEffect(() => setPage(1), [type, sub, days, flux, q])
+  useEffect(() => setPage(1), [type, sub, days, flux, q, tones])
   const params = new URLSearchParams({ page: String(page), size: '10', media: type, days: String(days) })
   if (sub) params.set('sub', sub)
   if (flux) params.set('flux', flux)
   if (q) params.set('q', q)
+  if (tones.length) params.set('tone', tones.join(','))
+  const ar = i.lang === 'ar'
   const { data, error, loading } = useFetch<NewsResponse>(`/api/news?${params}`)
 
   function onSubmit(e: FormEvent) {
@@ -495,8 +501,44 @@ function Feed({ type, sub, days, flux }: { type: MediaPageType; sub: string; day
           <button type="submit" className="news-btn">
             {i.t.search}
           </button>
+          <fieldset className={tones.length ? 'news-tones is-on' : 'news-tones'} aria-label={x.tone}>
+            {(['positive', 'neutral', 'negative'] as Tone[]).map((tone) => (
+              <label key={tone} className={`news-tones__opt is-${tone}`}>
+                <input type="checkbox" checked={tones.includes(tone)} onChange={() => setTones(tones.includes(tone) ? tones.filter((t) => t !== tone) : [...tones, tone])} />
+                {x.tones[tone]}
+              </label>
+            ))}
+          </fieldset>
+          {/* Tous les filtres (source, thème, pays, période précise…) : la liste des actualités, déjà limitée à ce média */}
+          <button
+            type="button"
+            className="news-btn news-btn--ghost"
+            onClick={() => drill({ media: type, ...(sub ? { sub } : {}), days: String(days), ...(q ? { q } : {}), ...(tones.length ? { tone: tones.join(',') } : {}) })}
+          >
+            {ar ? 'كل عوامل التصفية' : 'All filters'}
+          </button>
         </form>
       </div>
+      {(q || tones.length > 0) && (
+        <p className="news-active">
+          {q && (
+            <span className="mms-filterchip">
+              {ar ? 'البحث' : 'Search'}: <b dir="auto">{q}</b>
+              <button type="button" aria-label={ar ? 'إزالة' : 'Remove'} onClick={() => (setQ(''), setDraft(''))}>
+                ×
+              </button>
+            </span>
+          )}
+          {tones.length > 0 && (
+            <span className="mms-filterchip">
+              {x.tone}: <b>{tones.map((t) => x.tones[t]).join('، ')}</b>
+              <button type="button" aria-label={ar ? 'إزالة' : 'Remove'} onClick={() => setTones([])}>
+                ×
+              </button>
+            </span>
+          )}
+        </p>
+      )}
       {error && <p className="news-status news-status--error">{i.t.loadError}</p>}
       {loading && !data && <p className="news-status">{i.t.loading}</p>}
       {data && data.items.length === 0 && <p className="mms-mpage__empty">{p.pages[type].empty}</p>}
