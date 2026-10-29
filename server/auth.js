@@ -53,6 +53,18 @@ export function markSession(token, patch) {
   saveSessions()
 }
 
+/** Code de l'application d'authentification (changement d'inscription du visage) ; un code déjà utilisé est refusé */
+export function verifySecondFactor(email, code) {
+  const users = readUsers()
+  const user = users.find((u) => u.email.toLowerCase() === String(email).toLowerCase())
+  if (!user?.totp?.secret || typeof code !== 'string' || code.length > 20) return false
+  const step = verifyTotp(user.totp.secret, code, { lastStep: user.totp.lastStep ?? -1 })
+  if (step < 0) return false
+  user.totp.lastStep = step
+  writeUsers(users)
+  return true
+}
+
 /** Mot de passe saisi à nouveau (changement d'inscription du visage) : 5 essais par 15 minutes et par compte */
 const reauthFails = new Map()
 export function verifyPassword(email, password) {

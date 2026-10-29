@@ -10,7 +10,7 @@ import { aiUsage } from './ai.js'
 import { mountPermissionsAdmin, permsOf, profileExists } from './permissions.js'
 import { initBrand, mountClientAdmin } from './clientAdmin.js'
 import { sourceHealth } from './sourceHealth.js'
-import { addException, faceAdmin, resetFace, setFacePolicy } from './face.js'
+import { addException, approveChange, faceAdmin, resetFace, setFacePolicy } from './face.js'
 import { exportHealth, runCheck } from './exportHealth.js'
 import { countryOf as sourceCountry, initSourceMeta, reachIsSet, reachOf, reliabilityIsSet, reliabilityOf } from './sourceMeta.js'
 import {
@@ -370,6 +370,12 @@ export function mountSuperAdmin(app, root) {
     } catch (err) {
       res.status(err.status || 400).json({ error: err.code || 'FAILED' })
     }
+  })
+  sa.post('/face/approve', (req, res) => {
+    const email = String(req.body?.email || '')
+    const until = approveChange(email)
+    audit(req, 'face_approve', email, until)
+    res.json(faceAdmin())
   })
   sa.post('/face/reset', (req, res) => {
     const email = String(req.body?.email || '')

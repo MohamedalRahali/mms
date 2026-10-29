@@ -136,6 +136,7 @@ export const AUDIT_LABEL: Record<string, string> = {
   face_policy: 'سياسة التحقق بالوجه',
   face_exception: 'استثناء مؤقت من التحقق بالوجه',
   face_reset: 'إعادة تعيين التحقق بالوجه',
+  face_approve: 'اعتماد تغيير الوجه',
   support_ticket: 'حالة طلب دعم',
   entity_ai_edit: 'تعديل قرار تصحيح فاعل',
   mailing_list_create: 'إنشاء قائمة مراسلة',

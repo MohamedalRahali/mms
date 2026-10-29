@@ -8,7 +8,7 @@ import { aiEnabled, aiProvider, aiUsage, analyse, aroundRun, cached, explainSpik
 import { initEntityAI, startEntityAI } from './entityAI.js'
 import { allTags, countList, entitiesOf, findSpikes, initTags, itemKey, setTags, spikeItems, tagsOf, toCsv } from './intel.js'
 import { keyStatus } from './keys.js'
-import { currentUser, initAuth, loginRoute, logoutRoute, markSession, mfaDisableRoute, mfaEnableRoute, mfaLoginRoute, mfaSetupRoute, mfaStateOf, readUsers, requireAuth, sessionOf, setFaceGate, verifyPassword } from './auth.js'
+import { currentUser, initAuth, loginRoute, logoutRoute, markSession, mfaDisableRoute, mfaEnableRoute, mfaLoginRoute, mfaSetupRoute, mfaStateOf, readUsers, requireAuth, sessionOf, setFaceGate, verifyPassword, verifySecondFactor } from './auth.js'
 import { faceGate, faceStateOf, initFace, mountFace, setFaceEngine } from './face.js'
 import { makeEngine } from './faceEngine.js'
 import { initMfaPolicy } from './mfa.js'
@@ -185,7 +185,10 @@ setFaceEngine(makeEngine(root))
 initFace(path.join(root, 'data'), {
   log: (type, email, detail) => logSecurity(type, { login: email, detail }),
   notify: (email, what) => sendMail([email], faceNotice(what)),
+  // Super Admins avertis de chaque inscription, changement, demande et retrait (adresse du support technique)
+  notifyAdmins: (text) => sendSupportMail(supportConf().email, { subject: 'MMS · التحقق بالوجه', text, html: `<!doctype html><html lang="ar" dir="rtl"><body style="font-family:Tahoma,Arial,sans-serif"><p>${text.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c])}</p><p>Super Admin › الأمان › التحقق بالوجه</p></body></html>` }),
   verifyPassword,
+  verifySecondFactor,
   markSession,
   sessionOf,
 })

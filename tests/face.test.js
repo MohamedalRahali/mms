@@ -36,15 +36,21 @@ const fakeEngine = (ready = true) => ({
 
 const sessions = new Map()
 const notices = []
+const admins = []
 const logs = []
 let dir
-function setup(engineReady = true) {
+const TEST_KEY = Buffer.alloc(32, 7).toString('base64')
+function setup(engineReady = true, withKey = true) {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'face-'))
+  if (withKey) process.env.FACE_KEY = TEST_KEY
+  else delete process.env.FACE_KEY
   face.setFaceEngine(fakeEngine(engineReady))
   face.initFace(dir, {
     log: (t, e, d) => logs.push([t, e, d]),
     notify: async (e, w) => notices.push([e, w]),
+    notifyAdmins: async (text) => admins.push(text),
     verifyPassword: (e, p) => p === `pw-${e}`,
+    verifySecondFactor: (e, c) => c === '123456',
     markSession: (t, patch) => Object.assign(sessions.get(t), patch),
     sessionOf: () => null,
   })
@@ -145,8 +151,18 @@ test('11. remplacer un visage inscrit exige le mot de passe ; 2FA et mot de pass
   await doEnroll('alice@x.test', 'e1', 'alice')
   assert.equal((await doEnroll('alice@x.test', 'e1', 'bob')).error, 'REAUTH')
   assert.equal((await doEnroll('alice@x.test', 'e1', 'bob', { body: { password: 'faux' } })).error, 'REAUTH')
-  assert.equal((await doEnroll('alice@x.test', 'e1', 'alice', { body: { password: 'pw-alice@x.test' } })).status, 200)
+  // Mot de passe seul : refusé ; mot de passe + code 2FA : il faut encore l'accord du Super Admin
+  assert.equal((await doEnroll('alice@x.test', 'e1', 'alice', { body: { password: 'pw-alice@x.test' } })).error, 'REAUTH_2FA')
+  assert.equal((await doEnroll('alice@x.test', 'e1', 'alice', { body: { password: 'pw-alice@x.test', code: '000000' } })).error, 'REAUTH_2FA')
+  assert.equal((await doEnroll('alice@x.test', 'e1', 'alice', { body: { password: 'pw-alice@x.test', code: '123456' } })).error, 'APPROVAL')
+  assert.ok(admins.some((t) => t.includes('ينتظر اعتماد المشرف')))
+  assert.ok(face.faceAdmin().accounts.find((a) => a.email === 'alice@x.test').changeRequestedAt)
+  face.approveChange('alice@x.test')
+  assert.equal((await doEnroll('alice@x.test', 'e1', 'alice', { body: { password: 'pw-alice@x.test', code: '123456' } })).status, 200)
   assert.deepEqual(notices.at(-1), ['alice@x.test', 'reenroll'])
+  assert.ok(admins.at(-1).includes('تم تغيير الوجه'))
+  // L'accord ne sert qu'une fois
+  assert.equal((await doEnroll('alice@x.test', 'e1', 'bob', { body: { password: 'pw-alice@x.test', code: '123456' } })).error, 'APPROVAL')
   // Première inscription dans une session vieille de plus de 15 minutes : nouvelle connexion exigée
   login('carol@x.test', 'e2', Date.now() - 20 * 60_000)
   assert.equal((await doEnroll('carol@x.test', 'e2', 'alice')).error, 'REAUTH')
@@ -185,4 +201,30 @@ test('mise en service : rien n’est exigé si le moteur manque, ni en mode off,
   face.setFacePolicy({ mode: 'trial', trial: ['AroundExpressions@gmail.com'] })
   assert.equal(face.faceRequired('aroundexpressions@gmail.com'), true)
   assert.equal(face.faceRequired('alice@x.test'), false)
+})
+
+test('partage de compte : retrait puis nouvelle inscription = remplacement (2FA + accord) ; Super Admin averti', async () => {
+  setup()
+  login('alice@x.test', 'w1')
+  await doEnroll('alice@x.test', 'w1', 'alice')
+  assert.ok(admins.at(-1).includes('تم تسجيل وجه جديد'))
+  assert.equal(face.withdraw({ email: 'alice@x.test', body: { password: 'pw-alice@x.test' } }).status, 200)
+  // Même dans une session toute neuve, le visage d'un tiers ne peut pas être inscrit sans 2FA et accord
+  login('alice@x.test', 'w2')
+  assert.equal((await doEnroll('alice@x.test', 'w2', 'bob')).error, 'REAUTH')
+  assert.equal((await doEnroll('alice@x.test', 'w2', 'bob', { body: { password: 'pw-alice@x.test', code: '123456' } })).error, 'APPROVAL')
+  // Réinitialisation par le Super Admin : nouvelle inscription permise (toujours avec mot de passe + 2FA)
+  face.resetFace('alice@x.test')
+  assert.equal((await doEnroll('alice@x.test', 'w2', 'alice', { body: { password: 'pw-alice@x.test', code: '123456' } })).status, 200)
+})
+
+test('clé FACE_KEY absente : aucune inscription, rien n’est exigé, aucun fichier de clé créé', async () => {
+  setup(true, false)
+  assert.equal(face.keyReady(), false)
+  assert.equal(face.faceRequired('alice@x.test'), false)
+  login('alice@x.test', 'k1')
+  assert.equal((await doEnroll('alice@x.test', 'k1', 'alice')).error, 'KEY')
+  assert.equal(fs.existsSync(path.join(dir, 'face', 'key')), false)
+  assert.equal(face.faceAdmin().keyReady, false)
+  process.env.FACE_KEY = TEST_KEY
 })

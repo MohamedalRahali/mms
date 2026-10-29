@@ -6,9 +6,9 @@ import { ago, api, errText } from './api'
  * exceptions limitées dans le temps et réinitialisation, toutes journalisées. Aucune donnée biométrique n'est affichée.
  */
 
-type Account = { email: string; enrolled: boolean; enrolledAt: string | null; lastOkAt: string | null; lastFailAt: string | null; lockedUntil: string | null }
+type Account = { email: string; enrolled: boolean; enrolledAt: string | null; lastOkAt: string | null; lastFailAt: string | null; lockedUntil: string | null; changeRequestedAt: string | null; approvedUntil: string | null }
 type Exception = { email: string; until: string; reason: string; by: string; at: string }
-type State = { mode: 'off' | 'trial' | 'on'; trial: string[]; engine: { ready: boolean; missing: string[] }; exceptions: Exception[]; accounts: Account[] }
+type State = { mode: 'off' | 'trial' | 'on'; trial: string[]; approveChange: boolean; keyReady: boolean; engine: { ready: boolean; missing: string[] }; exceptions: Exception[]; accounts: Account[] }
 
 const MODE: Record<State['mode'], string> = { off: 'متوقف', trial: 'تجريبي (الحسابات المحددة فقط)', on: 'مفعّل لكل الحسابات' }
 
@@ -39,14 +39,22 @@ export function FaceCard() {
   if (!data) return msg ? <p className="sa-error">{msg}</p> : null
   const setMode = (mode: State['mode']) => {
     if (mode === 'on' && !window.confirm('سيُطلب من كل الحسابات تسجيل الوجه عند الدخول القادم. هل تريد المتابعة؟')) return
-    call(api<State>('/face/policy', 'PUT', { mode, trial: trial.split(/[\s,;]+/).filter(Boolean) }), 'تم الحفظ.')
+    call(api<State>('/face/policy', 'PUT', { mode, trial: trial.split(/[\s,;]+/).filter(Boolean), approveChange: data.approveChange }), 'تم الحفظ.')
   }
   return (
     <div className="sa-card sa-card--wide">
       <div className="sa-card__head">
         <h2>التحقق بالوجه</h2>
-        <span className={`sa-tag ${data.engine.ready ? '' : 'is-bad'}`}>{data.engine.ready ? 'المحرك جاهز' : 'المحرك غير مثبّت'}</span>
+        <span className="sa-row">
+          <span className={`sa-tag ${data.engine.ready ? '' : 'is-bad'}`}>{data.engine.ready ? 'المحرك جاهز' : 'المحرك غير مثبّت'}</span>
+          <span className={`sa-tag ${data.keyReady ? '' : 'is-bad'}`}>{data.keyReady ? 'مفتاح التشفير مضبوط' : 'مفتاح التشفير (FACE_KEY) غير مضبوط'}</span>
+        </span>
       </div>
+      {!data.keyReady && (
+        <p className="sa-note">
+          لا يمكن تسجيل أي وجه قبل ضبط مفتاح التشفير FACE_KEY في ملف إعدادات الخدمة (خارج مجلد البيانات): شغّل الملف « configurer-cle-visage-mms.bat » مرة واحدة على حاسوب الإدارة.
+        </p>
+      )}
       <p className="sa-muted">
         يُضاف إلى كلمة المرور والتحقق بخطوتين ولا يعوّضهما. لا تُحفظ أي صورة؛ نموذج الوجه مشفّر على الخادم ولا يظهر هنا. ما دام المحرك غير مثبّت لا يُطلب التحقق من أي حساب.
         {!data.engine.ready && data.engine.missing.length > 0 && ` الناقص: ${data.engine.missing.join('، ')}.`}
@@ -58,6 +66,14 @@ export function FaceCard() {
           </button>
         ))}
       </div>
+      <label className="sa-muted">
+        <input
+          type="checkbox"
+          checked={data.approveChange}
+          onChange={(e) => call(api<State>('/face/policy', 'PUT', { mode: data.mode, trial: data.trial, approveChange: e.target.checked }), 'تم الحفظ.')}
+        />{' '}
+        اعتماد المشرف لتغيير الوجه (تغيير الوجه المسجل يتطلب كلمة المرور ورمز التحقق بخطوتين واعتمادك)
+      </label>
       <label className="sa-muted">
         الحسابات في الوضع التجريبي (مفصولة بفاصلة)
         <input className="sa-input" dir="ltr" value={trial} onChange={(e) => setTrial(e.target.value)} onBlur={() => trial !== data.trial.join(', ') && setMode(data.mode)} />
@@ -91,6 +107,7 @@ export function FaceCard() {
                 <th>آخر تحقق ناجح</th>
                 <th>آخر فشل</th>
                 <th>إيقاف مؤقت</th>
+                <th>طلب تغيير</th>
                 <th />
               </tr>
             </thead>
@@ -102,6 +119,21 @@ export function FaceCard() {
                   <td>{a.lastOkAt ? ago(a.lastOkAt) : '—'}</td>
                   <td>{a.lastFailAt ? ago(a.lastFailAt) : '—'}</td>
                   <td>{a.lockedUntil ? new Date(a.lockedUntil).toLocaleTimeString('ar-LY') : '—'}</td>
+                  <td>
+                    {a.approvedUntil ? (
+                      <span className="sa-tag">معتمد حتى {new Date(a.approvedUntil).toLocaleString('ar-LY')}</span>
+                    ) : a.changeRequestedAt ? (
+                      <button
+                        type="button"
+                        className="sa-btn sa-btn--small"
+                        onClick={() => window.confirm(`اعتماد تغيير الوجه للحساب ${a.email}؟ تأكد من هوية صاحب الطلب أولاً. صالح 24 ساعة لتغيير واحد.`) && call(api<State>('/face/approve', 'POST', { email: a.email }), 'تم الاعتماد.')}
+                      >
+                        اعتماد طلب التغيير ({ago(a.changeRequestedAt)})
+                      </button>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                   <td>
                     <button
                       type="button"

@@ -28,6 +28,8 @@ const T = {
     help: 'نصائح: إضاءة أمامية جيدة، وجه مكشوف (دون نظارات شمسية أو قناع)، الكاميرا على مستوى العينين، شخص واحد فقط في الصورة.',
     recovery: 'لا تستطيع إتمام التحقق؟ تواصل مع الدعم الفني أو مسؤول المنصة لمنحك وصولاً مؤقتاً بعد التأكد من هويتك.',
     password: 'كلمة المرور (للتأكيد)',
+    code: 'رمز التحقق بخطوتين',
+    changeNote: 'تغيير الوجه المسجل يتطلب كلمة المرور ورمز التحقق بخطوتين واعتماد مسؤول المنصة.',
     errors: {
       DENIED: 'لم يُسمح باستعمال الكاميرا. اسمح بها من إعدادات المتصفح (رمز القفل بجانب العنوان) ثم أعد المحاولة.',
       NOCAM: 'لم يتم العثور على كاميرا. صِل كاميرا أو استعمل جهازاً مزوداً بكاميرا.',
@@ -41,6 +43,9 @@ const T = {
       MISMATCH: 'لم يتم التحقق من الهوية. أعد المحاولة في إضاءة جيدة.',
       LOCKED: 'محاولات كثيرة غير ناجحة. التحقق متوقف مؤقتاً حتى',
       REAUTH: 'للتأكيد، أعد تسجيل الدخول أو أدخل كلمة المرور.',
+      REAUTH_2FA: 'رمز التحقق بخطوتين غير صحيح أو مستعمل. أدخل الرمز الحالي من تطبيق المصادقة.',
+      APPROVAL: 'تغيير الوجه المسجل يحتاج إلى اعتماد مسؤول المنصة. أُرسل طلبك؛ أعد المحاولة بعد الاعتماد (صالح 24 ساعة).',
+      KEY: 'خدمة التحقق بالوجه غير جاهزة بعد. تم إبلاغ مسؤول المنصة.',
       CHALLENGE: 'انتهت مهلة المحاولة. أعد المحاولة.',
       CONSENT: 'الموافقة مطلوبة قبل تسجيل الوجه.',
       ENGINE: 'خدمة التحقق بالوجه غير متاحة حالياً.',
@@ -74,6 +79,8 @@ const T = {
     help: 'Tips: good light in front of you, uncovered face (no sunglasses or mask), camera at eye level, only one person in view.',
     recovery: 'Cannot complete verification? Contact technical support or the platform administrator for temporary access after your identity is confirmed.',
     password: 'Password (to confirm)',
+    code: 'Two-step code',
+    changeNote: 'Changing the enrolled face requires your password, a two-step code and approval from the platform administrator.',
     errors: {
       DENIED: 'Camera access was refused. Allow it in the browser settings (lock icon next to the address), then try again.',
       NOCAM: 'No camera found. Connect a camera or use a device that has one.',
@@ -87,6 +94,9 @@ const T = {
       MISMATCH: 'Identity not verified. Try again in good light.',
       LOCKED: 'Too many unsuccessful attempts. Verification is paused until',
       REAUTH: 'To confirm, sign in again or enter your password.',
+      REAUTH_2FA: 'The two-step code is wrong or already used. Enter the current code from your authenticator app.',
+      APPROVAL: 'Changing the enrolled face needs approval from the platform administrator. Your request was sent; try again once approved (valid 24 hours).',
+      KEY: 'Face verification is not ready yet. The platform administrator has been informed.',
       CHALLENGE: 'The attempt timed out. Try again.',
       CONSENT: 'Consent is required before enrollment.',
       ENGINE: 'Face verification is not available right now.',
@@ -135,7 +145,7 @@ const camError = (e: unknown) => {
 }
 
 /** Capture guidée : consentement (inscription), caméra, défi de poses tiré par le serveur, envoi */
-function Capture({ lang, purpose, password, onDone }: { lang: Lang; purpose: 'enroll' | 'verify'; password?: string; onDone: () => void }) {
+function Capture({ lang, purpose, password, code, onDone }: { lang: Lang; purpose: 'enroll' | 'verify'; password?: string; code?: string; onDone: () => void }) {
   const t = T[lang]
   const video = useRef<HTMLVideoElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -183,7 +193,7 @@ function Capture({ lang, purpose, password, onDone }: { lang: Lang; purpose: 'en
       const res = await fetch(`/api/face/${purpose}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nonce: c.nonce, frames, ...(purpose === 'enroll' ? { consent: true, password } : {}) }),
+        body: JSON.stringify({ nonce: c.nonce, frames, ...(purpose === 'enroll' ? { consent: true, password, code } : {}) }),
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok) throw Object.assign(new Error(j.error || 'FAILED'), { code: j.error || 'FAILED', until: j.until })
@@ -265,6 +275,7 @@ export function FacePanel({ lang, onClose }: { lang: Lang; onClose: () => void }
   const t = T[lang]
   const [state, setState] = useState<FaceState | null>(null)
   const [password, setPassword] = useState('')
+  const [code, setCode] = useState('')
   const [mode, setMode] = useState<'' | 'reenroll'>('')
   const [msg, setMsg] = useState('')
   const load = () =>
@@ -295,12 +306,21 @@ export function FacePanel({ lang, onClose }: { lang: Lang; onClose: () => void }
         )}
         {state?.engine && (
           <>
-            <label className="mfa-enable">
-              {t.password}
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
-            </label>
+            {state.enrolled && <p className="news-status">{t.changeNote}</p>}
+            <div className="mfa-enable">
+              <label>
+                {t.password}
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+              </label>
+              {state.enrolled && (
+                <label>
+                  {t.code}
+                  <input value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" maxLength={6} dir="ltr" autoComplete="one-time-code" />
+                </label>
+              )}
+            </div>
             <div className="face-panel__actions">
-              <button type="button" className="news-btn" disabled={!password} onClick={() => setMode('reenroll')}>
+              <button type="button" className="news-btn" disabled={!password || (state.enrolled && code.length !== 6)} onClick={() => setMode('reenroll')}>
                 {t.reenroll}
               </button>
               {state.enrolled && (
@@ -314,9 +334,11 @@ export function FacePanel({ lang, onClose }: { lang: Lang; onClose: () => void }
                 lang={lang}
                 purpose="enroll"
                 password={password}
+                code={code}
                 onDone={() => {
                   setMode('')
                   setPassword('')
+                  setCode('')
                   load()
                 }}
               />

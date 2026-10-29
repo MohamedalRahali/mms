@@ -44,11 +44,12 @@ let dir = ''
 let confFile = ''
 let templatesFile = ''
 let key = null
-let conf = { mode: 'off', trial: [], exceptions: [], threshold: 0.42 }
+// approveChange : remplacer un visage déjà inscrit exige l'accord du Super Admin (« اعتماد المشرف لتغيير الوجه »)
+let conf = { mode: 'off', trial: [], exceptions: [], threshold: 0.42, approveChange: true }
 let templates = {}
 let status = {} // compte → { enrolledAt, lastOkAt, lastFailAt, fails, lockUntil, locks } (sans donnée biométrique)
 let engine = { ready: () => false, info: () => ({ ready: false, missing: ['models'] }) }
-let hooks = { log: () => {}, notify: async () => {}, verifyPassword: () => false, markSession: () => {}, sessionOf: () => null }
+let hooks = { log: () => {}, notify: async () => {}, notifyAdmins: async () => {}, verifyPassword: () => false, verifySecondFactor: () => false, markSession: () => {}, sessionOf: () => null }
 const challenges = new Map() // nonce → { token, email, steps, at, purpose }
 
 export const setFaceEngine = (e) => (engine = e)
@@ -60,9 +61,10 @@ export function initFace(dataDir, h = {}) {
   hooks = { ...hooks, ...h }
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
   key = loadKey()
+  if (!key) console.warn('التحقق بالوجه : FACE_KEY absente (fichier .env du service) ; aucune inscription possible')
   try {
     const c = JSON.parse(fs.readFileSync(confFile, 'utf8'))
-    conf = { ...conf, ...c, mode: MODES.includes(c.mode) ? c.mode : 'off', trial: (c.trial || []).map(low), exceptions: c.exceptions || [] }
+    conf = { ...conf, ...c, mode: MODES.includes(c.mode) ? c.mode : 'off', trial: (c.trial || []).map(low), exceptions: c.exceptions || [], approveChange: c.approveChange !== false }
   } catch {
     /* réglages par défaut : désactivé */
   }
@@ -78,22 +80,15 @@ export function initFace(dataDir, h = {}) {
 
 const low = (s) => String(s || '').trim().toLowerCase()
 
+/**
+ * Clé de chiffrement : uniquement FACE_KEY (fichier .env du service, hors du dossier des données et de ses
+ * sauvegardes). Sans elle, aucun modèle n'est enregistré : jamais de modèle chiffré avec une clé posée à côté.
+ */
 function loadKey() {
-  if (process.env.FACE_KEY) {
-    const k = Buffer.from(process.env.FACE_KEY, 'base64')
-    if (k.length === 32) return k
-  }
-  const f = path.join(dir, 'key')
-  try {
-    const k = Buffer.from(fs.readFileSync(f, 'utf8').trim(), 'base64')
-    if (k.length === 32) return k
-  } catch {
-    /* première fois */
-  }
-  const k = crypto.randomBytes(32)
-  fs.writeFileSync(f, k.toString('base64'), { mode: 0o600 })
-  return k
+  const k = Buffer.from(String(process.env.FACE_KEY || ''), 'base64')
+  return k.length === 32 ? k : null
 }
+export const keyReady = () => Boolean(key)
 
 function writeAtomic(file, text, mode = 0o600) {
   fs.mkdirSync(path.dirname(file), { recursive: true })
@@ -135,7 +130,7 @@ const activeException = (email, now = Date.now()) => conf.exceptions.find((x) =>
 
 /** La vérification est-elle exigée pour ce compte, maintenant ? */
 export function faceRequired(email) {
-  if (!engine.ready()) return false
+  if (!engine.ready() || !key) return false
   if (activeException(email)) return false
   if (conf.mode === 'on') return true
   return conf.mode === 'trial' && conf.trial.includes(low(email))
@@ -149,7 +144,8 @@ export function faceStateOf(email, session) {
     enrolled: Boolean(templates[low(email)]),
     verified: Boolean(session?.face),
     lockedUntil: st.lockUntil && st.lockUntil > Date.now() ? new Date(st.lockUntil).toISOString() : null,
-    engine: engine.ready(),
+    engine: engine.ready() && Boolean(key),
+    changeApproved: Boolean(st.approvedUntil && st.approvedUntil > Date.now()),
     exceptionUntil: activeException(email)?.until || null,
   }
 }
@@ -250,11 +246,26 @@ const lockedUntil = (email, now = Date.now()) => {
 
 export async function enroll({ email, session, token, body, now = Date.now() }) {
   if (!engine.ready()) return { status: 503, error: 'ENGINE' }
+  // Clé de chiffrement absente : aucun modèle ne peut être enregistré (message réservé au Super Admin)
+  if (!key) return { status: 503, error: 'KEY' }
   if (body?.consent !== true) return { status: 400, error: 'CONSENT' }
   const k = low(email)
-  // Inscription existante à remplacer : mot de passe saisi à nouveau ; première inscription : session récente
-  if (templates[k]) {
+  const st0 = status[k] || {}
+  // Remplacement : visage déjà inscrit, ou inscrit puis retiré (sinon un retrait suivi d'une nouvelle inscription
+  // permettrait d'inscrire le visage d'un tiers). Mot de passe + code 2FA, et accord du Super Admin si exigé.
+  const replacing = Boolean(templates[k] || st0.everEnrolled)
+  if (replacing) {
     if (!hooks.verifyPassword(email, String(body?.password || ''))) return { status: 401, error: 'REAUTH' }
+    if (!hooks.verifySecondFactor(email, String(body?.code || ''))) return { status: 401, error: 'REAUTH_2FA' }
+    if (conf.approveChange && !(st0.approvedUntil > now)) {
+      if (!st0.changeRequestedAt || now - Date.parse(st0.changeRequestedAt) > 3600_000) {
+        status[k] = { ...st0, changeRequestedAt: new Date(now).toISOString() }
+        saveTemplates()
+        hooks.log('face_change_request', email, '')
+        hooks.notifyAdmins(`طلب تغيير الوجه المسجل للحساب ${email} ينتظر اعتماد المشرف.`)?.catch?.(() => {})
+      }
+      return { status: 403, error: 'APPROVAL' }
+    }
   } else if (!session || now - session.at > FRESH_MS) return { status: 401, error: 'REAUTH' }
   if (lockedUntil(email, now)) return { status: 429, error: 'LOCKED', until: new Date(lockedUntil(email, now)).toISOString() }
   const ch = takeChallenge(body?.nonce, token, email, 'enroll', now)
@@ -265,14 +276,16 @@ export async function enroll({ email, session, token, body, now = Date.now() }) 
     hooks.log('face_enroll_fail', email, r.code)
     return { status: 422, error: r.code }
   }
-  const replaced = Boolean(templates[k])
+  const replaced = replacing
   templates[k] = { ...seal(r.vector, email), at: new Date(now).toISOString(), consentAt: new Date(now).toISOString() }
-  status[k] = { ...(status[k] || {}), enrolledAt: new Date(now).toISOString(), fails: 0, lockUntil: 0 }
+  // Accord du Super Admin consommé : un seul changement par accord
+  status[k] = { ...(status[k] || {}), enrolledAt: new Date(now).toISOString(), everEnrolled: true, fails: 0, lockUntil: 0, approvedUntil: 0, changeRequestedAt: null }
   saveTemplates()
   // L'inscription vaut vérification pour la session en cours
   hooks.markSession(token, { face: now })
   hooks.log(replaced ? 'face_reenroll' : 'face_enroll', email, '')
-  hooks.notify(email, replaced ? 'reenroll' : 'enroll').catch?.(() => {})
+  hooks.notify(email, replaced ? 'reenroll' : 'enroll')?.catch?.(() => {})
+  hooks.notifyAdmins(replaced ? `تم تغيير الوجه المسجل للحساب ${email}.` : `تم تسجيل وجه جديد للحساب ${email}.`)?.catch?.(() => {})
   return { status: 200 }
 }
 
@@ -313,7 +326,8 @@ export function withdraw({ email, body }) {
   status[k] = { ...(status[k] || {}), enrolledAt: null, withdrawnAt: new Date().toISOString() }
   saveTemplates()
   hooks.log('face_withdraw', email, '')
-  hooks.notify(email, 'withdraw').catch?.(() => {})
+  hooks.notify(email, 'withdraw')?.catch?.(() => {})
+  hooks.notifyAdmins(`سحب المستخدم ${email} موافقته وحُذف نموذج وجهه.`)?.catch?.(() => {})
   return { status: 200 }
 }
 
@@ -323,6 +337,8 @@ export function faceAdmin() {
   return {
     mode: conf.mode,
     trial: conf.trial,
+    approveChange: conf.approveChange,
+    keyReady: Boolean(key),
     engine: engine.info(),
     exceptions: conf.exceptions.filter((x) => Date.parse(x.until) > Date.now()),
     accounts: Object.entries(status).map(([email, s]) => ({
@@ -332,6 +348,8 @@ export function faceAdmin() {
       lastOkAt: s.lastOkAt || null,
       lastFailAt: s.lastFailAt || null,
       lockedUntil: s.lockUntil && s.lockUntil > Date.now() ? new Date(s.lockUntil).toISOString() : null,
+      changeRequestedAt: s.changeRequestedAt || null,
+      approvedUntil: s.approvedUntil && s.approvedUntil > Date.now() ? new Date(s.approvedUntil).toISOString() : null,
     })),
   }
 }
@@ -339,7 +357,8 @@ export function faceAdmin() {
 export function setFacePolicy(body) {
   const mode = MODES.includes(body?.mode) ? body.mode : conf.mode
   const trial = Array.isArray(body?.trial) ? [...new Set(body.trial.map(low).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)))].slice(0, 50) : conf.trial
-  conf = { ...conf, mode, trial }
+  const approveChange = typeof body?.approveChange === 'boolean' ? body.approveChange : conf.approveChange
+  conf = { ...conf, mode, trial, approveChange }
   saveConf()
   return faceAdmin()
 }
@@ -356,14 +375,22 @@ export function addException(body, by) {
   return x
 }
 
-/** Réinitialisation par le Super Admin : modèle effacé, nouvelle inscription à la prochaine connexion */
+/** Accord du Super Admin pour un changement de visage : valable 24 heures, pour un seul changement */
+export function approveChange(email, now = Date.now()) {
+  const k = low(email)
+  status[k] = { ...(status[k] || {}), approvedUntil: now + 24 * 3600_000 }
+  saveTemplates()
+  return new Date(status[k].approvedUntil).toISOString()
+}
+
+/** Réinitialisation par le Super Admin : modèle effacé ; nouvelle inscription (mot de passe + 2FA) dans les 7 jours */
 export function resetFace(email) {
   const k = low(email)
   const had = Boolean(templates[k])
   delete templates[k]
-  status[k] = { ...(status[k] || {}), enrolledAt: null, fails: 0, lockUntil: 0, locks: 0 }
+  status[k] = { ...(status[k] || {}), enrolledAt: null, fails: 0, lockUntil: 0, locks: 0, approvedUntil: Date.now() + 7 * 86_400_000 }
   saveTemplates()
-  if (had) hooks.notify(email, 'reset').catch?.(() => {})
+  if (had) hooks.notify(email, 'reset')?.catch?.(() => {})
   return had
 }
 
