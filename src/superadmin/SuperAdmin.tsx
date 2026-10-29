@@ -7,6 +7,7 @@ import { AlertReviewCard, EntitiesEditor, MailPolicyCard, MfaPolicyCard, SourceP
 import { SourceHealthCard } from './SourceHealth'
 import { EntityAICard } from './EntityAI'
 import { SupportCard } from './Support'
+import { FaceCard } from './Face'
 import { ExportHealthCard } from './ExportHealth'
 import { ACTIVITY_LABEL, AUDIT_LABEL, ROLE_LABEL, SECURITY_LABEL, ago, api, errText, flag, fmtBytes, fmtDate, fmtDay, fmtMinutes, fmtNum, qs, setAuthLost } from './api'
 
@@ -136,7 +137,12 @@ export default function SuperAdmin() {
         {section === 'access' && <Access />}
         {section === 'analytics' && <Analytics />}
         {section === 'activity' && <Activity />}
-        {section === 'security' && <Security />}
+        {section === 'security' && (
+          <>
+            <FaceCard />
+            <Security />
+          </>
+        )}
         {section === 'sources' && <Sources />}
         {section === 'entities' && (
           <>

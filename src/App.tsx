@@ -23,6 +23,7 @@ import { type I18n, type Lang, I18nContext, initialLang, makeI18n, saveLang } fr
 import { useAlerts, useCollapsed, useFavorites } from './lib/prefs'
 import { type MfaInfo, type ModuleKey, type User, canDo, hasModule, onBusy, useAuth } from './lib/auth'
 import { MfaPanel } from './components/Mfa'
+import { FacePanel } from './components/Face'
 import { track } from './lib/track'
 import { ReportTray } from './components/ReportPick'
 import { CommandPalette, type PaletteEntry } from './components/CommandPalette'
@@ -213,6 +214,8 @@ export default function App() {
   const [palette, setPalette] = useState(false)
   // Panneau « التحقق بخطوتين » du compte
   const [mfaOpen, setMfaOpen] = useState(false)
+  // Panneau « التحقق بالوجه » du compte (affiché quand le service est en place pour ce compte)
+  const [faceOpen, setFaceOpen] = useState(false)
   // الإعدادات الشخصية : photo et nom modifiés pendant la session (le reste vient de /api/auth/me)
   const [profileOpen, setProfileOpen] = useState(false)
   const [me, setMe] = useState<{ name?: string; avatar?: string }>({})
@@ -504,6 +507,19 @@ export default function App() {
                           <path fill="currentColor" d="M12 1 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-4zm0 6a2.5 2.5 0 0 1 2.5 2.5V11h.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h.5V9.5A2.5 2.5 0 0 1 12 7zm0 1.5a1 1 0 0 0-1 1V11h2V9.5a1 1 0 0 0-1-1z" />
                         </svg>
                       </button>
+                      {(auth.user.face?.engine || auth.user.face?.enrolled) && (
+                        <button
+                          type="button"
+                          className="mms-logout"
+                          onClick={() => setFaceOpen(true)}
+                          title={lang === 'ar' ? 'التحقق بالوجه' : 'Face verification'}
+                          aria-label={lang === 'ar' ? 'التحقق بالوجه' : 'Face verification'}
+                        >
+                          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+                            <path fill="currentColor" d="M4 4h4v2H6v2H4zm12 0h4v4h-2V6h-2zM4 16h2v2h2v2H4zm14 2v-2h2v4h-4v-2zM12 7a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7zm0 8c2.8 0 5 1.2 5 2.5V18H7v-.5C7 16.2 9.2 15 12 15z" />
+                          </svg>
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="mms-logout"
@@ -666,6 +682,7 @@ export default function App() {
                     }}
                   />
                 )}
+                {faceOpen && auth && <FacePanel lang={lang === 'ar' ? 'ar' : 'en'} onClose={() => setFaceOpen(false)} />}
                 {mfaOpen && auth && (
                   <MfaPanel
                     lang={lang}

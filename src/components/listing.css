@@ -1057,3 +1057,67 @@
 .item-edit__check input {
   width: auto;
 }
+
+/* التحقق بالوجه (Face.tsx) : cadre de la caméra avec ovale de placement et consigne */
+.face-page__what {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+.face-page__consent {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 10px 0;
+  line-height: 1.6;
+}
+.face-capture {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 12px 0;
+}
+.face-capture__frame {
+  position: relative;
+  width: min(100%, 360px);
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.face-capture__frame video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+.face-capture__oval {
+  position: absolute;
+  inset: 12% 30%;
+  border: 3px dashed var(--line);
+  border-radius: 50%;
+}
+.face-capture__frame.is-live .face-capture__oval {
+  border-color: var(--green, #1f9d57);
+}
+.face-capture__say {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  text-align: center;
+  font-weight: 600;
+}
+.face-capture__help {
+  color: var(--ink-soft);
+}
+.face-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}

@@ -10,6 +10,7 @@ import { aiUsage } from './ai.js'
 import { mountPermissionsAdmin, permsOf, profileExists } from './permissions.js'
 import { initBrand, mountClientAdmin } from './clientAdmin.js'
 import { sourceHealth } from './sourceHealth.js'
+import { addException, faceAdmin, resetFace, setFacePolicy } from './face.js'
 import { exportHealth, runCheck } from './exportHealth.js'
 import { countryOf as sourceCountry, initSourceMeta, reachIsSet, reachOf, reliabilityIsSet, reliabilityOf } from './sourceMeta.js'
 import {
@@ -354,6 +355,29 @@ export function mountSuperAdmin(app, root) {
 
   /* ---- صحة المصادر : état des collecteurs et enregistreurs de la veille, budgets */
   sa.get('/source-health', (_req, res) => res.json(sourceHealth(path.join(root, 'data'))))
+  /* ---- التحقق بالوجه : mise en service, comptes, exceptions limitées ; aucune donnée biométrique n'est exposée */
+  sa.get('/face', (_req, res) => res.json(faceAdmin()))
+  sa.put('/face/policy', (req, res) => {
+    const r = setFacePolicy(req.body)
+    audit(req, 'face_policy', r.mode, r.trial.join(', '))
+    res.json(r)
+  })
+  sa.post('/face/exception', (req, res) => {
+    try {
+      const x = addException(req.body, req.sa.u)
+      audit(req, 'face_exception', x.email, `${x.until} · ${x.reason}`)
+      res.json(faceAdmin())
+    } catch (err) {
+      res.status(err.status || 400).json({ error: err.code || 'FAILED' })
+    }
+  })
+  sa.post('/face/reset', (req, res) => {
+    const email = String(req.body?.email || '')
+    const had = resetFace(email)
+    closeSessions(email)
+    audit(req, 'face_reset', email, had ? 'template deleted' : 'no template')
+    res.json(faceAdmin())
+  })
   /* ---- صحة التصدير : exports réels (PDF, Word) et contrôle programmé toutes les 6 heures */
   sa.get('/export-health', (_req, res) => res.json(exportHealth()))
   sa.post('/export-health/run', (_req, res) => {

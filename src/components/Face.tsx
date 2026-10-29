@@ -1,0 +1,335 @@
+import { useEffect, useRef, useState } from 'react'
+
+/**
+ * التحقق بالوجه : écrans d'inscription et de vérification (server/face.js). La caméra filme en direct ; seules
+ * quelques images basse définition (320×240) partent au serveur pour le calcul, puis sont oubliées. Rien n'est
+ * gardé dans le navigateur.
+ */
+
+export type FaceState = { required: boolean; enrolled: boolean; verified: boolean; lockedUntil: string | null; engine: boolean; exceptionUntil: string | null }
+type Lang = 'ar' | 'en'
+type Step = 'center' | 'left' | 'right'
+
+const T = {
+  ar: {
+    enrollTitle: 'تسجيل الوجه',
+    verifyTitle: 'التحقق بالوجه',
+    why: 'لحماية حسابك ومنع استعماله من شخص آخر، تطلب المنصة التحقق من وجهك عند كل دخول، إضافة إلى كلمة المرور والتحقق بخطوتين.',
+    what: 'ما الذي يُحفظ؟ نموذج رقمي مشفّر لوجهك على خادم المنصة فقط، مرتبط بحسابك وحده. لا تُحفظ أي صورة أو فيديو، ولا تُستعمل صورتك الشخصية. يمكنك سحب موافقتك وحذف النموذج في أي وقت من إعدادات حسابك.',
+    consent: 'أوافق صراحةً على معالجة صورة وجهي لإنشاء نموذج التحقق واستعماله عند الدخول إلى هذا الحساب.',
+    start: 'تشغيل الكاميرا',
+    verifyIntro: 'ضع وجهك داخل الإطار واتبع التعليمات. يستغرق التحقق بضع ثوانٍ.',
+    steps: { center: 'انظر إلى الكاميرا مباشرة', left: 'أدر رأسك قليلاً إلى يسارك', right: 'أدر رأسك قليلاً إلى يمينك' } as Record<Step, string>,
+    checking: 'جارٍ التحقق…',
+    okEnroll: 'تم تسجيل وجهك وتفعيل التحقق بالوجه لحسابك.',
+    okVerify: 'تم التحقق.',
+    retry: 'إعادة المحاولة',
+    logout: 'تسجيل الخروج',
+    help: 'نصائح: إضاءة أمامية جيدة، وجه مكشوف (دون نظارات شمسية أو قناع)، الكاميرا على مستوى العينين، شخص واحد فقط في الصورة.',
+    recovery: 'لا تستطيع إتمام التحقق؟ تواصل مع الدعم الفني أو مسؤول المنصة لمنحك وصولاً مؤقتاً بعد التأكد من هويتك.',
+    password: 'كلمة المرور (للتأكيد)',
+    errors: {
+      DENIED: 'لم يُسمح باستعمال الكاميرا. اسمح بها من إعدادات المتصفح (رمز القفل بجانب العنوان) ثم أعد المحاولة.',
+      NOCAM: 'لم يتم العثور على كاميرا. صِل كاميرا أو استعمل جهازاً مزوداً بكاميرا.',
+      BUSY: 'الكاميرا مستعملة من برنامج آخر. أغلقه ثم أعد المحاولة.',
+      LOST: 'انقطعت الكاميرا أثناء الالتقاط. تحقق من توصيلها ثم أعد المحاولة.',
+      INSECURE: 'الكاميرا تتطلب اتصالاً آمناً (https).',
+      NO_FACE: 'لم يظهر وجه في الصورة. ضع وجهك داخل الإطار.',
+      MULTI_FACE: 'يظهر أكثر من وجه. يجب أن تكون وحدك أمام الكاميرا.',
+      QUALITY: 'الصورة غير واضحة أو مظلمة. حسّن الإضاءة واقترب قليلاً.',
+      LIVENESS: 'تعذّر التأكد من أن الوجه حقيقي وحاضر. اتبع حركات الرأس المطلوبة، ولا تستعمل صورة أو شاشة.',
+      MISMATCH: 'لم يتم التحقق من الهوية. أعد المحاولة في إضاءة جيدة.',
+      LOCKED: 'محاولات كثيرة غير ناجحة. التحقق متوقف مؤقتاً حتى',
+      REAUTH: 'للتأكيد، أعد تسجيل الدخول أو أدخل كلمة المرور.',
+      CHALLENGE: 'انتهت مهلة المحاولة. أعد المحاولة.',
+      CONSENT: 'الموافقة مطلوبة قبل تسجيل الوجه.',
+      ENGINE: 'خدمة التحقق بالوجه غير متاحة حالياً.',
+      NOT_ENROLLED: 'لا يوجد وجه مسجل لهذا الحساب.',
+      FAILED: 'تعذّر الاتصال بالخادم. أعد المحاولة.',
+    } as Record<string, string>,
+    panel: 'التحقق بالوجه',
+    stateOn: 'مُفعّل لحسابك',
+    stateOff: 'غير مسجل',
+    reenroll: 'تحديث تسجيل الوجه',
+    withdraw: 'سحب الموافقة وحذف نموذج الوجه',
+    withdrawn: 'تم حذف نموذج الوجه.',
+    close: 'إغلاق',
+    exception: 'وصول مؤقت دون تحقق بالوجه حتى',
+    notRequired: 'التحقق بالوجه غير مفعّل لحسابك حالياً.',
+  },
+  en: {
+    enrollTitle: 'Face enrollment',
+    verifyTitle: 'Face verification',
+    why: 'To protect your account and prevent anyone else from using it, the platform verifies your face at each sign-in, in addition to your password and two-step verification.',
+    what: 'What is kept? An encrypted digital template of your face, on the platform server only, tied to your account alone. No photo or video is kept, and your profile picture is never used. You can withdraw consent and delete the template at any time from your account settings.',
+    consent: 'I explicitly consent to the processing of my face image to create the verification template and use it when signing in to this account.',
+    start: 'Turn on camera',
+    verifyIntro: 'Place your face inside the frame and follow the instructions. It takes a few seconds.',
+    steps: { center: 'Look straight at the camera', left: 'Turn your head slightly to your left', right: 'Turn your head slightly to your right' } as Record<Step, string>,
+    checking: 'Checking…',
+    okEnroll: 'Your face is enrolled and face verification is on for your account.',
+    okVerify: 'Verified.',
+    retry: 'Try again',
+    logout: 'Sign out',
+    help: 'Tips: good light in front of you, uncovered face (no sunglasses or mask), camera at eye level, only one person in view.',
+    recovery: 'Cannot complete verification? Contact technical support or the platform administrator for temporary access after your identity is confirmed.',
+    password: 'Password (to confirm)',
+    errors: {
+      DENIED: 'Camera access was refused. Allow it in the browser settings (lock icon next to the address), then try again.',
+      NOCAM: 'No camera found. Connect a camera or use a device that has one.',
+      BUSY: 'The camera is used by another program. Close it, then try again.',
+      LOST: 'The camera disconnected during capture. Check it, then try again.',
+      INSECURE: 'The camera requires a secure connection (https).',
+      NO_FACE: 'No face in the picture. Place your face inside the frame.',
+      MULTI_FACE: 'More than one face is visible. You must be alone in front of the camera.',
+      QUALITY: 'The picture is blurry or dark. Improve the light and come a little closer.',
+      LIVENESS: 'Could not confirm a live face. Follow the head movements asked, and do not use a photo or a screen.',
+      MISMATCH: 'Identity not verified. Try again in good light.',
+      LOCKED: 'Too many unsuccessful attempts. Verification is paused until',
+      REAUTH: 'To confirm, sign in again or enter your password.',
+      CHALLENGE: 'The attempt timed out. Try again.',
+      CONSENT: 'Consent is required before enrollment.',
+      ENGINE: 'Face verification is not available right now.',
+      NOT_ENROLLED: 'No face is enrolled for this account.',
+      FAILED: 'Could not reach the server. Try again.',
+    } as Record<string, string>,
+    panel: 'Face verification',
+    stateOn: 'On for your account',
+    stateOff: 'Not enrolled',
+    reenroll: 'Update face enrollment',
+    withdraw: 'Withdraw consent and delete the face template',
+    withdrawn: 'The face template was deleted.',
+    close: 'Close',
+    exception: 'Temporary access without face verification until',
+    notRequired: 'Face verification is not on for your account right now.',
+  },
+}
+
+const W = 320
+const H = 240
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/** Image de la vidéo en RGB brut 320×240 (base64) : aucun format de fichier, rien n'est enregistré */
+function grab(video: HTMLVideoElement, canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!
+  ctx.drawImage(video, 0, 0, W, H)
+  const { data } = ctx.getImageData(0, 0, W, H)
+  const rgb = new Uint8Array(W * H * 3)
+  for (let i = 0, j = 0; i < data.length; i += 4) {
+    rgb[j++] = data[i]
+    rgb[j++] = data[i + 1]
+    rgb[j++] = data[i + 2]
+  }
+  let bin = ''
+  for (let i = 0; i < rgb.length; i += 0x8000) bin += String.fromCharCode(...rgb.subarray(i, i + 0x8000))
+  return btoa(bin)
+}
+
+const camError = (e: unknown) => {
+  const n = (e as { name?: string })?.name
+  if (!window.isSecureContext) return 'INSECURE'
+  if (n === 'NotAllowedError' || n === 'SecurityError') return 'DENIED'
+  if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'NOCAM'
+  if (n === 'NotReadableError' || n === 'AbortError') return 'BUSY'
+  return 'NOCAM'
+}
+
+/** Capture guidée : consentement (inscription), caméra, défi de poses tiré par le serveur, envoi */
+function Capture({ lang, purpose, password, onDone }: { lang: Lang; purpose: 'enroll' | 'verify'; password?: string; onDone: () => void }) {
+  const t = T[lang]
+  const video = useRef<HTMLVideoElement>(null)
+  const canvas = useRef<HTMLCanvasElement>(null)
+  const stream = useRef<MediaStream | null>(null)
+  const [phase, setPhase] = useState<'idle' | 'live' | 'sending' | 'done'>('idle')
+  const [instruction, setInstruction] = useState('')
+  const [error, setError] = useState('')
+  const [until, setUntil] = useState('')
+  const stop = () => {
+    stream.current?.getTracks().forEach((tr) => tr.stop())
+    stream.current = null
+  }
+  useEffect(() => stop, [])
+
+  async function run() {
+    setError('')
+    setUntil('')
+    let lost = false
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('x'), { name: window.isSecureContext ? 'NotFoundError' : 'SecurityError' })
+      stream.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false })
+    } catch (e) {
+      setError(camError(e))
+      return
+    }
+    stream.current.getVideoTracks()[0]?.addEventListener('ended', () => (lost = true))
+    const v = video.current!
+    v.srcObject = stream.current
+    await v.play().catch(() => undefined)
+    setPhase('live')
+    try {
+      const ch = await fetch('/api/face/challenge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose }) })
+      const c = await ch.json().catch(() => ({}))
+      if (!ch.ok) throw Object.assign(new Error(c.error || 'FAILED'), { code: c.error || 'FAILED' })
+      const frames: { w: number; h: number; rgb: string; step: string }[] = []
+      for (const step of c.steps as Step[]) {
+        setInstruction(t.steps[step])
+        await wait(1800)
+        if (lost || !stream.current) throw Object.assign(new Error('LOST'), { code: 'LOST' })
+        frames.push({ w: W, h: H, rgb: grab(v, canvas.current!), step })
+      }
+      stop()
+      setPhase('sending')
+      setInstruction(t.checking)
+      const res = await fetch(`/api/face/${purpose}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nonce: c.nonce, frames, ...(purpose === 'enroll' ? { consent: true, password } : {}) }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw Object.assign(new Error(j.error || 'FAILED'), { code: j.error || 'FAILED', until: j.until })
+      setPhase('done')
+      setInstruction(purpose === 'enroll' ? t.okEnroll : t.okVerify)
+      setTimeout(onDone, 900)
+    } catch (e) {
+      stop()
+      const err = e as { code?: string; until?: string }
+      setError(err.code || 'FAILED')
+      setUntil(err.until || '')
+      setPhase('idle')
+      setInstruction('')
+    }
+  }
+
+  const fmt = (iso: string) => new Intl.DateTimeFormat(lang === 'ar' ? 'ar-LY' : 'en-GB', { timeStyle: 'short', timeZone: 'Africa/Tripoli' }).format(new Date(iso))
+  return (
+    <div className="face-capture">
+      <div className={`face-capture__frame ${phase === 'live' ? 'is-live' : ''}`}>
+        <video ref={video} muted playsInline aria-hidden />
+        <span className="face-capture__oval" aria-hidden />
+        {instruction && (
+          <p className="face-capture__say" role="status" aria-live="assertive">
+            {instruction}
+          </p>
+        )}
+      </div>
+      <canvas ref={canvas} width={W} height={H} hidden />
+      {error && (
+        <p className="news-status news-status--error" role="alert">
+          {t.errors[error] ?? t.errors.FAILED}
+          {error === 'LOCKED' && until ? ` ${fmt(until)}` : ''}
+        </p>
+      )}
+      {phase === 'idle' && (
+        <button type="button" className="news-btn" onClick={run}>
+          {error ? t.retry : t.start}
+        </button>
+      )}
+      <small className="face-capture__help">{t.help}</small>
+    </div>
+  )
+}
+
+/** Écran imposé après mot de passe et double authentification : inscription (avec consentement) ou vérification */
+export function FaceRequired({ lang, face, onDone, onLogout }: { lang: Lang; face: FaceState; onDone: () => void; onLogout: () => void }) {
+  const t = T[lang]
+  const [agreed, setAgreed] = useState(false)
+  const enroll = !face.enrolled
+  return (
+    <div className="mms-maintenance mfa-page face-page" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+      <h1>{enroll ? t.enrollTitle : t.verifyTitle}</h1>
+      {enroll ? (
+        <>
+          <p>{t.why}</p>
+          <p className="face-page__what">{t.what}</p>
+          <label className="face-page__consent">
+            <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} /> {t.consent}
+          </label>
+          {agreed && <Capture lang={lang} purpose="enroll" onDone={onDone} />}
+        </>
+      ) : (
+        <>
+          <p>{t.verifyIntro}</p>
+          <Capture lang={lang} purpose="verify" onDone={onDone} />
+        </>
+      )}
+      <small>{t.recovery}</small>
+      <button type="button" className="news-btn news-btn--ghost" onClick={onLogout}>
+        {t.logout}
+      </button>
+    </div>
+  )
+}
+
+/** Panneau du compte : état, mise à jour (mot de passe exigé), retrait du consentement */
+export function FacePanel({ lang, onClose }: { lang: Lang; onClose: () => void }) {
+  const t = T[lang]
+  const [state, setState] = useState<FaceState | null>(null)
+  const [password, setPassword] = useState('')
+  const [mode, setMode] = useState<'' | 'reenroll'>('')
+  const [msg, setMsg] = useState('')
+  const load = () =>
+    fetch('/api/face/status')
+      .then((r) => r.json())
+      .then(setState)
+      .catch(() => setMsg(t.errors.FAILED))
+  useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  async function withdraw() {
+    const res = await fetch('/api/face/withdraw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) })
+    const j = await res.json().catch(() => ({}))
+    setMsg(res.ok ? t.withdrawn : (t.errors[j.error] ?? t.errors.FAILED))
+    setPassword('')
+    load()
+  }
+  return (
+    <div className="mms-modal" role="dialog" aria-modal="true" aria-label={t.panel} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="mms-modal__box" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+        <h2>{t.panel}</h2>
+        {state && (
+          <p>
+            {state.enrolled ? t.stateOn : state.required ? t.stateOff : t.notRequired}
+            {state.exceptionUntil ? ` · ${t.exception} ${new Date(state.exceptionUntil).toLocaleString(lang === 'ar' ? 'ar-LY' : 'en-GB')}` : ''}
+          </p>
+        )}
+        {state?.engine && (
+          <>
+            <label className="mfa-enable">
+              {t.password}
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+            </label>
+            <div className="face-panel__actions">
+              <button type="button" className="news-btn" disabled={!password} onClick={() => setMode('reenroll')}>
+                {t.reenroll}
+              </button>
+              {state.enrolled && (
+                <button type="button" className="news-btn news-btn--ghost" disabled={!password} onClick={withdraw}>
+                  {t.withdraw}
+                </button>
+              )}
+            </div>
+            {mode === 'reenroll' && (
+              <Capture
+                lang={lang}
+                purpose="enroll"
+                password={password}
+                onDone={() => {
+                  setMode('')
+                  setPassword('')
+                  load()
+                }}
+              />
+            )}
+          </>
+        )}
+        {msg && <p className="news-status">{msg}</p>}
+        <div className="mms-modal__actions">
+          <button type="button" className="news-btn news-btn--ghost" onClick={onClose}>
+            {t.close}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

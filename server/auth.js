@@ -34,6 +34,38 @@ setInterval(() => {
 let onAuthEvent = () => {}
 export const setAuthListener = (fn) => (onAuthEvent = fn)
 
+// التحقق بالوجه (server/face.js) : contrôle supplémentaire après mot de passe et double authentification
+let faceGate = () => ''
+export const setFaceGate = (fn) => (faceGate = fn)
+
+/** Session de la requête (jeton et contenu), pour la vérification du visage */
+export function sessionOf(req) {
+  const token = readCookie(req)
+  const s = token && sessions.get(token)
+  return s && s.expires >= Date.now() ? { token, session: s } : null
+}
+
+/** Marque la session (par exemple visage vérifié) ; rien si elle n'existe plus */
+export function markSession(token, patch) {
+  const s = sessions.get(token)
+  if (!s) return
+  Object.assign(s, patch)
+  saveSessions()
+}
+
+/** Mot de passe saisi à nouveau (changement d'inscription du visage) : 5 essais par 15 minutes et par compte */
+const reauthFails = new Map()
+export function verifyPassword(email, password) {
+  const key = String(email).toLowerCase()
+  const f = reauthFails.get(key)
+  if (f && f.count >= MAX_FAILS && Date.now() - f.at < LOCK_MS) return false
+  const user = findUser(email)
+  const ok = Boolean(user && typeof password === 'string' && password.length <= 1000 && checkPassword(user, password))
+  if (ok) reauthFails.delete(key)
+  else reauthFails.set(key, { count: (f && Date.now() - f.at < LOCK_MS ? f.count : 0) + 1, at: Date.now() })
+  return ok
+}
+
 export function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto.scryptSync(String(password), salt, 64, { N: 16384, r: 8, p: 1 }).toString('hex')
   return { salt, hash }
@@ -309,6 +341,9 @@ export function requireAuth(req, res, next) {
   // Double authentification exigée mais pas encore activée : seule l'activation est permise (personne n'est bloqué dehors)
   const raw = findUser(user.email)
   if (raw && mfaRequired(raw) && !raw.totp?.secret) return res.status(403).json({ error: 'MFA_SETUP' })
+  // Visage exigé et pas encore vérifié dans cette session : seules l'inscription et la vérification sont permises
+  const blocked = faceGate(user.email, sessionOf(req)?.session, req.path)
+  if (blocked) return res.status(403).json({ error: blocked })
   req.user = user
   next()
 }

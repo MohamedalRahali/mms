@@ -8,7 +8,9 @@ import { aiEnabled, aiProvider, aiUsage, analyse, aroundRun, cached, explainSpik
 import { initEntityAI, startEntityAI } from './entityAI.js'
 import { allTags, countList, entitiesOf, findSpikes, initTags, itemKey, setTags, spikeItems, tagsOf, toCsv } from './intel.js'
 import { keyStatus } from './keys.js'
-import { currentUser, initAuth, loginRoute, logoutRoute, mfaDisableRoute, mfaEnableRoute, mfaLoginRoute, mfaSetupRoute, mfaStateOf, readUsers, requireAuth } from './auth.js'
+import { currentUser, initAuth, loginRoute, logoutRoute, markSession, mfaDisableRoute, mfaEnableRoute, mfaLoginRoute, mfaSetupRoute, mfaStateOf, readUsers, requireAuth, sessionOf, setFaceGate, verifyPassword } from './auth.js'
+import { faceGate, faceStateOf, initFace, mountFace, setFaceEngine } from './face.js'
+import { makeEngine } from './faceEngine.js'
 import { initMfaPolicy } from './mfa.js'
 import { initMailPolicy } from './mailPolicy.js'
 import { initPermissions, permissionGate, permsOf } from './permissions.js'
@@ -157,7 +159,8 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff')
   res.setHeader('X-Frame-Options', 'SAMEORIGIN')
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()')
+  // Caméra permise pour MMS seul (التحقق بالوجه), jamais pour un site intégré ; le reste reste fermé
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(), payment=(), usb=()')
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
   res.setHeader('Content-Security-Policy', "object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'")
   res.setHeader(
@@ -177,6 +180,16 @@ mountSuperAdmin(app, root)
 
 // Connexion : seules ces routes sont ouvertes, tout le reste de l'API demande une session
 initAuth(path.join(root, 'data'))
+// التحقق بالوجه : désactivé par défaut et jamais exigé tant que le moteur n'est pas installé
+setFaceEngine(makeEngine(root))
+initFace(path.join(root, 'data'), {
+  log: (type, email, detail) => logSecurity(type, { login: email, detail }),
+  notify: (email, what) => sendMail([email], faceNotice(what)),
+  verifyPassword,
+  markSession,
+  sessionOf,
+})
+setFaceGate(faceGate)
 initTags(path.join(root, 'data'))
 app.post('/api/auth/login', express.json({ limit: '4kb' }), loginRoute)
 app.post('/api/auth/logout', logoutRoute)
@@ -193,7 +206,7 @@ app.get('/api/auth/me', (req, res) => {
   const user = currentUser(req)
   if (!user) return res.status(401).json({ error: 'AUTH' })
   const raw = readUsers().find((u) => u.email === user.email)
-  res.json({ user: { ...user, avatar: avatarUrl(user.email), perms: permsOf(user), mfa: mfaStateOf(raw) } })
+  res.json({ user: { ...user, avatar: avatarUrl(user.email), perms: permsOf(user), mfa: mfaStateOf(raw), face: faceStateOf(user.email, sessionOf(req)?.session) } })
 })
 
 // Référentiel des entités : variantes d'un même acteur fusionnées, médias jamais comptés comme acteurs
@@ -322,6 +335,7 @@ app.get('/api/v1/news', publicLimit, (req, res) => {
 })
 
 app.use('/api', requireAuth)
+mountFace(app)
 
 // Droits par profil : modules (pages) et actions (boutons) permis, réglés dans la console Super Admin.
 // Les profils de base reproduisent les anciens droits par rôle (lecture pour tous, création pour les analystes,
@@ -1223,3 +1237,14 @@ app.listen(PORT, HOST, () => {
   console.log(`  Mosaïque FM : ${process.env.MOSAIQUE_DATA_DIR}`)
   console.log(`  Libye       : ${process.env.LIBYE_DATA_DIR}`)
 })
+
+/** E-mail à l'utilisateur quand son inscription du visage change (sans aucune donnée biométrique) */
+function faceNotice(what) {
+  const text = {
+    enroll: 'تم تسجيل بصمة وجهك في حسابك على منصة MMS. إذا لم تقم بذلك، اتصل بالدعم الفني فوراً.',
+    reenroll: 'تم تغيير بصمة الوجه المسجلة في حسابك على منصة MMS. إذا لم تقم بذلك، اتصل بالدعم الفني فوراً.',
+    withdraw: 'تم حذف بصمة الوجه من حسابك على منصة MMS بناءً على طلبك.',
+    reset: 'أعاد المسؤول تعيين التحقق بالوجه في حسابك على منصة MMS؛ سيُطلب منك تسجيل وجهك عند الدخول القادم.',
+  }[what] || ''
+  return { subject: 'MMS · التحقق بالوجه', text, html: `<!doctype html><html lang="ar" dir="rtl"><body style="font-family:Tahoma,Arial,sans-serif"><p>${text}</p></body></html>` }
+}

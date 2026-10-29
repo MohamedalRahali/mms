@@ -15,6 +15,7 @@ import { setShareToken } from './lib/news'
 import { SharedBoard } from './components/Share'
 import { I18nContext, makeI18n } from './lib/i18n'
 import { MfaRequired } from './components/Mfa'
+import { FaceRequired } from './components/Face'
 
 // Console Super Admin : chargée seulement à l'adresse /superadmin, séparée de la plateforme
 const SuperAdmin = lazy(() => import('./superadmin/SuperAdmin'))
@@ -74,6 +75,16 @@ function Gate() {
     return watchUnauthorized(() => setUser(null))
   }, [])
 
+  // Juste après la connexion : état du visage (vérification exigée ou non) relu depuis le serveur
+  const needFace = Boolean(user) && user?.face === undefined
+  useEffect(() => {
+    if (!needFace) return
+    fetch('/api/auth/me')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => json?.user && setUser(json.user))
+      .catch(() => {})
+  }, [needFace])
+
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
     setUser(null)
@@ -112,6 +123,22 @@ function Gate() {
           }
         })()}
         onDone={(mfa) => setUser({ ...user, mfa })}
+        onLogout={logout}
+      />
+    )
+  // التحقق بالوجه : après mot de passe et double authentification, inscription ou vérification avant tout le reste
+  if (user.face?.required && !user.face.verified)
+    return (
+      <FaceRequired
+        lang={(() => {
+          try {
+            return sessionStorage.getItem('mms-lang') === 'en' ? 'en' : 'ar'
+          } catch {
+            return 'ar'
+          }
+        })()}
+        face={user.face}
+        onDone={() => user.face && setUser({ ...user, face: { ...user.face, verified: true, enrolled: true } })}
         onLogout={logout}
       />
     )
