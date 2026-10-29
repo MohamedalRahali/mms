@@ -287,6 +287,10 @@ export default function App() {
 
   {
     const status = useFetch<NewsResponse>('/api/news?size=1').data
+    // Pages de médias sans aucune publication dans la base (aujourd'hui : les podcasts) : retirées du menu, elles
+    // reviennent d'elles-mêmes dès que la veille en collecte ; l'adresse directe reste valable
+    const mediaCounts = useFetch<{ media?: { name: string; count: number }[] }>('/api/news/facets').data?.media
+    const shownMedia = MEDIA_PAGES.filter((m) => m !== 'podcast' || !mediaCounts || mediaCounts.some((c) => c.name === m && c.count > 0))
 
     function setLang(next: Lang) {
       if (next !== lang) track('lang', next)
@@ -311,7 +315,7 @@ export default function App() {
       { key: 'dashboard', label: t.navDashboard },
       { key: 'radar', label: radarText(lang).nav },
       { key: 'news', label: t.navNews },
-      ...MEDIA_PAGES.map((m) => ({ key: `media-${m}` as View, label: MEDIA_PAGE_TEXT[lang].nav[m] })),
+      ...shownMedia.map((m) => ({ key: `media-${m}` as View, label: MEDIA_PAGE_TEXT[lang].nav[m] })),
       { key: 'media-live', label: MEDIA_PAGE_TEXT[lang].nav.live },
       { key: 'watch', label: WATCH_TEXT[lang].menu },
       { key: 'stats', label: t.navStats },
@@ -345,7 +349,7 @@ export default function App() {
       },
       {
         group: MEDIA_PAGE_TEXT[lang].group,
-        items: MEDIA_PAGES.flatMap((m) => [
+        items: shownMedia.flatMap((m) => [
           { key: `media-${m}` as View, label: MEDIA_PAGE_TEXT[lang].nav[m] },
           ...(m === 'broadcast' ? MEDIA_SUBS.map((sub) => ({ key: 'media-broadcast' as View, sub, label: MEDIA_PAGE_TEXT[lang].subTypes[sub] })) : []),
           ...(m === 'broadcast' ? [{ key: 'media-live' as View, label: MEDIA_PAGE_TEXT[lang].nav.live }] : []),
