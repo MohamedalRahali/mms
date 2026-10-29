@@ -35,6 +35,7 @@ import { mountGeo } from './geo.js'
 import { mountCatalog } from './catalog.js'
 import { canSendAlert, initAlertFlow, mountAlertFlow, openWatchAlert, withFlow } from './alertFlow.js'
 import { intlRegion } from './themes.js'
+import { dedupeKeyer } from './dedupe.js'
 import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionOf, regionStats, resolveEntities } from './entities.js'
 import { initPinboards, mountPinboards, pinnedKeys } from './pinboards.js'
 import { initMailingLists, mountMailingLists } from './mailingLists.js'
@@ -569,6 +570,9 @@ app.put('/api/tags', express.json({ limit: '4kb' }), (req, res) => {
 })
 
 /** Tonalité jour par jour, sur les mêmes jours que la courbe */
+// Réseaux sociaux : leurs auteurs sont des comptes, pas des médias (compteur « المصادر » séparé)
+const SOCIAL_CHANNELS = new Set(['x', 'twitter', 'bluesky', 'facebook', 'instagram', 'telegram', 'tiktok', 'reddit', 'mastodon', 'youtube', 'linkedin', 'threads'])
+
 function toneDays(items, perDay) {
   const rows = perDay.map((d) => ({ date: d.date, positive: 0, neutral: 0, negative: 0 }))
   const index = new Map(rows.map((d, i) => [d.date, i]))
@@ -592,24 +596,41 @@ function statsData(q) {
   const perDay = []
   for (let i = days - 1; i >= 0; i--) perDay.push({ date: toDay(new Date(Date.now() - i * 86_400_000).toISOString()), count: 0 })
   const index = new Map(perDay.map((d, i) => [d.date, i]))
-  // Portée potentielle (vidéo « Charts ») : somme des portées des publications, par jour et par source ; estimée tant
-  // que le Super Admin n'a pas saisi la portée des sources concernées
+  // Chiffres sans gonflement (audit des statistiques, 29/10) :
+  // - « الأخبار (دون تكرار) » : une publication compte une fois si son adresse ou son titre (normalisé) a déjà été vu
+  //   dans la période (copies, republications, collectes répétées) ; « مرات النشر » : toutes les publications ;
+  // - sources : médias d'un côté, comptes de réseaux sociaux de l'autre ;
+  // - portée : chaque source compte une fois (et non une fois par publication), estimée tant qu'elle n'est pas saisie
+  const storyOf = dedupeKeyer()
+  const uniquePerDay = perDay.map(() => new Set())
   const reachPerDay = perDay.map((d) => ({ date: d.date, count: 0 }))
+  const daySources = perDay.map(() => new Set())
   const reachBySource = new Map()
-  let reachTotal = 0
+  const media = new Set()
+  const accounts = new Set()
   let reachEstimated = false
   for (const it of found) {
     const i = index.get(toDay(it.date))
-    if (i != null) perDay[i].count++
-    const r = reachOf(it)
-    reachTotal += r
-    if (i != null) reachPerDay[i].count += r
-    reachBySource.set(it.origin, (reachBySource.get(it.origin) || 0) + r)
+    if (i != null) {
+      perDay[i].count++
+      uniquePerDay[i].add(storyOf(it))
+      if (!daySources[i].has(it.origin)) {
+        daySources[i].add(it.origin)
+        reachPerDay[i].count += reachOf(it)
+      }
+    }
+    ;(SOCIAL_CHANNELS.has(it.channel) ? accounts : media).add(it.origin)
+    if (!reachBySource.has(it.origin)) reachBySource.set(it.origin, reachOf(it))
     if (!reachEstimated && !reachIsSet(it.origin)) reachEstimated = true
   }
+  const reachTotal = [...reachBySource.values()].reduce((a, b) => a + b, 0)
   return {
     days,
     total: found.length,
+    unique: new Set(found.map(storyOf)).size,
+    perDayUnique: perDay.map((d, i) => ({ date: d.date, count: uniquePerDay[i].size })),
+    mediaSources: media.size,
+    accounts: accounts.size,
     reach: {
       total: reachTotal,
       estimated: reachEstimated,
@@ -623,7 +644,7 @@ function statsData(q) {
     categories: counts(found, 'category'),
     sources: counts(found, 'origin').slice(0, 10),
     channels: counts(found, 'channel'),
-    media: counts(found, 'media'),
+    media: counts(found, 'media').filter((m) => m.name),
     reactions: reactionTotals(found, foundComments),
     tones: counts(
       found.filter((it) => it.tone),

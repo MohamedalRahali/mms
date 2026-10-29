@@ -14,7 +14,8 @@ const HERO_TEXT = {
     title: 'رادار ليبيا المباشر',
     sub: 'المدن الأكثر ذكراً خلال 7 أيام',
     k24: 'أخبار آخر 24 ساعة',
-    kSources: 'مصادر نشطة اليوم',
+    kSources: 'مصادر إعلامية نشطة اليوم',
+    kAccounts: (n: string) => `+ ${n} حساب على الشبكات`,
     kNeg: 'النبرة السلبية اليوم',
     kWeek: 'حجم الأسبوع',
     vsAvg: (p: string) => `${p} مقارنة بالمتوسط`,
@@ -29,7 +30,8 @@ const HERO_TEXT = {
     title: 'Live Libya radar',
     sub: 'Most mentioned cities, last 7 days',
     k24: 'News, last 24 hours',
-    kSources: 'Active sources today',
+    kSources: 'Active media sources today',
+    kAccounts: (n: string) => `+ ${n} social accounts`,
     kNeg: 'Negative tone today',
     kWeek: 'Weekly volume',
     vsAvg: (p: string) => `${p} vs average`,
@@ -434,17 +436,18 @@ export function CommandHero({ flux }: { flux: Flux | '' }) {
   const latest = useFetch<NewsResponse>(`/api/news?size=14${q}`).data
   // Comparaison sur les seuls jours où la collecte a des données (au moins 5 jours) : pas de faux pic au démarrage
 
-  const per = fortnight?.perDay.map((d) => d.count) ?? []
+  // Publications sans doublons (même adresse ou même titre) : chiffres de l'accueil non gonflés
+  const per = (fortnight?.perDayUnique ?? fortnight?.perDay)?.map((d) => d.count) ?? []
   const last7 = per.slice(-7).reduce((a, b) => a + b, 0)
   // 24 h comparées aux 7 jours complets d'avant (aujourd'hui exclu) ; la semaine aux 7 jours précédents
-  const vsAvg = compare(day?.total ?? 0, per.slice(-8, -1), 1)
+  const vsAvg = compare(day?.unique ?? day?.total ?? 0, per.slice(-8, -1), 1)
   const vsPrev = compare(last7, per.slice(-14, -7), 7)
   const shown = (n: number) => (n > 300 ? `${x.over} +300%` : pct(n))
   const tones = day?.tones ?? []
   const rated = tones.reduce((a, b) => a + b.count, 0)
   const neg = tones.find((t) => t.name === 'negative')?.count ?? 0
   const negPct = rated ? Math.round((neg / rated) * 100) : 0
-  const total24 = day?.total ?? 0
+  const total24 = day?.unique ?? day?.total ?? 0
 
   return (
     <section className="mms-hero" aria-label={x.title}>
@@ -457,7 +460,7 @@ export function CommandHero({ flux }: { flux: Flux | '' }) {
           trend={vsAvg ?? undefined}
           note={!fortnight ? undefined : vsAvg == null ? x.noBase : x.vsAvg(shown(vsAvg))}
         />
-        <Kpi index={1} label={x.kSources} value={day?.sourcesCount ?? 0} spark={week?.perDay.map((d) => d.count)} />
+        <Kpi index={1} label={x.kSources} value={day?.mediaSources ?? day?.sourcesCount ?? 0} spark={week?.perDay.map((d) => d.count)} note={day?.accounts ? x.kAccounts(i.num(day.accounts)) : undefined} />
         <Kpi index={2} label={x.kNeg} value={negPct} suffix="%" note={rated ? `${i.num(rated)} ${x.ofTone}` : undefined} tone="neg" />
         <Kpi
           index={3}

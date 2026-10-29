@@ -87,7 +87,8 @@ export function StatsView({ flux }: { flux: Flux | '' }) {
   const { data, error, loading } = useFetch<Stats>(`/api/news/stats?days=${days}${flux ? `&flux=${flux}` : ''}`)
   // Période double : la différence donne la période précédente, pour les variations des chiffres clés
   const wide = useFetch<Stats>(`/api/news/stats?days=${Number(days) * 2}${flux ? `&flux=${flux}` : ''}`).data
-  const prev = wide && data && wide.days === data.days * 2 ? { total: wide.total - data.total, broadcasts: wide.broadcasts - data.broadcasts } : null
+  const uniq = (s: Stats) => s.unique ?? s.total
+  const prev = wide && data && wide.days === data.days * 2 ? { total: uniq(wide) - uniq(data), broadcasts: wide.broadcasts - data.broadcasts } : null
   const cov = coverageFrom(Number(days), useHistory()?.since)
 
   return (
@@ -114,9 +115,9 @@ export function StatsView({ flux }: { flux: Flux | '' }) {
             <div className="news-tile">
               <span>{t.tileTotal}</span>
               <strong>
-                <CountUp value={data.total} num={num} />
+                <CountUp value={uniq(data)} num={num} />
               </strong>
-              <Delta now={data.total} before={prev?.total ?? null} cov={cov} />
+              <Delta now={uniq(data)} before={prev?.total ?? null} cov={cov} />
             </div>
             <div className="news-tile">
               <span>{t.tileBroadcasts}</span>
@@ -128,13 +129,15 @@ export function StatsView({ flux }: { flux: Flux | '' }) {
             <div className="news-tile">
               <span>{t.tileSources}</span>
               <strong>
-                <CountUp value={data.sourcesCount} num={num} />
+                <CountUp value={data.mediaSources ?? data.sourcesCount} num={num} />
               </strong>
+              {/* Comptes des réseaux sociaux à part : ce ne sont pas des médias */}
+              {data.accounts != null && <small>{t.tileAccounts(num(data.accounts))}</small>}
             </div>
             <div className="news-tile">
               <span>{t.tileAverage}</span>
               <strong>
-                <CountUp value={Math.round(data.total / data.days)} num={num} />
+                <CountUp value={Math.round(uniq(data) / data.days)} num={num} />
               </strong>
             </div>
           </div>

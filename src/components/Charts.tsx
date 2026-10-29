@@ -312,10 +312,10 @@ function Kpi({ stats, metric }: { stats: Stats; metric: WidgetConf['metric'] }) 
     metric === 'broadcasts'
       ? stats.broadcasts
       : metric === 'sources'
-        ? stats.sourcesCount
+        ? (stats.mediaSources ?? stats.sourcesCount)
         : metric === 'average'
-          ? Math.round((stats.total / stats.days) * 10) / 10
-          : stats.total
+          ? Math.round(((stats.unique ?? stats.total) / stats.days) * 10) / 10
+          : (stats.unique ?? stats.total)
   const counted = useCountUp(Math.round(value * 10)) / 10
   const spark = stats.perDay.map((d) => d.count)
   const max = Math.max(...spark, 1)

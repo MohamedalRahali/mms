@@ -104,6 +104,11 @@ export type Facets = {
 export type Stats = {
   days: number
   total: number
+  // Sans gonflement : publications sans doublons (même adresse ou même titre), sources médias et comptes séparés
+  unique?: number
+  perDayUnique?: { date: string; count: number }[]
+  mediaSources?: number
+  accounts?: number
   // Portée potentielle : somme des portées des publications (estimée si des sources n'ont pas de chiffre saisi)
   reach?: { total: number; estimated: boolean; perDay: { date: string; count: number }[]; sources: Count[] }
   sourcesCount: number
