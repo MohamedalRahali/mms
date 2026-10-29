@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Avatar, ProfilePanel } from './components/Profile'
 import { Builder } from './components/Builder'
 import { Watches } from './components/Watches'
@@ -242,6 +242,46 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
   const closePresent = useCallback(() => setPresenting(false), [])
+  // Historique de navigation : chaque changement de page est une entrée du navigateur (bouton « رجوع » de la page
+  // et bouton retour du navigateur). L'état gardé : page, veille ouverte, filtres de la liste ; rien dans l'adresse
+  // à part la page (pas de mots-clés ni de filtres dans l'URL)
+  const restoring = useRef(false)
+  const [depth, setDepth] = useState(() => (typeof history.state?.depth === 'number' ? history.state.depth : 0))
+  const [prevView, setPrevView] = useState<View | null>(() => history.state?.prev ?? null)
+  useEffect(() => {
+    if (restoring.current) {
+      restoring.current = false
+      return
+    }
+    const cur = history.state
+    const same = cur && cur.view === view && cur.watch === newsWatch && cur.drill === (drill?.n ?? 0)
+    if (same) return
+    const url = new URL(location.href)
+    url.searchParams.set('view', view)
+    for (const k of ['watch', 'clip', 't', 'e', 'q', 'sub']) if (view !== 'news' || k !== 'watch') url.searchParams.delete(k)
+    if (!cur || typeof cur.depth !== 'number') {
+      history.replaceState({ view, watch: newsWatch, drill: drill?.n ?? 0, filters: drill?.filters ?? null, depth: 0, prev: null }, '', url)
+      return
+    }
+    const next = { view, watch: newsWatch, drill: drill?.n ?? 0, filters: drill?.filters ?? null, depth: cur.depth + 1, prev: cur.view }
+    history.pushState(next, '', url)
+    setDepth(next.depth)
+    setPrevView(cur.view)
+  }, [view, newsWatch, drill])
+  useEffect(() => {
+    const onPop = (e: PopStateEvent) => {
+      const s = e.state
+      if (!s || !s.view) return
+      restoring.current = true
+      setNewsWatch(s.watch || '')
+      setDrill(s.filters ? { n: s.drill || 0, filters: s.filters } : null)
+      setView(s.view)
+      setDepth(s.depth || 0)
+      setPrevView(s.prev || null)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
   const [theme, setTheme] = useTheme()
   useFx()
 
@@ -527,6 +567,11 @@ export default function App() {
                   </aside>
 
                   <main className="mms-main">
+                    {depth > 0 && prevView && (
+                      <button type="button" className="mms-back" onClick={() => history.back()}>
+                        <span aria-hidden>{i18n.dir === 'rtl' ? '→' : '←'}</span> {lang === 'ar' ? 'رجوع إلى' : 'Back to'} {TABS.find((x) => x.key === prevView)?.label ?? (lang === 'ar' ? 'الصفحة السابقة' : 'previous page')}
+                      </button>
+                    )}
                     <div key={shown} className="mms-view">
                       <Suspense fallback={<p className="news-status">{t.loading}</p>}>
                       {shown === 'dashboard' && (

@@ -835,3 +835,24 @@
     bottom: 10px;
   }
 }
+
+/* Historique des rapports : recherche et tri */
+.rpt-list__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+.rpt-list__tools input,
+.rpt-list__tools select {
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+}
+.rpt-list__tools input {
+  flex: 1 1 220px;
+}

@@ -683,7 +683,11 @@ export function mountReports(app, dataDir, { getItems, aiEnabled, aiRun, sendMai
       }
     } else aiError = 'AI_OFF'
     const logo = logoFile(req.user.email) ? `/api/reports/logo?v=${now}` : '/logo-npdc.png'
-    const title = String(req.body?.title || '').trim().slice(0, 200) || `${t.title} — ${fmtDate(new Date(now).toISOString(), lang)}`
+    // Titre lisible et unique (audit v3) : date et heure, nombre de publications ; version ajoutée si le titre existe déjà
+    const base = String(req.body?.title || '').trim().slice(0, 180) || `${t.title} — ${fmtDateTime(new Date(now).toISOString(), lang)} — ${posts.length} ${lang === 'en' ? 'posts' : 'منشور'}`
+    const taken = new Set(readAll(req.user.email).map((r) => r.title))
+    let title = base
+    for (let v = 2; taken.has(title) && v < 100; v++) title = `${base} (v${v})`
     const meta = cleanMeta({
       org: String(req.body?.org || '').trim() || t.org,
       author: displayName ? displayName(req.user) : req.user.name || req.user.email,

@@ -4099,3 +4099,57 @@ img.mms-user__avatar--img {
   color: var(--ink);
   font: inherit;
 }
+
+/* Onglet « استطلاع » (audit v3) : il recouvrait les titres et boutons du radar au milieu de l'écran ; désormais une
+   petite pastille en bas, qui ne masque plus le contenu */
+.mms-survey__tab {
+  top: auto;
+  bottom: 18px;
+  right: 18px;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  writing-mode: horizontal-tb;
+  font-size: 0.85rem;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  opacity: 0.92;
+}
+.mms-survey__tab:hover,
+.mms-survey__tab:focus-visible {
+  opacity: 1;
+}
+.mms-survey {
+  top: auto;
+  bottom: 64px;
+  right: 18px;
+}
+@media print {
+  .mms-survey__tab {
+    display: none;
+  }
+}
+
+/* Bouton « رجوع » : revient à la page précédente avec ses filtres (historique du navigateur) */
+.mms-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.8rem;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.mms-back:hover,
+.mms-back:focus-visible {
+  border-color: var(--green);
+  color: var(--green-deep);
+}
+@media print {
+  .mms-back {
+    display: none;
+  }
+}

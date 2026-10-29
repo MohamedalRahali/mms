@@ -171,6 +171,13 @@ export function Reports({ onNews }: { onNews: () => void }) {
   const i = useI18n()
   const t = reportText(i.lang)
   const [list, setList] = useState<ListResponse | null>(null)
+  // Recherche et tri de l'historique des rapports (audit v3 : rapports nombreux au même titre)
+  const [find, setFind] = useState('')
+  const [order, setOrder] = useState<'recent' | 'old' | 'title'>('recent')
+  const needle = find.trim().toLowerCase()
+  const shownReports = (list?.reports ?? [])
+    .filter((r) => !needle || r.title.toLowerCase().includes(needle))
+    .sort((a, b) => (order === 'title' ? a.title.localeCompare(b.title) : order === 'old' ? a.createdAt.localeCompare(b.createdAt) : b.createdAt.localeCompare(a.createdAt)))
   const [open, setOpen] = useState<Report | null>(null)
   const [notes, setNotes] = useState<string[]>([])
   const [err, setErr] = useState('')
@@ -233,9 +240,20 @@ export function Reports({ onNews }: { onNews: () => void }) {
       )}
       <section className="rpt-list">
         <h3>{t.history}</h3>
+        {list && list.reports.length > 0 && (
+          <div className="rpt-list__tools">
+            <input type="search" value={find} onChange={(e) => setFind(e.target.value)} placeholder={i.lang === 'ar' ? 'ابحث في عناوين التقارير' : 'Search report titles'} aria-label={i.lang === 'ar' ? 'بحث' : 'Search'} dir="auto" />
+            <select value={order} onChange={(e) => setOrder(e.target.value as 'recent' | 'old' | 'title')} aria-label={i.lang === 'ar' ? 'الترتيب' : 'Order'}>
+              <option value="recent">{i.lang === 'ar' ? 'الأحدث أولاً' : 'Newest first'}</option>
+              <option value="old">{i.lang === 'ar' ? 'الأقدم أولاً' : 'Oldest first'}</option>
+              <option value="title">{i.lang === 'ar' ? 'العنوان' : 'Title'}</option>
+            </select>
+          </div>
+        )}
         {list && !list.reports.length && <p className="news-status">{t.empty}</p>}
+        {list && list.reports.length > 0 && shownReports.length === 0 && <p className="news-status">{i.lang === 'ar' ? 'لا يوجد تقرير مطابق.' : 'No matching report.'}</p>}
         <ul>
-          {list?.reports.map((r) => (
+          {shownReports.map((r) => (
             <li key={r.id} className="rpt-list__item">
               <button type="button" className="rpt-list__open" onClick={() => openReport(r.id)}>
                 <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden>
