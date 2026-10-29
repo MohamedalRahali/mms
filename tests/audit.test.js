@@ -323,7 +323,35 @@ test('الرصد المبرمج : veille vérifiée, plages, coût, création de
   assert.equal(res.total, 1)
   assert.equal(res.hits[0].kind, 'fixed')
   assert.equal(smartSearch({ q: 'نفط', channel: 'tanasuh' }, { list: [], st, now: NOW, data, broadcastItems: items, channels }).total, 0)
+  // Plus aucune plage à venir : aujourd'hui 07:02 est passé (12:00 à Tripoli) et la période s'arrête aujourd'hui
+  const { nextSlot } = await import('../server/rasd.js')
+  assert.equal(nextSlot({ ...w, windows: ['07:02-07:04'], to: '2026-10-29' }, NOW), null)
+  assert.equal(nextSlot({ ...w, windows: ['07:02-07:10'], to: '' }, NOW).start, '2026-10-30T05:02:00.000Z')
   // Passages repérés dans une transcription
   const doc = { debut: '2026-10-29T12:00:00Z', fin: '2026-10-29T12:30:00Z', segments: [{ debut: '2026-10-29T12:00:00Z', texte: 'نشرة الأخبار. أعلنت المؤسسة الوطنية للنفط عن زيادة الإنتاج. وفي الرياضة فاز الأهلي.' }] }
   assert.equal(hitsOf(doc, w).length, 1)
+})
+
+test('tableaux d’épingles : réglages, épinglage automatique, épinglage en masse, export CSV, filtre', async () => {
+  const pb = await import('../server/pinboards.js')
+  pb.initPinboards(fs.mkdtempSync(path.join(os.tmpdir(), 'mms-pin2-')))
+  const NOW = Date.parse('2026-10-29T10:00:00Z')
+  const b = pb.createPinboard('النفط', 'a@x', { description: 'متابعة', color: '#2fcb81', group: 'اقتصاد', rule: { query: 'النفط OR oil', until: '2026-11-30' } })
+  assert.deepEqual([b.color, b.group, b.rule.query], ['#2fcb81', 'اقتصاد', 'النفط OR oil'])
+  assert.equal(pb.createPinboard('بدون قاعدة', 'a@x', { rule: { query: '  ' }, color: 'red' }).rule, null, 'requête vide = pas d’épinglage automatique')
+  const it = (id, title, date) => ({ id, title, summary: '', origin: 'وال', channel: 'site', date, url: `https://x.test/${id}`, tone: '' })
+  const since = Date.parse(pb.pinboard(b.id).rule.since)
+  const items = [it('a', 'ارتفاع إنتاج النفط', new Date(since + 1000).toISOString()), it('b', 'مباراة كرة', new Date(since + 2000).toISOString()), it('c', 'oil price', new Date(since - 86_400_000).toISOString())]
+  assert.equal(pb.autoPin(items, NOW), 1, 'seulement la fiche publiée après la règle et qui correspond')
+  assert.equal(pb.autoPin(items, NOW), 0, 'pas de doublon')
+  // Date limite passée : plus d'épinglage
+  pb.updatePinboard(b.id, { rule: { query: 'مباراة', until: '2026-10-01' } })
+  assert.equal(pb.autoPin([it('d', 'مباراة', new Date(NOW).toISOString())], NOW), 0)
+  const bulk = pb.pinMany(b.id, [items[1], items[2], items[0]], 'a@x')
+  assert.equal(bulk.added, 2)
+  assert.equal(pb.pinnedKeys(b.id).size, 3)
+  const { csv } = pb.pinboardCsv(b.id)
+  assert.match(csv, /^﻿title,source/)
+  pb.pinMany(b.id, [it('e', '=HYPERLINK("x")', new Date(NOW).toISOString())], 'a@x')
+  assert.match(pb.pinboardCsv(b.id).csv, /"'=HYPERLINK/, 'cellule neutralisée contre les formules')
 })

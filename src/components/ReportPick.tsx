@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { NewsItem } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { MAX_PICK, selection, useSelection } from '../lib/reportSelection'
+import { PinSelection } from './Pinboards'
 import './reports.css'
 
 /** Sélection des publications pour le générateur de rapports : case sur chaque carte, page entière, barre flottante */
@@ -99,6 +100,7 @@ export function ReportTray({ onGenerate, hidden }: { onGenerate: () => void; hid
         <button type="button" className="rpt-tray__link" onClick={() => setOpen(!open)} aria-expanded={open}>
           {open ? t.hide : t.show}
         </button>
+        <PinSelection ids={list.map((p) => p.id)} />
         <button type="button" className="rpt-tray__link" onClick={() => selection.clear()}>
           {t.clear}
         </button>

@@ -35,7 +35,7 @@ import { mountGeo } from './geo.js'
 import { mountCatalog } from './catalog.js'
 import { canSendAlert, initAlertFlow, mountAlertFlow, withFlow } from './alertFlow.js'
 import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionOf, regionStats, resolveEntities } from './entities.js'
-import { initPinboards, mountPinboards } from './pinboards.js'
+import { initPinboards, mountPinboards, pinnedKeys } from './pinboards.js'
 import { mountRasd } from './rasd.js'
 import { dispatchHistory, initDispatchLog, logDispatch } from './dispatchLog.js'
 import { SPLITS, STEPS, timeline } from './timeline.js'
@@ -80,6 +80,7 @@ function applyFilters(items, q) {
   const days = Number(q.days) || 0
   const since = days ? Date.now() - days * 86_400_000 : 0
   const haystack = (it) => `${it.title} ${it.summary} ${it.origin}`.toLowerCase()
+  const pinned = q.pinboard ? pinnedKeys(String(q.pinboard)) : null
   return items.filter(
     (it) =>
       (!q.flux || it.flux === q.flux) &&
@@ -95,6 +96,7 @@ function applyFilters(items, q) {
       (!q.important || (it.importance || 1) >= 2) &&
       (!q.country || countryOf(it) === q.country) &&
       (!q.region || regionOf(it) === q.region) &&
+      (!pinned || pinned.has(it.url || it.id)) &&
       (!q.processed || (q.processed === 'yes') === isProcessed(itemKey(it))) &&
       (!since || Date.parse(it.date) >= since) &&
       (!match || match(searchText(it))) &&

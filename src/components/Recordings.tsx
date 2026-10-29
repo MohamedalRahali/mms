@@ -65,7 +65,8 @@ const TEXT = {
     channel: 'القناة',
     start: 'البداية',
     end: 'النهاية',
-    local: 'بتوقيت جهازك',
+    local: 'بتوقيت طرابلس',
+    tripoliNow: (h: string) => `الساعة الآن في طرابلس ${h}`,
     now: 'الآن',
     plus: (m: number) => `+${m} د`,
     duration: 'المدة',
@@ -139,7 +140,8 @@ const TEXT = {
     channel: 'Channel',
     start: 'Start',
     end: 'End',
-    local: 'your device time',
+    local: 'Tripoli time',
+    tripoliNow: (h: string) => `Time in Tripoli now: ${h}`,
     now: 'Now',
     plus: (m: number) => `+${m} min`,
     duration: 'Duration',
@@ -265,11 +267,9 @@ function errorText(t: (typeof TEXT)['ar'], e: Err, limits?: Data['limits']) {
   }
 }
 
-// Valeur d'un champ datetime-local (heure du poste) pour un instant donné
-const localValue = (t: number) => {
-  const d = new Date(t - new Date(t).getTimezoneOffset() * 60_000)
-  return d.toISOString().slice(0, 16)
-}
+// Champs de date et d'heure en heure de Tripoli (UTC+2 toute l'année), quel que soit le fuseau du poste
+const localValue = (t: number) => new Date(t + 2 * 3_600_000).toISOString().slice(0, 16)
+const fromLocal = (v: string) => Date.parse(`${v}:00+02:00`)
 
 function Bar({ value, label }: { value: number; label: string }) {
   const pct = Math.round(Math.max(0, Math.min(1, value)) * 100)
@@ -462,8 +462,8 @@ export function Recordings({ channel }: { channel?: string }) {
   useEffect(() => {
     if (!form.chaine && channels.length) setForm((f) => ({ ...f, chaine: channels.find((c) => c.recordable)?.id ?? '' }))
   }, [channels, form.chaine])
-  const start = Date.parse(form.debut)
-  const end = Date.parse(form.fin)
+  const start = fromLocal(form.debut)
+  const end = fromLocal(form.fin)
   const minutes = Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, Math.round((end - Math.max(start, Date.now())) / 60_000)) : 0
   const cost = minutes * (data?.limits.costPerMinute ?? 0.003)
   const preset = (m: number) => {
@@ -478,7 +478,7 @@ export function Recordings({ channel }: { channel?: string }) {
       const res = await fetch('/api/recordings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chaine: form.chaine, debut: new Date(form.debut).toISOString(), fin: new Date(form.fin).toISOString() }),
+        body: JSON.stringify({ chaine: form.chaine, debut: new Date(fromLocal(form.debut)).toISOString(), fin: new Date(fromLocal(form.fin)).toISOString() }),
       })
       const json = await res.json().catch(() => ({ error: 'generic' }))
       setMsg(res.ok ? { ok: true, text: json.merged ? t.merged : t.scheduled } : { ok: false, text: errorText(t, json, data?.limits) })
@@ -545,6 +545,7 @@ export function Recordings({ channel }: { channel?: string }) {
             <input type="datetime-local" value={form.fin} onChange={(e) => setForm({ ...form, fin: e.target.value })} required />
           </label>
           <div className="rec-form__presets">
+            <small className="rasd-clock">🕒 {t.tripoliNow(localValue(Date.now()).slice(11, 16))}</small>
             <span>{t.now}</span>
             {[15, 30, 60, 120].map((m) => (
               <button key={m} type="button" className="ld-toggle" onClick={() => preset(m)}>

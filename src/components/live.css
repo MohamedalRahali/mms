@@ -1079,3 +1079,16 @@
 .rasd-search > .ld-hint .news-badge {
   margin-inline-end: 0.3rem;
 }
+
+.rasd-clock {
+  color: var(--gold);
+  font-weight: 600;
+}
+.rasd-next {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--green-deep);
+}
+.rasd-next.is-none {
+  color: var(--coral);
+}

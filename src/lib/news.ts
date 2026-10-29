@@ -148,6 +148,7 @@ export type Filters = {
   country: string
   processed: string
   region: string
+  pinboard: string
 }
 export const EMPTY_FILTERS: Filters = {
   q: '',
@@ -168,6 +169,7 @@ export const EMPTY_FILTERS: Filters = {
   country: '',
   processed: '',
   region: '',
+  pinboard: '',
 }
 
 /** Clic sur un graphique ou une entité : ouvre la liste des actualités avec ces filtres */

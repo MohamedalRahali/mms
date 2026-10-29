@@ -47,6 +47,9 @@ const TEXT = {
     days: 'الأيام',
     dayNames: ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],
     windows: 'الفترات (بتوقيت طرابلس)',
+    tripoliNow: (h: string) => `الساعة الآن في طرابلس ${h}`,
+    next: (d: string) => `أول تسجيل: ${d}`,
+    noNext: 'لا توجد فترة قادمة: كل الفترات مضت (بتوقيت طرابلس) وتاريخ النهاية قريب.',
     addWindow: '+ فترة',
     remove: 'حذف',
     from: 'من تاريخ',
@@ -99,6 +102,7 @@ const TEXT = {
     approx: 'التوقيت تقريبي',
     errors: {
       NO_NAME: 'أدخل اسماً للرصد.',
+      NO_UPCOMING: 'لا توجد فترة قادمة: كل الفترات مضت بتوقيت طرابلس. اختر فترة لاحقة أو مدّد تاريخ النهاية.',
       NO_KEYWORDS: 'أدخل كلمة مفتاحية واحدة على الأقل.',
       NO_CHANNELS: 'اختر قناة واحدة على الأقل.',
       NO_DAYS: 'اختر يوماً واحداً على الأقل.',
@@ -132,6 +136,9 @@ const TEXT = {
     days: 'Days',
     dayNames: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
     windows: 'Time slots (Tripoli time)',
+    tripoliNow: (h: string) => `Time in Tripoli now: ${h}`,
+    next: (d: string) => `First recording: ${d}`,
+    noNext: 'No upcoming slot: every slot has passed (Tripoli time) and the end date is too close.',
     addWindow: '+ slot',
     remove: 'Remove',
     from: 'From',
@@ -184,6 +191,7 @@ const TEXT = {
     approx: 'Times are approximate',
     errors: {
       NO_NAME: 'Enter a name for the watch.',
+      NO_UPCOMING: 'No upcoming slot: every slot has passed in Tripoli time. Choose a later slot or extend the end date.',
       NO_KEYWORDS: 'Enter at least one keyword.',
       NO_CHANNELS: 'Choose at least one channel.',
       NO_DAYS: 'Choose at least one day.',
@@ -215,6 +223,15 @@ function WatchEditor({ initial, channels, onDone }: { initial: Draft; channels: 
   const t = useText()
   const [d, setD] = useState<Draft>(initial)
   const [cost, setCost] = useState<Cost | null>(null)
+  const [next, setNext] = useState<{ start: string; channel: string } | null | undefined>(undefined)
+  const i = useI18n()
+  // Heure de Tripoli (UTC+2), rafraîchie chaque minute : les plages d'une veille sont dans ce fuseau
+  const [clock, setClock] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setClock(Date.now()), 30_000)
+    return () => clearInterval(id)
+  }, [])
+  const tripoli = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Tripoli' }).format(new Date(clock))
   const [err, setErr] = useState('')
   const [showSuggest, setShowSuggest] = useState(false)
   const suggest = useFetch<{ suggestions: Suggestion[] }>('/api/rasd/suggest', 0).data?.suggestions ?? []
@@ -225,6 +242,7 @@ function WatchEditor({ initial, channels, onDone }: { initial: Draft; channels: 
       const res = await fetch('/api/rasd/estimate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(toBody(d)) }).catch(() => null)
       const json = res ? await res.json().catch(() => ({})) : {}
       setCost(res?.ok ? json.cost : null)
+      setNext(res?.ok ? json.next : undefined)
     }, 400)
     return () => clearTimeout(id)
   }, [d])
@@ -321,7 +339,9 @@ function WatchEditor({ initial, channels, onDone }: { initial: Draft; channels: 
         </div>
       </fieldset>
       <fieldset className="rasd-editor__set">
-        <legend>{t.windows}</legend>
+        <legend>
+          {t.windows} <small className="rasd-clock">🕒 {t.tripoliNow(tripoli)}</small>
+        </legend>
         <div className="rasd-windows">
           {d.windows.map((w, k) => (
             <span key={k} className="rasd-window" dir="ltr">
@@ -344,6 +364,9 @@ function WatchEditor({ initial, channels, onDone }: { initial: Draft; channels: 
         <input type="checkbox" checked={d.alert} onChange={(e) => set({ alert: e.target.checked })} />
         <span>{t.alert}</span>
       </label>
+      {next !== undefined && (
+        <p className={next ? 'rasd-next' : 'rasd-next is-none'}>{next ? t.next(`${i.dateTime(next.start)} · ${channels.find((c) => c.id === next.channel)?.nom ?? next.channel}`) : t.noNext}</p>
+      )}
       {cost && (
         <p className={`rasd-cost is-${cost.level}`}>
           {t.estimate(cost.minutesPerDay, cost.costPerDay.toFixed(3))} · {t.total(cost.totalCostPerDay.toFixed(3), cost.part.toFixed(2))}
@@ -351,7 +374,7 @@ function WatchEditor({ initial, channels, onDone }: { initial: Draft; channels: 
         </p>
       )}
       <div className="rasd-editor__actions">
-        <button type="submit" className="news-btn" disabled={cost?.level === 'over'}>
+        <button type="submit" className="news-btn" disabled={cost?.level === 'over' || next === null}>
           {t.save}
         </button>
         <button type="button" className="news-btn news-btn--ghost" onClick={() => onDone(false)}>

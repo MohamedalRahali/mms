@@ -215,6 +215,14 @@ export function upcomingSlots(w, now = Date.now(), horizon = HORIZON) {
   return out.sort((x, y) => x.start - y.start)
 }
 
+/** Premier enregistrement à venir d'une veille (sur sa période, au plus 8 jours devant), ou null si plus aucune plage */
+export function nextSlot(w, now = Date.now()) {
+  const horizon = w.to ? Math.min(Date.parse(`${w.to}T23:59:59+02:00`) - now, 400 * DAY) : 8 * DAY
+  if (horizon <= 0) return null
+  const s = upcomingSlots(w, now, Math.max(horizon, 8 * DAY)).find((x) => !w.to || x.day <= w.to)
+  return s ? { start: new Date(s.start).toISOString(), end: new Date(s.end).toISOString(), channel: s.channel } : null
+}
+
 /**
  * Crée les enregistrements des plages à venir de toutes les veilles actives (une fois par plage et par chaîne). Les
  * plages refusées (budget, simultanés…) sont notées dans le journal avec leur raison, une seule fois.
@@ -417,7 +425,7 @@ export function mountRasd(app, { getItems, telegramReady, sendTelegram, logDispa
     wrap((req) => {
       const d = load()
       const w = cleanWatch(req.body || {}, recordableChannels(), { existing: d.watches.find((x) => x.id === req.body?.id) || null })
-      return { cost: costCheck(w, d.watches) }
+      return { cost: costCheck(w, d.watches), next: nextSlot(w), now: new Date().toISOString() }
     }),
   )
 
@@ -430,6 +438,8 @@ export function mountRasd(app, { getItems, telegramReady, sendTelegram, logDispa
     if (!existing) w.createdBy = String(req.user?.email || '').slice(0, 120)
     const cost = costCheck(w, d.watches)
     if (cost.level === 'over' && !w.paused) throw fail('BUDGET', 409, { cost })
+    // Plages toutes passées (heure de Tripoli) et date de fin atteinte : rien ne serait enregistré
+    if (!w.paused && !nextSlot(w)) throw fail('NO_UPCOMING', 400)
     d.watches = existing ? d.watches.map((x) => (x.id === w.id ? w : x)) : [...d.watches, w]
     // Plages modifiées : les refus notés pour cette veille sont oubliés, pour être réessayés
     d.log = d.log.filter((l) => l.watch !== w.id)

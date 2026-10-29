@@ -13,6 +13,7 @@ import { canDo, hasModule, useAuth } from '../lib/auth'
 import { SavedSearches } from './SavedSearches'
 import { type Overview, type ResultTab, ChartsTab, GroupHeader, ListToolbar, NetworkChips, PeopleTab, ResultTabs, SaveSearchButton, SourcesTab, groupLabel, useListText } from './Listing'
 import { countryName, flagOf, useListPrefs } from '../lib/listing'
+import { PinboardsDialog } from './Pinboards'
 import { type Health } from '../lib/news'
 
 // bare : la recherche et les filtres sont pilotés par la page appelante (مجمع البحث) ; seuls les résultats sont affichés
@@ -30,6 +31,7 @@ export function NewsList({ flux, initialWatch = '', initialFilters, bare = false
     { value: '30', label: t.last30 },
   ]
   const [draft, setDraft] = useState(initialFilters?.q ?? '')
+  const [pins, setPins] = useState(false)
   const [filters, setFilters] = useState<Filters>({ ...EMPTY_FILTERS, watch: initialWatch, ...initialFilters })
   const [exclude, setExclude] = useState(initialFilters?.exclude ?? '')
   const [page, setPage] = useState(1)
@@ -42,6 +44,7 @@ export function NewsList({ flux, initialWatch = '', initialFilters, bare = false
   const health = useFetch<Health>('/api/health', 0).data
   const briefs = Boolean(health?.ai) && canDo(auth?.user, 'ai_ask')
   const watches = useFetch<{ watches: WatchOption[] }>('/api/news/watches').data?.watches ?? []
+  const pinboards = useFetch<{ boards: { id: string; name: string; count: number }[] }>('/api/pinboards').data?.boards ?? []
 
   useEffect(() => setPage(1), [flux, prefs.group, prefs.sort, prefs.dir, prefs.fold, prefs.view])
   useEffect(() => setCollapsed(new Set()), [prefs.group])
@@ -208,6 +211,16 @@ export function NewsList({ flux, initialWatch = '', initialFilters, bare = false
             ))}
           </select>
         )}
+        {pinboards.length > 0 && (
+          <select className={filters.pinboard ? 'is-on' : ''} value={filters.pinboard} onChange={(e) => update({ pinboard: e.target.value })} aria-label={l.pinboard}>
+            <option value="">{l.allPinboards}</option>
+            {pinboards.map((b) => (
+              <option key={b.id} value={b.id}>
+                📌 {b.name} ({i.num(b.count)})
+              </option>
+            ))}
+          </select>
+        )}
         <select className={filters.processed ? 'is-on' : ''} value={filters.processed} onChange={(e) => update({ processed: e.target.value })} aria-label={l.status}>
           <option value="">{l.allStatus}</option>
           <option value="no">{l.unprocessed}</option>
@@ -266,6 +279,9 @@ export function NewsList({ flux, initialWatch = '', initialFilters, bare = false
       )}
       <div className="mms-searchrow">
         {canDo(auth?.user, 'manage_watches') && hasModule(auth?.user, 'watch') && <SaveSearchButton filters={filters} email={auth?.user.email ?? ''} />}
+        <button type="button" className="news-btn news-btn--ghost mms-savewatch" onClick={() => setPins(true)}>
+          📌 {l.pinboards}
+        </button>
         <NetworkChips value={filters.channel} counts={facets?.channels} onPick={(channel) => update({ channel })} />
       </div>
       <SavedSearches
@@ -375,6 +391,7 @@ export function NewsList({ flux, initialWatch = '', initialFilters, bare = false
       )}
         </>
       )}
+      {pins && <PinboardsDialog onClose={() => setPins(false)} />}
     </>
   )
 }
