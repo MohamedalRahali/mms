@@ -102,15 +102,22 @@ export function useRecovery(hashes, code) {
 /* ---------------------------------------------------------------- règle (console Super Admin) */
 
 let file = ''
-let policy = { requireAdmins: true, requireAll: false }
+// Règle par défaut depuis le 29/10/2026 (consigne d'Around) : obligatoire pour tous les comptes. Transition sans
+// blocage : un compte sans double authentification est invité à l'activer à sa prochaine connexion (écran
+// MFA_SETUP : QR code, vérification, codes de secours) ; le Super Admin peut réinitialiser un compte perdu.
+let policy = { requireAdmins: true, requireAll: true }
+const POLICY_VERSION = 2
 
 export function initMfaPolicy(dir) {
   file = path.join(dir, 'mfa.json')
   try {
     const saved = JSON.parse(fs.readFileSync(file, 'utf8'))
-    policy = { requireAdmins: saved.requireAdmins !== false, requireAll: saved.requireAll === true }
+    // Règle enregistrée avant la version 2 (obligatoire pour les administrateurs seulement) : passe à « tous »
+    const all = saved.version >= POLICY_VERSION ? saved.requireAll === true : true
+    policy = { requireAdmins: saved.requireAdmins !== false, requireAll: all }
   } catch {
-    /* règle par défaut : obligatoire pour les administrateurs */
+    // Pas de règle enregistrée : obligatoire pour tous
+    policy = { requireAdmins: true, requireAll: true }
   }
 }
 
@@ -119,7 +126,7 @@ export const mfaPolicy = () => ({ ...policy })
 export function setMfaPolicy(p) {
   policy = { requireAdmins: p?.requireAdmins !== false, requireAll: p?.requireAll === true }
   fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, JSON.stringify({ ...policy, savedAt: new Date().toISOString() }, null, 2))
+  fs.writeFileSync(file, JSON.stringify({ ...policy, version: POLICY_VERSION, savedAt: new Date().toISOString() }, null, 2))
   return mfaPolicy()
 }
 

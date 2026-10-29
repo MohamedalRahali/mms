@@ -1,4 +1,5 @@
-import { useContext, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { type Coverage, basisNote, fairChange } from '../lib/fair'
 import { DataSince } from './DataSince'
 import { type Count, type EngagementTotals, type Flux, type NewsItem, type Spike, type Stats, type Tone, DrillContext, TONES, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
@@ -88,13 +89,20 @@ export function QueryAssistant({ onUse, error }: { onUse: (query: string) => voi
 
 /* ---------------------------------------------------------------- petits éléments communs */
 
+// Jours couverts des deux périodes (réponse du serveur) : les variations se calculent à jours égaux
+const CoverageContext = createContext<Coverage | null>(null)
+
 function Delta({ cur, prev, invert = false }: { cur: number; prev: number; invert?: boolean }) {
   const p = usePro()
-  if (!prev) return cur ? <span className="mms-delta is-new">{p.cmpNew}</span> : null
-  const d = Math.round(((cur - prev) / prev) * 100)
+  const i = useI18n()
+  const cov = useContext(CoverageContext)
+  const d = fairChange(cur, prev, cov)
+  if (d === null) return null
+  if (d === 'new') return <span className="mms-delta is-new">{p.cmpNew}</span>
+  // Vert = bonne nouvelle : la hausse de la tonalité négative est en rouge (invert)
   const good = invert ? d <= 0 : d >= 0
   return (
-    <span className={`mms-delta ${good ? 'is-up' : 'is-down'}`}>
+    <span className={`mms-delta ${good ? 'is-up' : 'is-down'}`} title={basisNote(cov, i.lang) || undefined}>
       {d >= 0 ? '▲' : '▼'} {Math.abs(d)}%
     </span>
   )
@@ -365,6 +373,7 @@ type Pair = { name: string; current: number; previous: number }
 type Profile = { total: number; sources: number; important: number; tones: Record<Tone, number>; engagement: EngagementTotals }
 type Compare = {
   insufficient?: boolean
+  coverage?: Coverage
   days: number
   current: Profile
   previous: Profile
@@ -412,9 +421,11 @@ export function ComparePeriods({ flux }: { flux: Flux | '' }) {
     <>
       <PageHead title={p.cmpTitle} intro={p.cmpIntro} />
       <DataSince />
-      {data?.insufficient && (
+      {data?.insufficient && data.coverage && (
         <p className="mms-note" role="note">
-          {i.lang === 'ar' ? 'الفترة السابقة أقدم من بداية جمع البيانات: الفروق المعروضة لا تعكس تطوراً حقيقياً.' : 'The previous period predates data collection: the differences shown do not reflect a real trend.'}
+          {i.lang === 'ar'
+            ? `الفترة السابقة لا تغطيها البيانات إلا ${Math.round(data.coverage.previous)} يوم من ${data.coverage.days}: النسب محسوبة على متوسط الأيام المغطاة في كل فترة.`
+            : `Data covers only ${Math.round(data.coverage.previous)} of the ${data.coverage.days} days of the previous period: percentages compare the daily average of the covered days.`}
         </p>
       )}
       <div className="mms-toolbar">
@@ -426,7 +437,7 @@ export function ComparePeriods({ flux }: { flux: Flux | '' }) {
       {!data ? (
         <LoadState error={error} />
       ) : (
-        <>
+        <CoverageContext.Provider value={data.coverage ?? null}>
           <div className="mms-stats">
             <Stat index={0} label={p.cmpTotal} cur={data.current.total} prev={data.previous.total} />
             <Stat index={1} label={p.cmpSources} cur={data.current.sources} prev={data.previous.sources} />
@@ -445,7 +456,7 @@ export function ComparePeriods({ flux }: { flux: Flux | '' }) {
             <PairBars title={p.cmpSourcesList} rows={data.sources} onPick={(n) => drill({ source: n, days: String(days) })} />
             <PairBars title={i.t.allChannels} rows={data.channels} label={i.channel} onPick={(n) => drill({ channel: n, days: String(days) })} />
           </div>
-        </>
+        </CoverageContext.Provider>
       )}
     </>
   )
@@ -460,7 +471,8 @@ type Briefing = {
   to: string
   current: Profile
   previous: Profile
-  change: number | null
+  coverage?: Coverage
+  change: number | 'new' | null
   categories: Pair[]
   people: Pair[]
   orgs: Pair[]
@@ -639,6 +651,7 @@ export function ExecutiveBriefing({ flux }: { flux: Flux | '' }) {
       {!data ? (
         <LoadState error={error} />
       ) : (
+        <CoverageContext.Provider value={data.coverage ?? null}>
         <article className="mms-brief__sheet">
           <header className="mms-brief__head">
             <div>
@@ -647,9 +660,15 @@ export function ExecutiveBriefing({ flux }: { flux: Flux | '' }) {
                 {fmt.format(new Date(data.from))} – {fmt.format(new Date(data.to))}
               </h2>
             </div>
-            {data.change != null && (
-              <p className={data.change >= 0 ? 'mms-brief__change is-up' : 'mms-brief__change is-down'}>
+            {data.change === 'new' && (
+              <p className="mms-brief__change is-up">
+                {p.cmpNew} <small>{p.brVsPrev}</small>
+              </p>
+            )}
+            {typeof data.change === 'number' && (
+              <p className={data.change >= 0 ? 'mms-brief__change is-up' : 'mms-brief__change is-down'} title={basisNote(data.coverage, i.lang) || undefined}>
                 {data.change >= 0 ? '▲' : '▼'} {Math.abs(data.change)}% <small>{p.brVsPrev}</small>
+                {data.coverage?.partial && <small className="mms-brief__basis"> · {basisNote(data.coverage, i.lang)}</small>}
               </p>
             )}
           </header>
@@ -746,6 +765,7 @@ export function ExecutiveBriefing({ flux }: { flux: Flux | '' }) {
             ))}
           </ol>
         </article>
+        </CoverageContext.Provider>
       )}
       {canDo(auth?.user, 'schedule') && <ScheduleForm />}
     </div>

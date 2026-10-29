@@ -3,7 +3,7 @@ import './superadmin.css'
 import { Permissions, PermsSummary, ProfileSelect, loadCatalog } from './Permissions'
 import { GeoGlobe } from './GeoGlobe'
 import { ApiKeysCard, BrandCard, SharesCard, SourceMetaCell } from './ClientSettings'
-import { AlertReviewCard, EntitiesEditor, MailPolicyCard, MfaPolicyCard } from './Governance'
+import { AlertReviewCard, EntitiesEditor, MailPolicyCard, MfaPolicyCard, SourcePolicyCard } from './Governance'
 import { ACTIVITY_LABEL, AUDIT_LABEL, ROLE_LABEL, SECURITY_LABEL, ago, api, errText, flag, fmtBytes, fmtDate, fmtDay, fmtMinutes, fmtNum, qs, setAuthLost } from './api'
 
 /** Console Super Admin (وحدة التحكم العليا) : /superadmin, séparée de la plateforme */
@@ -1459,6 +1459,7 @@ function Settings() {
       </Card>
       <MailPolicyCard onMsg={setMsg} />
       <MfaPolicyCard onMsg={setMsg} />
+      <SourcePolicyCard onMsg={setMsg} />
       <AlertReviewCard onMsg={setMsg} />
       <BrandCard onMsg={setMsg} />
       <Card title="التسجيل">

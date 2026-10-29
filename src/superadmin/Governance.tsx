@@ -88,6 +88,51 @@ export function MailPolicyCard({ onMsg }: { onMsg: (m: string) => void }) {
   )
 }
 
+/* ---------------------------------------------------------------- سياسة مصادر التواصل والمنتديات */
+
+export function SourcePolicyCard({ onMsg }: { onMsg: (m: string) => void }) {
+  const { data, reload } = useList<{ policy: { blocked: string[]; forumAllow: string[]; defaults: string[] } }>('/source-policy')
+  const [blocked, setBlocked] = useState<string | null>(null)
+  const [allow, setAllow] = useState<string | null>(null)
+  if (!data) return null
+  const b = blocked ?? data.policy.blocked.join(', ')
+  const a = allow ?? data.policy.forumAllow.join(', ')
+  async function save() {
+    try {
+      await api('/source-policy', 'PUT', { blocked: b, forumAllow: a })
+      setBlocked(null)
+      setAllow(null)
+      onMsg('تم حفظ سياسة المصادر. تُطبَّق على كل الصفحات خلال دقيقة.')
+      reload()
+    } catch (e) {
+      onMsg(errText(e))
+    }
+  }
+  return (
+    <div className="sa-card sa-card--wide">
+      <div className="sa-card__head">
+        <h2>حسابات ومنتديات مستبعدة</h2>
+      </div>
+      <p className="sa-muted">
+        تُستبعد دائماً الحسابات الآلية (bots) والحسابات الشخصية على Reddit والمنتديات غير اللائقة، وتُدمج الأسماء «r/u/X» و«r/u_X». القائمة الافتراضية: {data.policy.defaults.join('، ')}.
+      </p>
+      <div className="sa-grid2">
+        <label className="sa-field">
+          <span>مصادر إضافية مستبعدة (مفصولة بفواصل أو أسطر)</span>
+          <textarea className="sa-input" rows={5} value={b} onChange={(e) => setBlocked(e.target.value)} dir="ltr" placeholder="r/SomeSubreddit" />
+        </label>
+        <label className="sa-field">
+          <span>القائمة البيضاء للمنتديات (فارغة = كل المنتديات ما عدا المستبعدة)</span>
+          <textarea className="sa-input" rows={5} value={a} onChange={(e) => setAllow(e.target.value)} dir="ltr" placeholder="r/libya" />
+        </label>
+      </div>
+      <button type="button" className="sa-btn" onClick={save}>
+        حفظ
+      </button>
+    </div>
+  )
+}
+
 /* ---------------------------------------------------------------- التحقق بخطوتين */
 
 export function MfaPolicyCard({ onMsg }: { onMsg: (m: string) => void }) {
@@ -108,7 +153,7 @@ export function MfaPolicyCard({ onMsg }: { onMsg: (m: string) => void }) {
       <div className="sa-card__head">
         <h2>التحقق بخطوتين</h2>
       </div>
-      <p className="sa-muted">رمز من 6 أرقام من تطبيق مصادقة على الهاتف، مع رموز استرداد. لا يُمنع أحد من الدخول: من يلزمه التحقق يُطلب منه تفعيله عند الدخول، ويمكن إعادة تعيينه من بطاقة المستخدم.</p>
+      <p className="sa-muted">رمز من 6 أرقام من تطبيق مصادقة على الهاتف، مع رموز استرداد. منذ 29/10/2026 أصبح إلزامياً لكل المستخدمين افتراضياً. لا يُمنع أحد من الدخول: من لم يفعّله بعد يُطلب منه تفعيله عند دخوله التالي، ويمكن إعادة تعيينه من بطاقة المستخدم.</p>
       <label className="sa-row">
         <input type="checkbox" checked={p.requireAdmins} onChange={(e) => set({ ...p, requireAdmins: e.target.checked })} />
         إلزامي للمديرين

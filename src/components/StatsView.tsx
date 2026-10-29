@@ -7,6 +7,8 @@ import { TopEngaged } from './Pro'
 import { useMedia } from '../lib/media'
 import { type MediaType } from '../lib/news'
 import { Delta, EntityPanel, MoodPanel } from './Trends'
+import { useHistory } from '../lib/history'
+import { coverageFrom } from '../lib/fair'
 
 function CountUp({ value, num }: { value: number; num: (n: number) => string }) {
   return <>{num(useCountUp(value))}</>
@@ -86,6 +88,7 @@ export function StatsView({ flux }: { flux: Flux | '' }) {
   // Période double : la différence donne la période précédente, pour les variations des chiffres clés
   const wide = useFetch<Stats>(`/api/news/stats?days=${Number(days) * 2}${flux ? `&flux=${flux}` : ''}`).data
   const prev = wide && data && wide.days === data.days * 2 ? { total: wide.total - data.total, broadcasts: wide.broadcasts - data.broadcasts } : null
+  const cov = coverageFrom(Number(days), useHistory()?.since)
 
   return (
     <>
@@ -113,14 +116,14 @@ export function StatsView({ flux }: { flux: Flux | '' }) {
               <strong>
                 <CountUp value={data.total} num={num} />
               </strong>
-              <Delta now={data.total} before={prev?.total ?? null} />
+              <Delta now={data.total} before={prev?.total ?? null} cov={cov} />
             </div>
             <div className="news-tile">
               <span>{t.tileBroadcasts}</span>
               <strong>
                 <CountUp value={data.broadcasts} num={num} />
               </strong>
-              <Delta now={data.broadcasts} before={prev?.broadcasts ?? null} />
+              <Delta now={data.broadcasts} before={prev?.broadcasts ?? null} cov={cov} />
             </div>
             <div className="news-tile">
               <span>{t.tileSources}</span>

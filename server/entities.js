@@ -36,7 +36,8 @@ export const DEFAULT_ENTITIES = [
   P('هانا تيتيه', ['تيتيه', 'Hanna Tetteh']),
   P('سيف الإسلام القذافي', ['سيف الاسلام القذافي', 'Saif al-Islam Gaddafi', 'Saif al-Islam Qaddafi']),
   P('معمر القذافي', ['القذافي', 'Gaddafi', 'Qaddafi', 'Kadhafi']),
-  P('دونالد ترامب', ['ترامب', 'ترمب', 'دونالد ترمب', 'الرئيس ترامب', 'Trump', 'Donald Trump'], false),
+  P('دونالد ترامب', ['ترامب', 'ترمب', 'دونالد ترمب', 'الرئيس ترامب', 'الرئيس الأمريكي ترامب', 'الرئيس الأمريكي دونالد ترامب', 'Trump', 'Donald Trump'], false),
+  O('وزارة المواصلات الليبية', ['وزارة المواصلات', 'وزارة المواصلات والنقل', 'Ministry of Transport', 'Libyan Ministry of Transport']),
   P('رجب طيب أردوغان', ['أردوغان', 'اردوغان', 'Erdogan', 'Erdoğan'], false),
   P('عبد الفتاح السيسي', ['السيسي', 'Sisi', 'el-Sisi'], false),
   O('حكومة الوحدة الوطنية', ['حكومة الوحدة', 'الحكومة الليبية في طرابلس', 'Government of National Unity', 'GNU']),
@@ -130,7 +131,16 @@ export function initEntities(dir) {
   file = path.join(dir, 'entities.json')
   try {
     const saved = JSON.parse(fs.readFileSync(file, 'utf8')).entities
-    if (Array.isArray(saved) && saved.length) entities = saved.map(cleanEntity).filter(Boolean)
+    if (Array.isArray(saved) && saved.length) {
+      // Référentiel enregistré + entrées et variantes ajoutées depuis dans le référentiel par défaut (sans rien retirer)
+      const list = saved.map(cleanEntity).filter(Boolean)
+      for (const d of DEFAULT_ENTITIES) {
+        const same = list.find((e) => e.name === d.name)
+        if (same) same.aliases = [...new Set([...(same.aliases || []), ...d.aliases])]
+        else list.push({ ...d })
+      }
+      entities = list
+    }
   } catch {
     entities = DEFAULT_ENTITIES
   }
@@ -160,6 +170,9 @@ export const lookup = (name) => index.get(norm(name)) || null
  * Range les entités d'une fiche : variantes fusionnées, médias retirés, chaque nom dans sa liste.
  * mediaNames : noms des sources suivies (normalisés) ; une source n'est jamais un acteur.
  */
+// Prénoms seuls (« محمد ») : trop ambigus pour être un acteur ; écartés sauf s'ils sont dans le référentiel
+const FIRST_NAMES = new Set(['محمد', 'أحمد', 'احمد', 'علي', 'عبدالله', 'عبد الله', 'خالد', 'عمر', 'مصطفى', 'إبراهيم', 'ابراهيم', 'يوسف', 'حسن', 'حسين', 'سالم', 'عبدالرحمن', 'صالح', 'محمود', 'فاطمة', 'مريم', 'عائشة', 'خديجة', 'سارة', 'Mohamed', 'Mohammed', 'Muhammad', 'Ahmed', 'Ali', 'Omar', 'Khaled'])
+
 export function resolveEntities(it, mediaNames = new Set()) {
   const out = { people: [], orgs: [], places: [] }
   const seen = new Set()
@@ -167,6 +180,7 @@ export function resolveEntities(it, mediaNames = new Set()) {
     const name = String(raw || '').trim()
     if (!name) return
     const e = lookup(name)
+    if (!e && list === 'people' && FIRST_NAMES.has(name)) return
     if (e?.type === 'media' || (!e && mediaNames.has(norm(name)))) return
     const canon = e ? e.name : name
     const target = e ? (e.type === 'person' ? 'people' : e.type === 'place' ? 'places' : 'orgs') : list

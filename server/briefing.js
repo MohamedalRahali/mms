@@ -4,7 +4,7 @@ import { getItems } from './store.js'
 import { onMailPolicyChange, splitRecipients } from './mailPolicy.js'
 import { logDispatch } from './dispatchLog.js'
 import { aiEnabled, briefingSummary } from './ai.js'
-import { briefingFacts, buildBriefing } from './insights.js'
+import { briefingFacts, buildBriefing, fairChange } from './insights.js'
 import { sendMail, sendTelegram, telegramReady } from './watches.js'
 
 /**
@@ -82,9 +82,17 @@ export async function briefingWithSummary(items, days, lastUpdate) {
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 const TONE = { positive: 'إيجابي', neutral: 'محايد', negative: 'سلبي' }
 const dateAr = new Intl.DateTimeFormat('ar-LY', { timeZone: 'Africa/Tripoli', day: 'numeric', month: 'long', year: 'numeric' })
-const delta = (a, b) => (b ? `${a >= b ? '▲' : '▼'} ${Math.abs(Math.round(((a - b) / b) * 100))}%` : '')
+// Variation à jours couverts égaux (voir insights.fairChange) ; « جديد » quand la base est trop petite
+let coverage = null
+const delta = (a, b) => {
+  const c = fairChange(a, b, coverage)
+  if (c === 'new') return 'جديد'
+  if (c == null) return ''
+  return `${c >= 0 ? '▲' : '▼'} ${Math.abs(c)}%${coverage?.partial ? ` (على أساس ${Math.round(coverage.previous)} يوم)` : ''}`
+}
 
 export function briefingEmail({ b, summary }) {
+  coverage = b.coverage || null
   const link = (process.env.PUBLIC_URL || 'http://localhost:5174').replace(/\/$/, '')
   const period = `${dateAr.format(new Date(b.from))} – ${dateAr.format(new Date(b.to))}`
   const list = (rows) => rows.map((r) => `<li>${esc(r.name)} : <b>${r.current}</b> <span style="color:#6b7c74">(${r.previous})</span></li>`).join('')
@@ -123,6 +131,7 @@ ${
 }
 
 export function briefingTelegram({ b, summary }) {
+  coverage = b.coverage || null
   const link = (process.env.PUBLIC_URL || 'http://localhost:5174').replace(/\/$/, '')
   const lines = [
     `<b>MMS · التقرير التنفيذي (${b.days} أيام)</b>`,

@@ -1,4 +1,5 @@
 import { useContext, useState, type PointerEvent } from 'react'
+import { type Coverage, basisNote, fairChange } from '../lib/fair'
 import { type Count, type Stats, type Tone, DrillContext, TONES } from '../lib/news'
 import { TONE_COLORS, useIntel } from '../lib/intel'
 import { useI18n } from '../lib/i18n'
@@ -52,16 +53,20 @@ const TEXT = {
 const useText = () => TEXT[useI18n().lang === 'ar' ? 'ar' : 'en']
 
 /** Variation en % par rapport à la période précédente, avec flèche et couleur */
-export function Delta({ now, before }: { now: number; before: number | null }) {
+// cov : jours couverts des deux périodes ; la valeur précédente est ramenée aux mêmes jours (lib/fair.ts)
+export function Delta({ now, before, cov }: { now: number; before: number | null; cov?: Coverage | null }) {
   const x = useText()
-  const { num } = useI18n()
+  const { num, lang } = useI18n()
   if (before == null) return null
-  if (!before) return now ? <small className="tr-delta is-up">▲ {x.vsPrev}</small> : null
-  const pct = Math.round(((now - before) / before) * 100)
+  const pct = fairChange(now, before, cov)
+  if (pct === null) return null
+  if (pct === 'new') return <small className="tr-delta is-up">{lang === 'ar' ? 'جديد' : 'new'}</small>
   const cls = pct > 0 ? 'tr-delta is-up' : pct < 0 ? 'tr-delta is-down' : 'tr-delta'
+  const note = basisNote(cov, lang)
   return (
-    <small className={cls} title={`${num(before)} → ${num(now)}`}>
+    <small className={cls} title={`${num(before)} → ${num(now)}${note ? ` · ${note}` : ''}`}>
       {pct > 0 ? '▲' : pct < 0 ? '▼' : '='} {pct ? `${pct > 0 ? '+' : ''}${num(pct)}%` : x.same} <span>{x.vsPrev}</span>
+      {note && <span> · {note}</span>}
     </small>
   )
 }

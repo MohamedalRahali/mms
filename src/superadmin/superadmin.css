@@ -935,3 +935,27 @@ textarea.sa-input {
   width: 100%;
   min-width: 90px;
 }
+
+/* Politique des sources (audit v3) */
+.sa-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 10px 0;
+}
+.sa-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.sa-field textarea.sa-input {
+  min-height: 110px;
+  resize: vertical;
+  font-family: inherit;
+}
+@media (max-width: 720px) {
+  .sa-grid2 {
+    grid-template-columns: 1fr;
+  }
+}

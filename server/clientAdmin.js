@@ -8,6 +8,8 @@ import { mfaPolicy, setMfaPolicy } from './mfa.js'
 import { applyMailPolicyToWatches } from './watches.js'
 import { applyMailPolicyToBriefing } from './briefing.js'
 import { listEntities, saveEntities } from './entities.js'
+import { setSourcePolicy, sourcePolicy } from './sourcePolicy.js'
+import { refreshSourcePolicy } from './store.js'
 import { reviewOption, setReviewOption } from './alertFlow.js'
 
 /**
@@ -78,6 +80,14 @@ export function mountClientAdmin(sa, { audit }) {
 
   /* ---- diffusion : domaines destinataires autorisés, adresses mises de côté */
   const blockedNow = () => ({ watches: applyMailPolicyToWatches(), briefing: applyMailPolicyToBriefing() })
+  // Politique des sources sociales : comptes et fils écartés, liste blanche des forums
+  sa.get('/source-policy', (_req, res) => res.json({ policy: sourcePolicy() }))
+  sa.put('/source-policy', (req, res) => {
+    const policy = setSourcePolicy(req.body || {})
+    refreshSourcePolicy()
+    audit(req, 'source_policy', `${policy.blocked.length} écartées, ${policy.forumAllow.length} forums autorisés`)
+    res.json({ policy })
+  })
   sa.get('/mail-policy', (_req, res) => res.json({ policy: mailPolicy(), blocked: blockedNow() }))
   sa.put('/mail-policy', (req, res) => {
     try {

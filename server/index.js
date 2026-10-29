@@ -37,6 +37,7 @@ import { canSendAlert, initAlertFlow, mountAlertFlow, withFlow } from './alertFl
 import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionOf, regionStats, resolveEntities } from './entities.js'
 import { initPinboards, mountPinboards, pinnedKeys } from './pinboards.js'
 import { mountRasd } from './rasd.js'
+import { initSourcePolicy } from './sourcePolicy.js'
 import { dispatchHistory, initDispatchLog, logDispatch } from './dispatchLog.js'
 import { SPLITS, STEPS, timeline } from './timeline.js'
 import { setEntityResolver } from './store.js'
@@ -178,6 +179,8 @@ app.get('/api/auth/me', (req, res) => {
 
 // Référentiel des entités : variantes d'un même acteur fusionnées, médias jamais comptés comme acteurs
 initEntities(path.join(root, 'data', 'superadmin'))
+// Politique des sources sociales et des forums (audit v3) : bots, comptes personnels, liste blanche des forums
+initSourcePolicy(path.join(root, 'data', 'superadmin'))
 const applyEntities = () =>
   setEntityResolver((items) => {
     const media = new Set(items.map((it) => normName(it.origin || '')).filter(Boolean))
@@ -787,7 +790,9 @@ app.get('/api/news/compare', (req, res) => {
   const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 180)
   const history = historyMemo(items)
   // Période de référence plus ancienne que la collecte : comparaison signalée comme non fiable
-  res.json({ ...comparePeriods(applyFilters(items, { flux: req.query.flux }), days), history, insufficient: history.days < 2 * days })
+  // Période de référence en partie avant la collecte : variations calculées à jours couverts égaux (coverage)
+  const cmp = comparePeriods(applyFilters(items, { flux: req.query.flux }), days)
+  res.json({ ...cmp, history, insufficient: cmp.coverage.partial })
 })
 
 // Rapport exécutif : chiffres, synthèse IA (si déjà rédigée), envoi programmé

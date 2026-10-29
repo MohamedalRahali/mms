@@ -41,7 +41,8 @@ test('règle de double authentification : administrateurs par défaut, tous en o
   initMfaPolicy(dir)
   assert.equal(mfaRequired({ role: 'admin' }), true)
   assert.equal(mfaRequired({}), true, 'compte sans rôle = administrateur')
-  assert.equal(mfaRequired({ role: 'viewer' }), false)
+  // Depuis le 29/10/2026 : obligatoire pour tous par défaut
+  assert.equal(mfaRequired({ role: 'viewer' }), true)
   setMfaPolicy({ requireAdmins: true, requireAll: true })
   assert.equal(mfaRequired({ role: 'viewer' }), true)
   setMfaPolicy({ requireAdmins: false, requireAll: false })
@@ -354,4 +355,59 @@ test('tableaux d’épingles : réglages, épinglage automatique, épinglage en 
   assert.match(csv, /^﻿title,source/)
   pb.pinMany(b.id, [it('e', '=HYPERLINK("x")', new Date(NOW).toISOString())], 'a@x')
   assert.match(pb.pinboardCsv(b.id).csv, /"'=HYPERLINK/, 'cellule neutralisée contre les formules')
+})
+
+test('variations en % justes avec un historique partiel (audit v3) : jours couverts égaux, « جديد » si base trop petite', async () => {
+  const { coverageOf, fairChange } = await import('../server/insights.js')
+  const DAY = 86_400_000
+  const NOW = Date.parse('2026-10-29T10:00:00Z')
+  // Collecte commencée il y a 9 jours : période de 7 j entière, période précédente couverte 2 jours sur 7
+  const items = [{ date: new Date(NOW - 9 * DAY).toISOString() }]
+  const cov = coverageOf(items, 7, NOW)
+  assert.deepEqual([cov.current, cov.previous, cov.partial], [7, 2, true])
+  // 700 actualités cette semaine, 200 sur les 2 jours couverts avant : 100/jour contre 100/jour = 0 %, pas +250 %
+  assert.equal(fairChange(700, 200, cov), 0)
+  assert.equal(fairChange(1050, 200, cov), 50)
+  // Base trop petite ou absente : « جديد » au lieu de +23 122 %
+  assert.equal(fairChange(7431, 1, cov), 'new')
+  assert.equal(fairChange(10, 0, { days: 7, current: 7, previous: 0, partial: true }), 'new')
+  assert.equal(fairChange(0, 0, cov), null)
+  // Historique complet : calcul habituel
+  const full = coverageOf([{ date: new Date(NOW - 30 * DAY).toISOString() }], 7, NOW)
+  assert.equal(full.partial, false)
+  assert.equal(fairChange(120, 100, full), 20)
+})
+
+test('audit v3 : bots et comptes personnels écartés, noms Reddit unifiés, prénoms seuls et alias', async () => {
+  const sp = await import('../server/sourcePolicy.js')
+  sp.initSourcePolicy(fs.mkdtempSync(path.join(os.tmpdir(), 'mms-sp-')))
+  assert.equal(sp.canonicalOrigin('r/u/Ahmed_Ly'), 'u/Ahmed_Ly')
+  assert.equal(sp.canonicalOrigin('r/u_Ahmed_Ly'), 'u/Ahmed_Ly')
+  const r = (origin, extra = {}) => ({ origin, channel: 'reddit', media: 'forum', ...extra })
+  for (const o of ['r/AutoNewspaper', 'r/ALJAZEERAauto', 'r/MapPorn', 'r/MilitaryPorn', 'r/WhitePeopleTwitter', 'r/u_someone']) assert.equal(sp.excludedBySource(r(o)), true, o)
+  assert.equal(sp.excludedBySource(r('r/libya')), false)
+  assert.equal(sp.excludedBySource({ origin: 'وال', channel: 'site', media: 'article' }), false)
+  // Liste blanche des forums : seuls les forums listés restent
+  sp.setSourcePolicy({ blocked: ['r/SomeSpam'], forumAllow: ['r/libya'] })
+  assert.equal(sp.excludedBySource(r('r/worldnews')), true)
+  assert.equal(sp.excludedBySource(r('r/libya')), false)
+  assert.equal(sp.excludedBySource({ origin: 'r/SomeSpam', channel: 'reddit', media: 'social' }), true)
+  const { resolveEntities } = await import('../server/entities.js')
+  const out = resolveEntities({ people: ['محمد', 'ترامب', 'محمد المنفي'], orgs: ['وزارة المواصلات'] })
+  assert.ok(!out.people.includes('محمد'), 'prénom seul écarté')
+  assert.ok(out.people.includes('دونالد ترامب'))
+  assert.ok(out.orgs.includes('وزارة المواصلات الليبية'))
+})
+
+test('double authentification : obligatoire pour tous par défaut, ancienne règle migrée', async () => {
+  const { initMfaPolicy, mfaPolicy, mfaRequired, setMfaPolicy } = await import('../server/mfa.js')
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'mms-mfa2-'))
+  initMfaPolicy(d)
+  assert.equal(mfaRequired({ role: 'viewer' }), true)
+  fs.writeFileSync(path.join(d, 'mfa.json'), JSON.stringify({ requireAdmins: true, requireAll: false }))
+  initMfaPolicy(d)
+  assert.equal(mfaPolicy().requireAll, true, 'règle de la version 1 : passe à « tous »')
+  setMfaPolicy({ requireAdmins: true, requireAll: false })
+  initMfaPolicy(d)
+  assert.equal(mfaPolicy().requireAll, false, 'choix explicite du Super Admin respecté')
 })

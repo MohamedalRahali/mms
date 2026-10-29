@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { demoItems } from './demo.js'
+import { canonicalOrigin, excludedBySource } from './sourcePolicy.js'
 
 /**
  * Lit les sorties des veilles et les ramène à un seul format d'actualité :
@@ -32,6 +33,11 @@ let previous = new Map() // id → { json, obj } de la lecture précédente
 let resolver = null
 export function setEntityResolver(fn) {
   resolver = fn
+  cache.at = 0
+  signature = ''
+}
+/** Politique des sources modifiée (console Super Admin) : relecture au prochain appel */
+export function refreshSourcePolicy() {
   cache.at = 0
   signature = ''
 }
@@ -223,7 +229,8 @@ function loadLibye(dir, track) {
         summary: clean(n.resume),
         category: normCategory(n.categorie),
         date: date.toISOString(),
-        origin: clean(n.source) || 'Source libyenne',
+        // « r/u/X » et « r/u_X » ramenés à « u/X » (sourcePolicy.js)
+        origin: canonicalOrigin(clean(n.source)) || 'Source libyenne',
         channel,
         lang: langCode(n.langue) || 'ar',
         url: webUrl(n.url),
@@ -350,10 +357,12 @@ export function getItems() {
   items.sort((a, b) => b.date.localeCompare(a.date))
   // Commentaires à part : seuls ceux dont la publication est dans MMS sont gardés
   const editorial = items.filter((it) => it.media !== 'comment')
-  const visible = hidden ? editorial.filter((it) => !hidden(it)) : editorial
+  // Sources coupées dans la console Super Admin, puis politique des sources sociales (bots, comptes personnels, forums)
+  const shown = (it) => (!hidden || !hidden(it)) && !excludedBySource(it)
+  const visible = editorial.filter(shown)
   const { reactions, comments } = linkReactions(
     visible,
-    items.filter((it) => it.media === 'comment' && (!hidden || !hidden(it))),
+    items.filter((it) => it.media === 'comment' && shown(it)),
   )
   cache = {
     at: Date.now(),

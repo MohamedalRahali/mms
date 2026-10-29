@@ -102,6 +102,33 @@ function pair(cur, prev, limit = 12) {
   return [...map.values()].sort((a, b) => b.current + b.previous - (a.current + a.previous)).slice(0, limit)
 }
 
+/**
+ * Jours de chaque période couverts par la collecte (début des données = fiche la plus ancienne). Quand la période
+ * précédente n'est couverte qu'en partie, la comparaison se fait à jours égaux : moyenne par jour couvert.
+ */
+export function coverageOf(items, days, now = Date.now()) {
+  let start = Infinity
+  for (const it of items) {
+    const t = Date.parse(it.date)
+    if (t < start) start = t
+  }
+  const span = (a, b) => Math.max(0, Math.min(b - Math.max(a, start), b - a)) / DAY_MS
+  const current = Math.round(span(now - days * DAY_MS, now) * 10) / 10
+  const previous = Math.round(span(now - 2 * days * DAY_MS, now - days * DAY_MS) * 10) / 10
+  return { days, current, previous, partial: previous < days - 0.5 }
+}
+
+/**
+ * Variation en % juste : la valeur précédente ramenée aux mêmes jours couverts que la période en cours.
+ * null : pas de comparaison possible ; 'new' : base trop petite (moins de 5 ou moins d'un jour couvert).
+ */
+export function fairChange(cur, prev, cov) {
+  if (!cov || cov.previous < 1 || cov.current <= 0) return cur ? 'new' : null
+  const base = prev * (cov.current / cov.previous)
+  if (base < 5) return cur ? 'new' : null
+  return Math.round(((cur - base) / base) * 100)
+}
+
 /** Période en cours (days derniers jours) contre la même durée juste avant */
 export function comparePeriods(items, days) {
   const now = Date.now()
@@ -112,6 +139,7 @@ export function comparePeriods(items, days) {
   })
   return {
     days,
+    coverage: coverageOf(items, days, now),
     current: profile(cur),
     previous: profile(prev),
     categories: pair(counts(cur, 'category'), counts(prev, 'category')),
@@ -124,8 +152,6 @@ export function comparePeriods(items, days) {
 }
 
 /* ---------------------------------------------------------------- rapport exécutif */
-
-const pct = (a, b) => (b ? Math.round(((a - b) / b) * 100) : null)
 
 export function buildBriefing(items, days) {
   const cmp = comparePeriods(items, days)
@@ -141,7 +167,8 @@ export function buildBriefing(items, days) {
     to: new Date(now).toISOString(),
     current: cmp.current,
     previous: cmp.previous,
-    change: pct(cmp.current.total, cmp.previous.total),
+    coverage: cmp.coverage,
+    change: fairChange(cmp.current.total, cmp.previous.total, cmp.coverage),
     categories: cmp.categories.slice(0, 6),
     people: cmp.people.slice(0, 6),
     orgs: cmp.orgs.slice(0, 6),

@@ -1,5 +1,4 @@
 import { useContext, useEffect, useRef, type MouseEvent as RMouseEvent } from 'react'
-import { useHistory } from '../lib/history'
 import { type Count, type Flux, type NewsResponse, type Stats, DrillContext, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { useCountUp } from '../lib/motion'
@@ -89,8 +88,9 @@ const pct = (n: number) => `${n > 0 ? '+' : ''}${Math.round(n)}%`
 function compare(current: number, base: number[], scale: number) {
   const active = base.filter((n) => n > 0)
   if (active.length < 5) return null
+  // Moyenne des seuls jours avec des données (même règle que lib/fair.ts : jours couverts égaux)
   const ref = (active.reduce((a, b) => a + b, 0) / active.length) * scale
-  if (ref < current * 0.3) return null
+  if (ref < 5) return null
   return ((current - ref) / ref) * 100
 }
 
@@ -432,15 +432,13 @@ export function CommandHero({ flux }: { flux: Flux | '' }) {
   const fortnight = useFetch<Stats>(`/api/news/stats?days=14${q}`).data
   const week = useFetch<Stats>(`/api/news/stats?days=7${q}`).data
   const latest = useFetch<NewsResponse>(`/api/news?size=14${q}`).data
-  // Moins de 14 jours de données : pas de comparaison (la montée en charge de la collecte n'est pas un événement)
-  const history = useHistory()
-  const shortHistory = Boolean(history && !history.enough)
+  // Comparaison sur les seuls jours où la collecte a des données (au moins 5 jours) : pas de faux pic au démarrage
 
   const per = fortnight?.perDay.map((d) => d.count) ?? []
   const last7 = per.slice(-7).reduce((a, b) => a + b, 0)
   // 24 h comparées aux 7 jours complets d'avant (aujourd'hui exclu) ; la semaine aux 7 jours précédents
-  const vsAvg = shortHistory ? null : compare(day?.total ?? 0, per.slice(-8, -1), 1)
-  const vsPrev = shortHistory ? null : compare(last7, per.slice(-14, -7), 7)
+  const vsAvg = compare(day?.total ?? 0, per.slice(-8, -1), 1)
+  const vsPrev = compare(last7, per.slice(-14, -7), 7)
   const shown = (n: number) => (n > 300 ? `${x.over} +300%` : pct(n))
   const tones = day?.tones ?? []
   const rated = tones.reduce((a, b) => a + b.count, 0)
