@@ -959,3 +959,29 @@ textarea.sa-input {
     grid-template-columns: 1fr;
   }
 }
+
+/* صحة المصادر (SourceHealth.tsx) */
+.sa-health__counts button.sa-tag {
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.sa-tag.is-picked {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+.sa-health__budgets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+}
+.sa-health__note {
+  max-width: 360px;
+}
+.sa-health__err {
+  display: block;
+  color: var(--sa-bad);
+  font-size: 12px;
+  word-break: break-word;
+}

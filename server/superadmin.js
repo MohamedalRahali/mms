@@ -9,6 +9,7 @@ import { keyStatus } from './keys.js'
 import { aiUsage } from './ai.js'
 import { mountPermissionsAdmin, permsOf, profileExists } from './permissions.js'
 import { initBrand, mountClientAdmin } from './clientAdmin.js'
+import { sourceHealth } from './sourceHealth.js'
 import { countryOf as sourceCountry, initSourceMeta, reachIsSet, reachOf, reliabilityIsSet, reliabilityOf } from './sourceMeta.js'
 import {
   all,
@@ -348,6 +349,9 @@ export function mountSuperAdmin(app, root) {
 
   /* ---- pays et portée des sources, logo du client, clés d'API, liens de partage */
   mountClientAdmin(sa, { audit })
+
+  /* ---- صحة المصادر : état des collecteurs et enregistreurs de la veille, budgets */
+  sa.get('/source-health', (_req, res) => res.json(sourceHealth(path.join(root, 'data'))))
 
   sa.get('/me', (req, res) => res.json({ user: req.sa.u, expires: iso(req.sa.exp), ip: ipOf(req), country: countryOf(ipOf(req)) }))
   sa.post('/logout', (req, res) => {
