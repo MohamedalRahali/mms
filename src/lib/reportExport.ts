@@ -317,7 +317,6 @@ export async function toPdf(html: string, meta: ReportMeta, title: string): Prom
     if (document.fonts?.ready) await document.fonts.ready
     // 1,6 : texte net à l'impression et PDF assez léger pour partir par e-mail
     const scale = 1.6
-    const canvas = await html2canvas(root, { scale, backgroundColor: '#ffffff', useCORS: true, logging: false })
     const top = root.getBoundingClientRect().top
     // Points de coupe possibles : bas de chaque bloc et de chaque ligne de tableau ; sauts de page imposés
     const cuts = new Set<number>()
@@ -354,16 +353,38 @@ export async function toPdf(html: string, meta: ReportMeta, title: string): Prom
     }
     const head = await strip(meta.header || title)
     const foot = await strip(meta.footer)
+    // Le document est dessiné par tranches de quelques pages (6 000 px CSS au plus) : une seule image géante dépasse
+    // la taille maximale d'un canvas du navigateur (≈ 16 000 à 32 000 px de haut) et sort blanche, d'où des pages vides
+    const SEGMENT = 6000
+    const segments: { from: number; to: number; slices: number[] }[] = []
     slices.forEach(([a, b], idx) => {
+      const cur = segments[segments.length - 1]
+      if (cur && b - cur.from <= SEGMENT) {
+        cur.to = b
+        cur.slices.push(idx)
+      } else segments.push({ from: a, to: b, slices: [idx] })
+    })
+    const pages: { canvas: HTMLCanvasElement; h: number }[] = []
+    for (const seg of segments) {
+      const part = await html2canvas(root, { scale, backgroundColor: '#ffffff', useCORS: true, logging: false, y: seg.from + top + window.scrollY, height: seg.to - seg.from, windowHeight: Math.max(window.innerHeight, seg.to - seg.from) })
+      for (const idx of seg.slices) {
+        const [a, b] = slices[idx]
+        const h = Math.max(b - a, 1)
+        const page = document.createElement('canvas')
+        page.width = part.width
+        page.height = Math.round(h * scale)
+        const ctx = page.getContext('2d')!
+        ctx.fillStyle = '#fff'
+        ctx.fillRect(0, 0, page.width, page.height)
+        ctx.drawImage(part, 0, Math.round((a - seg.from) * scale), part.width, page.height, 0, 0, part.width, page.height)
+        pages.push({ canvas: page, h })
+      }
+    }
+    // Contrôle avant enregistrement : une page sans encre (blanche) est retirée ; si tout est blanc, aucun fichier vide
+    const kept = pages.filter((p) => inkRatio(p.canvas) > 0.002)
+    if (!kept.length) throw Object.assign(new Error('EMPTY_PDF'), { code: 'EMPTY_PDF' })
+    kept.forEach(({ canvas: page, h }, idx) => {
       if (idx) pdf.addPage()
-      const h = Math.max(b - a, 1)
-      const page = document.createElement('canvas')
-      page.width = canvas.width
-      page.height = Math.round(h * scale)
-      const ctx = page.getContext('2d')!
-      ctx.fillStyle = '#fff'
-      ctx.fillRect(0, 0, page.width, page.height)
-      ctx.drawImage(canvas, 0, Math.round(a * scale), canvas.width, page.height, 0, 0, canvas.width, page.height)
       pdf.addImage(page.toDataURL('image/jpeg', 0.85), 'JPEG', m, m + band, contentW, h / PX, undefined, 'FAST')
       if (head) pdf.addImage(head, 'PNG', m, m, contentW, head.height / scale / PX)
       pdf.setDrawColor(201, 214, 206)
@@ -372,13 +393,27 @@ export async function toPdf(html: string, meta: ReportMeta, title: string): Prom
       if (meta.pageNumbers) {
         pdf.setFontSize(9)
         pdf.setTextColor(107, 122, 144)
-        pdf.text(`${idx + 1} / ${slices.length}`, pageW / 2, pageH - m + 1, { align: 'center' })
+        pdf.text(`${idx + 1} / ${kept.length}`, pageW / 2, pageH - m + 1, { align: 'center' })
       }
     })
     return pdf.output('blob')
   } finally {
     host.remove()
   }
+}
+
+/** Part des pixels non blancs d'une page (échantillon d'un pixel sur 16) : 0 = page vide */
+export function inkRatio(c: HTMLCanvasElement) {
+  const ctx = c.getContext('2d')
+  if (!ctx || !c.width || !c.height) return 0
+  const { data } = ctx.getImageData(0, 0, c.width, c.height)
+  let ink = 0
+  let seen = 0
+  for (let i = 0; i < data.length; i += 64) {
+    seen++
+    if (data[i] < 235 || data[i + 1] < 235 || data[i + 2] < 235) ink++
+  }
+  return seen ? ink / seen : 0
 }
 
 /* ---------------------------------------------------------------- impression */
