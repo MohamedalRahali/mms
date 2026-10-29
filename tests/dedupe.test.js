@@ -22,3 +22,23 @@ test('doublons : même adresse, même titre, titres trop courts', () => {
   assert.deepEqual(keys, ['1', '1', '1', '4', '5', '6', '7', '8'])
   assert.equal(new Set(keys).size, 6)
 })
+
+test('rapport exécutif et comparaison : actualités sans doublons, sources médias séparées des comptes', async () => {
+  const { comparePeriods } = await import('../server/insights.js')
+  const now = Date.now()
+  const at = (h) => new Date(now - h * 3_600_000).toISOString()
+  const base = { summary: '', category: 'politique', tone: 'neutral', importance: 2, people: ['الدبيبة'], orgs: [], places: [] }
+  const items = [
+    { ...base, id: 'a', title: 'الحكومة تعلن الميزانية الجديدة للعام المقبل', url: 'https://alwasat.ly/1', origin: 'الوسط', channel: 'site', date: at(1) },
+    { ...base, id: 'b', title: 'الحكومة تعلن الميزانية الجديدة للعام المقبل', url: 'https://libyaobserver.ly/2', origin: 'ليبيا أوبزرفر', channel: 'site', date: at(2) },
+    { ...base, id: 'c', title: 'تغريدة عن الميزانية الجديدة ومخصصاتها', url: 'https://x.com/u/1', origin: '@user1', channel: 'x', date: at(3) },
+    { ...base, id: 'd', title: 'فيديو عن الميزانية الجديدة ومخصصاتها كاملة', url: 'https://www.youtube.com/watch?v=Z1', origin: 'قناة', channel: 'youtube', date: at(4) },
+  ]
+  const c = comparePeriods(items, 7)
+  assert.equal(c.current.publications, 4)
+  assert.equal(c.current.total, 3)
+  assert.equal(c.current.sources, 2)
+  assert.equal(c.current.accounts, 2)
+  assert.equal(c.categories[0].current, 3)
+  assert.equal(c.people[0].current, 3)
+})

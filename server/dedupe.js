@@ -27,3 +27,26 @@ export function dedupeKeyer() {
     return id
   }
 }
+
+/** Publications sans doublons (première occurrence de chaque actualité, dans l'ordre reçu) */
+export function uniqueItems(items) {
+  const key = dedupeKeyer()
+  const seen = new Set()
+  return items.filter((it) => {
+    const k = key(it)
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+}
+
+// Réseaux sociaux : leurs auteurs sont des comptes, pas des médias (compteurs de sources séparés)
+export const SOCIAL_CHANNELS = new Set(['x', 'twitter', 'bluesky', 'facebook', 'instagram', 'telegram', 'tiktok', 'reddit', 'mastodon', 'youtube', 'linkedin', 'threads'])
+
+/** Sources distinctes : médias d'un côté, comptes de réseaux sociaux de l'autre */
+export function sourceSplit(items) {
+  const media = new Set()
+  const accounts = new Set()
+  for (const it of items) (SOCIAL_CHANNELS.has(it.channel) ? accounts : media).add(it.origin)
+  return { media: media.size, accounts: accounts.size }
+}

@@ -107,7 +107,7 @@ export function briefingEmail({ b, summary }) {
 <h1 style="margin:4px 0 2px;font-size:24px">التقرير التنفيذي</h1>
 <p style="margin:0 0 18px;color:#5f7469">${esc(period)}</p>
 <table style="width:100%;border-spacing:8px"><tr>
-${kpi('عدد الأخبار', b.current.total, b.previous.total)}${kpi('المصادر', b.current.sources, b.previous.sources)}${kpi('أخبار لافتة', b.current.important, b.previous.important)}${kpi('نبرة سلبية', b.current.tones.negative, b.previous.tones.negative)}
+${kpi('عدد الأخبار', b.current.total, b.previous.total)}${kpi('المصادر الإعلامية', b.current.sources, b.previous.sources)}${kpi('أخبار لافتة', b.current.important, b.previous.important)}${kpi('نبرة سلبية', b.current.tones.negative, b.previous.tones.negative)}
 </tr></table>
 ${
   summary

@@ -35,7 +35,7 @@ import { mountGeo } from './geo.js'
 import { mountCatalog } from './catalog.js'
 import { canSendAlert, initAlertFlow, mountAlertFlow, openWatchAlert, withFlow } from './alertFlow.js'
 import { intlRegion } from './themes.js'
-import { dedupeKeyer } from './dedupe.js'
+import { SOCIAL_CHANNELS, dedupeKeyer } from './dedupe.js'
 import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionOf, regionStats, resolveEntities } from './entities.js'
 import { initPinboards, mountPinboards, pinnedKeys } from './pinboards.js'
 import { initMailingLists, mountMailingLists } from './mailingLists.js'
@@ -570,8 +570,6 @@ app.put('/api/tags', express.json({ limit: '4kb' }), (req, res) => {
 })
 
 /** Tonalité jour par jour, sur les mêmes jours que la courbe */
-// Réseaux sociaux : leurs auteurs sont des comptes, pas des médias (compteur « المصادر » séparé)
-const SOCIAL_CHANNELS = new Set(['x', 'twitter', 'bluesky', 'facebook', 'instagram', 'telegram', 'tiktok', 'reddit', 'mastodon', 'youtube', 'linkedin', 'threads'])
 
 function toneDays(items, perDay) {
   const rows = perDay.map((d) => ({ date: d.date, positive: 0, neutral: 0, negative: 0 }))

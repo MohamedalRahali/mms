@@ -1,4 +1,5 @@
 import { compileQuery, searchText } from './query.js'
+import { sourceSplit, uniqueItems } from './dedupe.js'
 import { normalize } from './watches.js'
 import { countList, findSpikes } from './intel.js'
 
@@ -55,7 +56,8 @@ export const topEngaged = (items, limit = 10) =>
  */
 export function shareOfVoice(items, actors, days) {
   const since = Date.now() - days * DAY_MS
-  const scoped = items.filter((it) => Date.parse(it.date) >= since)
+  // Part de voix sur les actualités sans doublons : une même dépêche reprise dix fois ne compte qu'une fois
+  const scoped = uniqueItems(items.filter((it) => Date.parse(it.date) >= since))
   const perDayKeys = []
   for (let i = days - 1; i >= 0; i--) perDayKeys.push(toDay(new Date(Date.now() - i * DAY_MS).toISOString()))
   const dayIndex = new Map(perDayKeys.map((d, i) => [d, i]))
@@ -84,12 +86,18 @@ export function shareOfVoice(items, actors, days) {
 
 /* ---------------------------------------------------------------- comparaison de périodes */
 
+// Chiffres non gonflés (audit des statistiques, 29/10) : actualités sans doublons (même adresse ou même titre),
+// sources médias séparées des comptes de réseaux sociaux ; « publications » garde le nombre brut
 function profile(items) {
+  const uniq = uniqueItems(items)
+  const split = sourceSplit(items)
   return {
-    total: items.length,
-    sources: new Set(items.map((it) => it.origin)).size,
-    important: items.filter((it) => (it.importance || 1) >= 2).length,
-    tones: tonesOf(items),
+    total: uniq.length,
+    publications: items.length,
+    sources: split.media,
+    accounts: split.accounts,
+    important: uniq.filter((it) => (it.importance || 1) >= 2).length,
+    tones: tonesOf(uniq),
     engagement: engagementTotals(items),
   }
 }
@@ -137,17 +145,20 @@ export function comparePeriods(items, days) {
     const t = Date.parse(it.date)
     return t >= now - 2 * days * DAY_MS && t < now - days * DAY_MS
   })
+  // Classements par thème et par acteur sur les actualités sans doublons ; par source : publications de chaque source
+  const uCur = uniqueItems(cur)
+  const uPrev = uniqueItems(prev)
   return {
     days,
     coverage: coverageOf(items, days, now),
     current: profile(cur),
     previous: profile(prev),
-    categories: pair(counts(cur, 'category'), counts(prev, 'category')),
+    categories: pair(counts(uCur, 'category'), counts(uPrev, 'category')),
     sources: pair(counts(cur, 'origin'), counts(prev, 'origin')),
     channels: pair(counts(cur, 'channel'), counts(prev, 'channel')),
-    people: pair(countList(cur, 'people', 30), countList(prev, 'people', 30)),
-    orgs: pair(countList(cur, 'orgs', 30), countList(prev, 'orgs', 30)),
-    places: pair(countList(cur, 'places', 30), countList(prev, 'places', 30)),
+    people: pair(countList(uCur, 'people', 30), countList(uPrev, 'people', 30)),
+    orgs: pair(countList(uCur, 'orgs', 30), countList(uPrev, 'orgs', 30)),
+    places: pair(countList(uCur, 'places', 30), countList(uPrev, 'places', 30)),
   }
 }
 
@@ -156,7 +167,7 @@ export function comparePeriods(items, days) {
 export function buildBriefing(items, days) {
   const cmp = comparePeriods(items, days)
   const now = Date.now()
-  const cur = items.filter((it) => Date.parse(it.date) >= now - days * DAY_MS)
+  const cur = uniqueItems(items.filter((it) => Date.parse(it.date) >= now - days * DAY_MS))
   // Les plus marquantes : importance, puis reprises et interactions
   const top = [...cur]
     .sort((a, b) => (b.importance || 1) - (a.importance || 1) || interactions(b) - interactions(a) || b.date.localeCompare(a.date))
