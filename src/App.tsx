@@ -1,4 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
+import { Avatar, ProfilePanel } from './components/Profile'
 import { Builder } from './components/Builder'
 import { Watches } from './components/Watches'
 import { WATCH_TEXT } from './lib/watches'
@@ -210,6 +211,9 @@ export default function App() {
   const [palette, setPalette] = useState(false)
   // Panneau « التحقق بخطوتين » du compte
   const [mfaOpen, setMfaOpen] = useState(false)
+  // الإعدادات الشخصية : photo et nom modifiés pendant la session (le reste vient de /api/auth/me)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [me, setMe] = useState<{ name?: string; avatar?: string }>({})
   const [mfaState, setMfaState] = useState<MfaInfo | null>(null)
   // Marque du client : nom de l'assistant IA (« Around » par défaut), réglé dans la console Super Admin
   const brand = useBrand()
@@ -427,13 +431,19 @@ export default function App() {
                   </div>
                   {auth && (
                     <div className="mms-user" title={auth.user.email}>
-                      <span className="mms-user__avatar" aria-hidden>
-                        {initials(auth.user.name, auth.user.email)}
-                      </span>
-                      <span className="mms-user__id">
-                        <strong>{auth.user.name || auth.user.email.split('@')[0]}</strong>
-                        <small>{ROLE_LABEL[lang === 'ar' ? 'ar' : 'en'][auth.user.role ?? 'admin']}</small>
-                      </span>
+                      <button
+                        type="button"
+                        className="mms-user__open"
+                        onClick={() => setProfileOpen(true)}
+                        title={lang === 'ar' ? 'الإعدادات الشخصية' : 'Personal settings'}
+                        aria-label={lang === 'ar' ? 'الإعدادات الشخصية' : 'Personal settings'}
+                      >
+                        <Avatar src={me.avatar ?? auth.user.avatar} label={initials(me.name ?? auth.user.name, auth.user.email)} />
+                        <span className="mms-user__id">
+                          <strong>{me.name || auth.user.name || auth.user.email.split('@')[0]}</strong>
+                          <small>{ROLE_LABEL[lang === 'ar' ? 'ar' : 'en'][auth.user.role ?? 'admin']}</small>
+                        </span>
+                      </button>
                       <button
                         type="button"
                         className="mms-logout"
@@ -585,6 +595,17 @@ export default function App() {
                   />
                 )}
                 {presenting && <Presentation flux={flux} onClose={closePresent} />}
+                {profileOpen && auth && (
+                  <ProfilePanel
+                    initials={initials(me.name ?? auth.user.name, auth.user.email)}
+                    onClose={() => setProfileOpen(false)}
+                    onChange={(p) => setMe((x) => ({ ...x, ...p }))}
+                    onMfa={() => {
+                      setProfileOpen(false)
+                      setMfaOpen(true)
+                    }}
+                  />
+                )}
                 {mfaOpen && auth && (
                   <MfaPanel
                     lang={lang}

@@ -37,6 +37,7 @@ import { canSendAlert, initAlertFlow, mountAlertFlow, withFlow } from './alertFl
 import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionOf, regionStats, resolveEntities } from './entities.js'
 import { initPinboards, mountPinboards, pinnedKeys } from './pinboards.js'
 import { mountRasd } from './rasd.js'
+import { avatarUrl, initProfile, mountProfile } from './profile.js'
 import { initSourcePolicy } from './sourcePolicy.js'
 import { dispatchHistory, initDispatchLog, logDispatch } from './dispatchLog.js'
 import { SPLITS, STEPS, timeline } from './timeline.js'
@@ -174,7 +175,7 @@ app.get('/api/auth/me', (req, res) => {
   const user = currentUser(req)
   if (!user) return res.status(401).json({ error: 'AUTH' })
   const raw = readUsers().find((u) => u.email === user.email)
-  res.json({ user: { ...user, perms: permsOf(user), mfa: mfaStateOf(raw) } })
+  res.json({ user: { ...user, avatar: avatarUrl(user.email), perms: permsOf(user), mfa: mfaStateOf(raw) } })
 })
 
 // Référentiel des entités : variantes d'un même acteur fusionnées, médias jamais comptés comme acteurs
@@ -907,6 +908,9 @@ mountAlertFlow(app)
 initPinboards(path.join(root, 'data'))
 mountPinboards(app, { getItems })
 mountRasd(app, { getItems, telegramReady, sendTelegram, logDispatch })
+// الإعدادات الشخصية : photo de profil, nom, préférences, mot de passe
+initProfile(path.join(root, 'data'))
+mountProfile(app)
 // سجل الإرسال : envois des veilles, alertes du radar, briefing et rapports
 app.get('/api/watches/history', (_req, res) => res.json({ rows: dispatchHistory() }))
 

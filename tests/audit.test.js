@@ -411,3 +411,18 @@ test('double authentification : obligatoire pour tous par défaut, ancienne règ
   initMfaPolicy(d)
   assert.equal(mfaPolicy().requireAll, false, 'choix explicite du Super Admin respecté')
 })
+
+test('photo de profil : seuls PNG, JPEG et WebP réels sont acceptés (SVG, HTML et exécutables refusés)', async () => {
+  const { detectImage, avatarKey } = await import('../server/profile.js')
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
+  const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10])
+  const webp = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBPVP8 ')])
+  assert.equal(detectImage(png).type, 'image/png')
+  assert.equal(detectImage(jpg).type, 'image/jpeg')
+  assert.equal(detectImage(webp).type, 'image/webp')
+  assert.equal(detectImage(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>')), null)
+  assert.equal(detectImage(Buffer.from('MZ\x90\x00 exécutable renommé en .png')), null)
+  assert.equal(detectImage(Buffer.from('<html><body>')), null)
+  assert.match(avatarKey('A@X.test'), /^[a-f0-9]{24}$/)
+  assert.equal(avatarKey('A@X.test'), avatarKey('a@x.test'), 'même clé quelle que soit la casse')
+})

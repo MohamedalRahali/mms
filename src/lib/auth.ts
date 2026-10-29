@@ -24,7 +24,7 @@ export type ModuleKey =
 export type ActionKey = 'export' | 'ai_ask' | 'ai_run' | 'edit_dashboards' | 'manage_watches' | 'tags' | 'send_email' | 'schedule' | 'diffusion' | 'mark_processed' | 'share_dashboards'
 export type Perms = { profile: string; profileName: string; modules: ModuleKey[]; actions: ActionKey[] }
 export type MfaInfo = { enabled: boolean; required: boolean; setup: boolean; recoveryLeft: number }
-export type User = { email: string; name: string; role?: Role; perms?: Perms; mfa?: MfaInfo }
+export type User = { email: string; name: string; role?: Role; perms?: Perms; mfa?: MfaInfo; avatar?: string }
 
 const RANK: Record<Role, number> = { viewer: 0, analyst: 1, admin: 2 }
 /** Le compte a-t-il au moins ce rôle ? Les comptes sans rôle sont administrateurs. */

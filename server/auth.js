@@ -374,6 +374,28 @@ export function userSessions(email) {
   return [...sessions.values()].filter((s) => s.email.toLowerCase() === key && s.expires > now).map(({ at, expires, ip, ua }) => ({ at, expires, ip: ip || '', ua: ua || '' }))
 }
 
+/**
+ * Changement de mot de passe par l'utilisateur (الإعدادات الشخصية) : mot de passe actuel exigé, 10 caractères au moins,
+ * différent de l'actuel et de l'identifiant. Les autres sessions du compte sont fermées ; renvoie leur nombre.
+ */
+export function changePassword(req, email, current, next) {
+  const fail = (code, status = 400) => Object.assign(new Error(code), { code, status })
+  const users = readUsers()
+  const u = users.find((x) => x.email === email)
+  if (!u) throw fail('NOT_FOUND', 404)
+  if (!checkPassword(u, current)) throw fail('BAD_PASSWORD', 403)
+  if (next.length < 10) throw fail('TOO_SHORT')
+  if (next === current) throw fail('SAME')
+  if (next.toLowerCase() === String(u.email).toLowerCase() || next.toLowerCase() === String(u.username || '').toLowerCase()) throw fail('WEAK')
+  Object.assign(u, hashPassword(next), { passwordChangedAt: new Date().toISOString() })
+  writeUsers(users)
+  const keep = readCookie(req)
+  let n = 0
+  for (const [k, s] of sessions) if (k !== keep && s.email.toLowerCase() === email.toLowerCase() && sessions.delete(k)) n++
+  if (n) saveSessions()
+  return n
+}
+
 /** Ferme toutes les sessions d'un compte (tous ses appareils) ; renvoie leur nombre */
 export function closeSessions(email) {
   const key = String(email || '').toLowerCase()

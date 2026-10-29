@@ -4028,3 +4028,74 @@ textarea:focus {
 .mms-tl > :not(.mms-tl__wrap) {
   flex-shrink: 0;
 }
+
+/* الإعدادات الشخصية : pastille cliquable, photo, sections */
+.mms-user__open {
+  display: inline-flex;
+  align-items: center;
+  gap: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.mms-user__open:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+img.mms-user__avatar--img {
+  object-fit: cover;
+  padding: 0;
+  background: var(--surface-2);
+}
+.prof {
+  width: min(560px, 100%);
+}
+.prof__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.prof__section h4 {
+  margin: 0;
+}
+.prof__photo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.prof__photo .mms-user__avatar {
+  width: 88px;
+  height: 88px;
+  flex: none;
+  font-size: 1.6rem;
+}
+.prof__row {
+  display: flex;
+  gap: 8px;
+}
+.prof__row input {
+  flex: 1;
+}
+.prof label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.prof input:not([type='file']) {
+  min-height: 38px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+}
