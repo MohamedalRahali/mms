@@ -42,3 +42,23 @@ test('rapport exécutif et comparaison : actualités sans doublons, sources méd
   assert.equal(c.categories[0].current, 3)
   assert.equal(c.people[0].current, 3)
 })
+
+test('variations : au-delà de +100 % un multiplicateur (« ×2,7 »), et aucune part au-dessus de 100 %', async () => {
+  const { formatDelta } = await import('../server/briefing.js')
+  const full = { days: 7, current: 7, previous: 7, partial: false }
+  assert.equal(formatDelta(266, 100, full), '▲ ×2,7')
+  assert.equal(formatDelta(150, 100, full), '▲ 50%')
+  assert.equal(formatDelta(50, 100, full), '▼ 50%')
+  assert.equal(formatDelta(200, 100, full), '▲ 100%')
+  // Part de voix : chaque acteur compte au plus une fois par actualité, jamais plus que le total
+  const { shareOfVoice } = await import('../server/insights.js')
+  const now = new Date().toISOString()
+  const items = [
+    { id: '1', title: 'الدبيبة وحفتر في اجتماع واحد مهم جدا', url: 'https://a.ly/1', date: now, people: ['عبد الحميد الدبيبة', 'خليفة حفتر'], orgs: [], places: [] },
+    { id: '2', title: 'الدبيبة وحفتر في اجتماع واحد مهم جدا', url: 'https://b.ly/2', date: now, people: ['عبد الحميد الدبيبة', 'خليفة حفتر'], orgs: [], places: [] },
+    { id: '3', title: 'الدبيبة يستقبل وفدا أوروبيا في طرابلس', url: 'https://a.ly/3', date: now, people: ['عبد الحميد الدبيبة'], orgs: [], places: [] },
+  ]
+  const sov = shareOfVoice(items, ['عبد الحميد الدبيبة', 'خليفة حفتر'], 7)
+  for (const r of sov.actors) assert.ok(r.count <= sov.total, `${r.name} ${r.count} > ${sov.total}`)
+  assert.equal(sov.total, 2)
+})

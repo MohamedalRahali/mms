@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { type Coverage, basisNote, fairChange } from '../lib/fair'
+import { type Coverage, basisNote, fairChange, formatChange } from '../lib/fair'
 import { DataSince } from './DataSince'
 import { type Count, type EngagementTotals, type Flux, type NewsItem, type Spike, type Stats, type Tone, DrillContext, TONES, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
@@ -103,8 +103,8 @@ function Delta({ cur, prev, invert = false }: { cur: number; prev: number; inver
   // Vert = bonne nouvelle : la hausse de la tonalité négative est en rouge (invert)
   const good = invert ? d <= 0 : d >= 0
   return (
-    <span className={`mms-delta ${good ? 'is-up' : 'is-down'}`} title={basisNote(cov, i.lang) || undefined}>
-      {d >= 0 ? '▲' : '▼'} {Math.abs(d)}%
+    <span className={`mms-delta ${good ? 'is-up' : 'is-down'}`} title={[formatChange(d, i.lang).title, basisNote(cov, i.lang)].filter(Boolean).join(' · ')}>
+      {d >= 0 ? '▲' : '▼'} {formatChange(d, i.lang).text}
     </span>
   )
 }
@@ -671,7 +671,7 @@ export function ExecutiveBriefing({ flux }: { flux: Flux | '' }) {
             )}
             {typeof data.change === 'number' && (
               <p className={data.change >= 0 ? 'mms-brief__change is-up' : 'mms-brief__change is-down'} title={basisNote(data.coverage, i.lang) || undefined}>
-                {data.change >= 0 ? '▲' : '▼'} {Math.abs(data.change)}% <small>{p.brVsPrev}</small>
+                {data.change >= 0 ? '▲' : '▼'} <span title={formatChange(data.change, i.lang).title}>{formatChange(data.change, i.lang).text}</span> <small>{p.brVsPrev}</small>
                 {data.coverage?.partial && <small className="mms-brief__basis"> · {basisNote(data.coverage, i.lang)}</small>}
               </p>
             )}

@@ -2,7 +2,7 @@ import { useContext, useEffect, useRef, type MouseEvent as RMouseEvent } from 'r
 import { type Count, type Flux, type NewsResponse, type Stats, DrillContext, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { useCountUp } from '../lib/motion'
-import { fairChange } from '../lib/fair'
+import { fairChange, formatChange } from '../lib/fair'
 import { useHistory } from '../lib/history'
 import { type V, arc, fromLatLon, rotate } from './Globe'
 
@@ -447,7 +447,8 @@ export function CommandHero({ flux }: { flux: Flux | '' }) {
   // 24 h contre la moyenne des 7 jours complets d'avant ; semaine contre les 7 jours précédents (jours couverts seulement)
   const vsAvg = compare(day?.unique ?? day?.total ?? 0, perRows.slice(-8, -1), 1, since)
   const vsPrev = compare(last7, perRows.slice(-14, -7), 7, since)
-  const shown = (n: number) => (n > 300 ? `${x.over} +300%` : pct(n))
+  // Au-delà de +100 % : multiplicateur (« ×2,7 ») au lieu d'un pourcentage supérieur à 100 % ; rien n'est plafonné
+  const shown = (n: number) => (n > 100 ? formatChange(n, i.lang).text : pct(n))
   const tones = day?.tones ?? []
   const rated = tones.reduce((a, b) => a + b.count, 0)
   const neg = tones.find((t) => t.name === 'negative')?.count ?? 0

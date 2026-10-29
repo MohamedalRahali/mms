@@ -1,5 +1,5 @@
 import { useContext, useState, type PointerEvent } from 'react'
-import { type Coverage, basisNote, fairChange } from '../lib/fair'
+import { type Coverage, basisNote, fairChange, formatChange } from '../lib/fair'
 import { type Count, type Stats, type Tone, DrillContext, TONES } from '../lib/news'
 import { TONE_COLORS, useIntel } from '../lib/intel'
 import { useI18n } from '../lib/i18n'
@@ -65,7 +65,7 @@ export function Delta({ now, before, cov }: { now: number; before: number | null
   const note = basisNote(cov, lang)
   return (
     <small className={cls} title={`${num(before)} → ${num(now)}${note ? ` · ${note}` : ''}`}>
-      {pct > 0 ? '▲' : pct < 0 ? '▼' : '='} {pct ? `${pct > 0 ? '+' : ''}${num(pct)}%` : x.same} <span>{x.vsPrev}</span>
+      {pct > 0 ? '▲' : pct < 0 ? '▼' : '='} {pct ? (pct > 100 ? formatChange(pct, lang).text : `${pct > 0 ? '+' : ''}${num(pct)}%`) : x.same} <span>{x.vsPrev}</span>
       {note && <span> · {note}</span>}
     </small>
   )

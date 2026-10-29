@@ -86,11 +86,17 @@ const TONE = { positive: 'إيجابي', neutral: 'محايد', negative: 'سل�
 const dateAr = new Intl.DateTimeFormat('ar-LY', { timeZone: 'Africa/Tripoli', day: 'numeric', month: 'long', year: 'numeric' })
 // Variation à jours couverts égaux (voir insights.fairChange) ; « جديد » quand la base est trop petite
 let coverage = null
+export const formatDelta = (a, b, cov) => {
+  coverage = cov === undefined ? coverage : cov
+  return delta(a, b)
+}
 const delta = (a, b) => {
   const c = fairChange(a, b, coverage)
   if (c === 'new') return 'جديد'
   if (c == null) return ''
-  return `${c >= 0 ? '▲' : '▼'} ${Math.abs(c)}%${coverage?.partial ? ` (على أساس ${Math.round(coverage.previous)} يوم)` : ''}`
+  // Au-delà de +100 % : multiplicateur (« ×2,7 », أكثر من الضعف), comme à l'écran (lib/fair.ts formatChange)
+  const shown = c > 100 ? `×${(1 + c / 100).toFixed(1).replace('.', ',')}` : `${Math.abs(c)}%`
+  return `${c >= 0 ? '▲' : '▼'} ${shown}${coverage?.partial ? ` (على أساس ${Math.round(coverage.previous)} يوم)` : ''}`
 }
 
 export function briefingEmail({ b, summary }) {

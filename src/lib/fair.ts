@@ -33,3 +33,15 @@ export function fairChange(cur: number, prev: number, cov: Coverage | null | und
 /** Petite mention de la base de calcul quand la période précédente est partielle */
 export const basisNote = (cov: Coverage | null | undefined, lang: string) =>
   cov?.partial ? (lang === 'ar' ? `على أساس متوسط ${Math.round(cov.previous)} يوم` : `based on a ${Math.round(cov.previous)}-day average`) : ''
+
+/**
+ * Affichage d'une variation : entre -100 % et +100 %, le pourcentage ; au-delà, un multiplicateur (+166 % → « ×2,7 »),
+ * plus parlant qu'un pourcentage supérieur à 100 % (le % exact reste dans l'infobulle). Rien n'est plafonné.
+ */
+export function formatChange(d: number, lang: string): { text: string; title: string } {
+  const exact = `${d > 0 ? '+' : ''}${Math.round(d)}%`
+  if (d <= 100) return { text: `${Math.abs(Math.round(d))}%`, title: exact }
+  const factor = (1 + d / 100).toLocaleString(lang === 'ar' ? 'ar-LY' : 'en', { maximumFractionDigits: 1 })
+  const words = lang === 'ar' ? (d >= 200 ? `أكثر من ${d >= 300 ? 'ثلاثة' : 'ضعفين'} أضعاف` : 'أكثر من الضعف') : d >= 200 ? `more than ${d >= 300 ? 'three' : 'two'}-fold` : 'more than double'
+  return { text: `×${factor}`, title: `${words} (${exact})` }
+}
