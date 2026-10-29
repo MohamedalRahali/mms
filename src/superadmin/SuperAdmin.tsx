@@ -6,6 +6,7 @@ import { ApiKeysCard, BrandCard, SharesCard, SourceMetaCell } from './ClientSett
 import { AlertReviewCard, EntitiesEditor, MailPolicyCard, MfaPolicyCard, SourcePolicyCard } from './Governance'
 import { SourceHealthCard } from './SourceHealth'
 import { EntityAICard } from './EntityAI'
+import { SupportCard } from './Support'
 import { ACTIVITY_LABEL, AUDIT_LABEL, ROLE_LABEL, SECURITY_LABEL, ago, api, errText, flag, fmtBytes, fmtDate, fmtDay, fmtMinutes, fmtNum, qs, setAuthLost } from './api'
 
 /** Console Super Admin (وحدة التحكم العليا) : /superadmin, séparée de la plateforme */
@@ -142,7 +143,12 @@ export default function SuperAdmin() {
             <EntitiesEditor />
           </>
         )}
-        {section === 'settings' && <Settings />}
+        {section === 'settings' && (
+          <>
+            <SupportCard />
+            <Settings />
+          </>
+        )}
       </main>
       {openUser && <UserSheet email={openUser} onClose={() => setOpenUser(null)} />}
     </div>

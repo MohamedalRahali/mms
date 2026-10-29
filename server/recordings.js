@@ -64,6 +64,13 @@ export const statusFile = () => readJson(STATUS(), null)
 
 const fail = (code, status = 400, extra = {}) => Object.assign(new Error(code), { code, status, extra })
 
+const YT_BLOCKED = /not a bot|Sign in to confirm|cookies-from-browser/i
+export function availability(c) {
+  const youtubeOnly = Boolean(c.youtube) && !c.flux && !c.radio_browser
+  if (youtubeOnly && YT_BLOCKED.test(String(c.erreur || ''))) return { available: false, why: 'YOUTUBE_BLOCKED' }
+  return { available: Boolean(c.flux || c.youtube || c.radio_browser), why: '' }
+}
+
 /** Chaînes enregistrables : une adresse de direct (flux, YouTube ou annuaire radio) ; créneaux fixes du soir */
 export function recordableChannels(list = liveSources()) {
   return list.map((c) => ({
@@ -72,6 +79,9 @@ export function recordableChannels(list = liveSources()) {
     canal: c.canal === 'radio' ? 'radio' : 'tv',
     slots: Array.isArray(c.creneaux) ? c.creneaux : [],
     recordable: Boolean(c.flux || c.youtube || c.radio_browser),
+    // Disponible maintenant ? Une chaîne lue seulement par YouTube est indisponible tant que YouTube refuse le serveur
+    // (contrôle anti-robot : fichier de cookies à renouveler) ; les flux directs restent disponibles
+    ...availability(c),
     inVeille: !c.liveOnly,
     stream: { flux: c.flux || '', youtube: c.youtube || '', radio_browser: c.radio_browser || '', referer: c.referer || '' },
   }))
@@ -157,6 +167,8 @@ export function addRecording({ chaine, debut, fin, rasd = [] }, by, { now = Date
   const ch = channels.find((c) => c.id === String(chaine || ''))
   if (!ch) throw fail('NO_CHANNEL', 404)
   if (!ch.recordable) throw fail('NOT_RECORDABLE')
+  // Échec certain (YouTube refuse le serveur) : refusé tout de suite avec la raison, au lieu d'un enregistrement vide
+  if (ch.available === false) throw fail(ch.why || 'UNAVAILABLE')
   let start = Date.parse(debut)
   const end = Date.parse(fin)
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) throw fail('BAD_RANGE')

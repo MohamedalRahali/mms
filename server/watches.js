@@ -468,10 +468,16 @@ let transport = null
 let onMailBlocked = () => {}
 export const setMailBlockedListener = (fn) => (onMailBlocked = fn)
 
-export async function sendMail(to, mail) {
+/**
+ * Support technique : une seule adresse, réglée par le Super Admin (« بريد الدعم الفني »), hors liste blanche des
+ * domaines (c'est l'équipe technique, pas un destinataire de veille). Aucun autre module ne passe par ici.
+ */
+export const sendSupportMail = (address, mail) => sendMail([address], mail, { support: true })
+
+export async function sendMail(to, mail, { support = false } = {}) {
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS) throw Object.assign(new Error('smtp_missing'), { code: 'smtp_missing' })
-  // Aucun e-mail ne part hors des domaines autorisés, quel que soit le module qui l'envoie
-  const { ok, blocked } = splitRecipients((Array.isArray(to) ? to : [to]).map(String))
+  // Aucun e-mail ne part hors des domaines autorisés, quel que soit le module qui l'envoie (sauf l'adresse du support)
+  const { ok, blocked } = support ? { ok: (Array.isArray(to) ? to : [to]).map(String).slice(0, 1), blocked: [] } : splitRecipients((Array.isArray(to) ? to : [to]).map(String))
   if (blocked.length) onMailBlocked(blocked, mail?.subject || '')
   if (!ok.length) throw Object.assign(new Error('domain_blocked'), { code: 'DOMAIN_BLOCKED' })
   to = ok

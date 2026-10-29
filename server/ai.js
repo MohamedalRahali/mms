@@ -357,9 +357,10 @@ export async function runEconomy(prompt, spec) {
 /* ---------------------------------------------------------------- Around (réponses et agents) */
 
 /** Lance une consigne d'Around sur le moteur disponible ; même cache que le reste de l'IA */
-export async function aroundRun(key, prompt, spec) {
+export async function aroundRun(key, prompt, spec, { economy = false } = {}) {
   if (cache.has(key)) return cache.get(key)
-  const data = await run(aiProvider(), prompt, spec)
+  // Types d'analyse : moteur économique (Gemini gratuit en priorité), même cache
+  const data = economy ? await runEconomy(prompt, spec) : await run(aiProvider(), prompt, spec)
   const result = { ...data, at: new Date().toISOString() }
   cache.set(key, result)
   return result

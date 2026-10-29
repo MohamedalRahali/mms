@@ -3,7 +3,6 @@ import { useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { MediaIcon } from './MediaParts'
 import { type LiveStat, LiveDesk } from './LiveDesk'
-import { Recordings } from './Recordings'
 import './live.css'
 
 /**
@@ -359,10 +358,11 @@ export function LiveWall() {
         {data && <span className="lw-onair">{x.onAir(i.num(onAir))}</span>}
       </header>
       {data && (
-        <details className="lw-rec">
-          <summary>⏺ {x.record}</summary>
-          <Recordings />
-        </details>
+        <p className="lw-rec">
+          <a className="news-btn news-btn--ghost" href="/?view=media-broadcast#rec">
+            ⏺ {x.record} {i.dir === 'rtl' ? '←' : '→'}
+          </a>
+        </p>
       )}
       {data && (
         <div className="seg lw-order" role="group" aria-label={x.sort}>

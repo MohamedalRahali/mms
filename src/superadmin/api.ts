@@ -132,6 +132,8 @@ export const AUDIT_LABEL: Record<string, string> = {
   mfa_policy: 'قاعدة التحقق بخطوتين',
   entities: 'المرجع الموحد للفاعلين',
   entity_ai_run: 'تصحيح الفاعلين بالذكاء الاصطناعي',
+  support_email: 'بريد الدعم الفني',
+  support_ticket: 'حالة طلب دعم',
   entity_ai_edit: 'تعديل قرار تصحيح فاعل',
   mailing_list_create: 'إنشاء قائمة مراسلة',
   mailing_list_update: 'تعديل قائمة مراسلة',

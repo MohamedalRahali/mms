@@ -30,6 +30,7 @@ import { useBrand } from './components/Share'
 import { RegionsPanel } from './components/Regions'
 import { DataSince } from './components/DataSince'
 import { assistantName, renameAround } from './lib/brand'
+import { SupportChat } from './components/SupportChat'
 
 // Générateur de rapports (éditeur, exports Word et PDF) : chargé seulement à l'ouverture de la page
 const Reports = lazy(() => import('./components/reports/Reports'))
@@ -645,6 +646,7 @@ export default function App() {
                 <UpdateToast onReload={reload} />
                 <ReportTray hidden={shown === 'reports'} onGenerate={() => go('reports')} />
                 <Survey />
+                <SupportChat />
                 {palette && (
                   <CommandPalette
                     entries={paletteEntries}

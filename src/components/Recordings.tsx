@@ -34,7 +34,7 @@ type Rec = {
   rasd?: string[]
   hits?: number | null
 }
-type Channel = { id: string; nom: string; canal: 'tv' | 'radio'; slots: string[]; recordable: boolean }
+type Channel = { id: string; nom: string; canal: 'tv' | 'radio'; slots: string[]; recordable: boolean; available?: boolean; why?: string }
 type Data = {
   items: Rec[]
   channels: Channel[]
@@ -104,6 +104,8 @@ const TEXT = {
     close: 'إغلاق',
     approx: 'التوقيت تقريبي',
     notRecordable: 'لا يوجد رابط بث يمكن تسجيله',
+    availableNow: 'متاح الآن',
+    ytBlocked: 'غير متاح: يوتيوب يرفض الخادم حالياً (يجب تجديد ملف الكوكيز)',
     errors: {
       PAST: 'هذه الفترة بدأت قبل أكثر من دقيقتين. البث المباشر لا يتيح الرجوع إلى الماضي (دقيقة إلى أربع دقائق فقط حسب الفحص)، لذا لا يمكن تسجيل فترة مضت.',
       pastSlots: (s: string) => `هذه القناة تُسجَّل تلقائياً في الفترة ${s}: راجع نصوصها في تبويب «النص» للقناة.`,
@@ -115,6 +117,8 @@ const TEXT = {
       BAD_PART: (m: string) => `أدخل مبلغاً بين 0 و${m} $.`,
       BUDGET: (e: string, r: string) => `التكلفة التقديرية ${e} $ تتجاوز المتبقي من سقف هذا الشهر (${r} $).`,
       NOT_RECORDABLE: 'هذه القناة لا تملك رابط بث يمكن تسجيله.',
+      YOUTUBE_BLOCKED: 'هذه القناة تُسجَّل عبر يوتيوب، ويوتيوب يرفض الخادم حالياً (التحقق من أنك لست روبوتاً). اختر قناة متاحة الآن، أو جدّد ملف الكوكيز على الخادم.',
+      UNAVAILABLE: 'هذه القناة غير متاحة الآن.',
       NO_CHANNEL: 'القناة غير موجودة.',
       BAD_RANGE: 'يجب أن تكون النهاية بعد البداية.',
       FINISHED: 'هذا التسجيل انتهى بالفعل.',
@@ -179,6 +183,8 @@ const TEXT = {
     close: 'Close',
     approx: 'Times are approximate',
     notRecordable: 'No recordable stream',
+    availableNow: 'available now',
+    ytBlocked: 'unavailable: YouTube is currently refusing the server (cookies file must be renewed)',
     errors: {
       PAST: 'This period started more than 2 minutes ago. Live streams cannot be rewound (1 to 4 minutes at most, as tested), so a past period cannot be recorded.',
       pastSlots: (s: string) => `This channel is recorded automatically during ${s}: see its transcripts in the channel's “Transcript” tab.`,
@@ -190,6 +196,8 @@ const TEXT = {
       BAD_PART: (m: string) => `Enter an amount between 0 and $${m}.`,
       BUDGET: (e: string, r: string) => `The estimated cost ($${e}) exceeds what is left of this month's cap ($${r}).`,
       NOT_RECORDABLE: 'This channel has no recordable stream.',
+      YOUTUBE_BLOCKED: 'This channel is recorded through YouTube, and YouTube is currently refusing the server (bot check). Pick a channel available now, or renew the cookies file on the server.',
+      UNAVAILABLE: 'This channel is not available right now.',
       NO_CHANNEL: 'Unknown channel.',
       BAD_RANGE: 'The end must be after the start.',
       FINISHED: 'This recording has already finished.',
@@ -218,6 +226,8 @@ function veilleMessage(t: (typeof TEXT)['ar'], raw?: string) {
   const known = v[code]
   if (code === 'STREAM_DOWN') {
     const n = /^\d+$/.test(rest[0] ?? '') ? (rest.shift() as string) : ''
+    // Cause la plus fréquente, dite clairement : YouTube refuse le serveur (contrôle anti-robot)
+    if (/not a bot|Sign in to confirm/i.test(rest.join('|'))) return { text: t.errors.YOUTUBE_BLOCKED, detail: rest.join('|') }
     return { text: t.veille.STREAM_DOWN(n), detail: rest.join('|') }
   }
   if (typeof known === 'string') return { text: known, detail: rest.join('|') }
@@ -460,7 +470,7 @@ export function Recordings({ channel }: { channel?: string }) {
   const [focus, setFocus] = useState<{ n: number; terms: string[] } | null>(null)
   const channels = (data?.channels ?? []).filter((c) => !channel || c.id === channel)
   useEffect(() => {
-    if (!form.chaine && channels.length) setForm((f) => ({ ...f, chaine: channels.find((c) => c.recordable)?.id ?? '' }))
+    if (!form.chaine && channels.length) setForm((f) => ({ ...f, chaine: (channels.find((c) => c.recordable && c.available !== false) ?? channels.find((c) => c.recordable))?.id ?? '' }))
   }, [channels, form.chaine])
   const start = fromLocal(form.debut)
   const end = fromLocal(form.fin)
@@ -524,9 +534,9 @@ export function Recordings({ channel }: { channel?: string }) {
               <span>{t.channel}</span>
               <select value={form.chaine} onChange={(e) => setForm({ ...form, chaine: e.target.value })} required>
                 {channels.map((c) => (
-                  <option key={c.id} value={c.id} disabled={!c.recordable}>
+                  <option key={c.id} value={c.id} disabled={!c.recordable || c.available === false}>
                     {c.canal === 'radio' ? '📻' : '📺'} {c.nom}
-                    {c.recordable ? '' : ` — ${t.notRecordable}`}
+                    {!c.recordable ? ` — ${t.notRecordable}` : c.available === false ? ` — ${c.why === 'YOUTUBE_BLOCKED' ? t.ytBlocked : t.notRecordable}` : ` — ✓ ${t.availableNow}`}
                   </option>
                 ))}
               </select>

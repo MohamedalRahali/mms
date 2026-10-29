@@ -21,9 +21,10 @@ import { mountSuperAdmin } from './superadmin.js'
 import { mountDiffusion } from './diffusion.js'
 import { mountMedia } from './media.js'
 import { mountReports } from './reports.js'
-import { AGENTS, ASK_SPEC, agentFacts, agentItems, agentStats, askPrompt, itemLines, sourceCard, specFor } from './around.js'
+import { AGENTS, ANALYSES, ASK_SPEC, agentFacts, agentItems, agentStats, askPrompt, itemLines, sourceCard, specFor } from './around.js'
 import { emergingTopics, historyOf, sentimentBarometer, smartAlerts, startRadarAlerts, storyClusters, storyIndex } from './radar.js'
 import { startRadarWorker } from './radarWorker.js'
+import { sendSupportMail } from './watches.js'
 import { createWatch, deleteWatch, enabledWatches, guardWatch, itemsForWatch, mergeWatches, sendMail, setWatchAccess, similarWatches, watchesFor, watchIdsFor, sendTelegram, setEnabled, setMailBlockedListener, setWatchAlert, setWatchAlertListener, setWatchTools, startWatches, telegramReady } from './watches.js'
 import { countryOf, reachIsSet, reachOf } from './sourceMeta.js'
 import { initProcessed, isProcessed, processedOf, setProcessed } from './processed.js'
@@ -40,6 +41,7 @@ import { SOCIAL_CHANNELS, dedupeKeyer, uniqueItems } from './dedupe.js'
 import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionOf, regionStats, resolveEntities } from './entities.js'
 import { initPinboards, mountPinboards, pinnedKeys } from './pinboards.js'
 import { initMailingLists, mountMailingLists } from './mailingLists.js'
+import { initSupport, mountSupport } from './support.js'
 import { mountRasd } from './rasd.js'
 import { avatarUrl, initProfile, mountProfile } from './profile.js'
 import { initItemEdits, mountItemEdits } from './itemEdits.js'
@@ -401,6 +403,19 @@ function uniqueCount(found, cache, q) {
   return uniqueMemo.get(key)
 }
 
+const typeMemo = new Map()
+function typeCounts(pool, cache, q) {
+  const { page, size, sort, dir, group, media, sub, fold, ...rest } = q
+  const key = `${cache.at}|${JSON.stringify(rest)}`
+  if (!typeMemo.has(key)) {
+    if (typeMemo.size > 200) typeMemo.clear()
+    const counts = {}
+    for (const it of uniqueItems(applyFilters(pool, { ...rest }))) counts[it.media || 'article'] = (counts[it.media || 'article'] || 0) + 1
+    typeMemo.set(key, counts)
+  }
+  return typeMemo.get(key)
+}
+
 async function newsData(q) {
   const cache = getItems()
   const { lastUpdate, demo } = cache
@@ -429,6 +444,8 @@ async function newsData(q) {
     newest: cache.items.find((it) => Date.parse(it.date) <= Date.now())?.date || null,
     // Actualités sans doublons (même règle que التحليل et le rapport exécutif), à côté des histoires et des publications
     unique: uniqueCount(found, cache, q),
+    // Barre d'onglets par type de contenu : actualités sans doublons de chaque type, avec les autres filtres en cours
+    typeCounts: typeCounts(watched, cache, q),
     demo,
   }
 }
@@ -853,15 +870,19 @@ app.post('/api/ai/agent', express.json({ limit: '8kb' }), async (req, res) => {
   const lang = req.body?.lang === 'en' ? 'en' : 'ar'
   if (askRunning >= 3) return res.status(429).json({ error: 'BUSY' })
   const { pool, days, lastUpdate, watch, label } = aroundScope(req.body)
-  const stats = agentStats(pool, subject, days)
+  // Chiffres sur les actualités sans doublons (même règle que التحليل et le rapport exécutif)
+  const stats = agentStats(uniqueItems(pool), subject, days)
   const { items: found, ...numbers } = stats
   if (!found.length) return res.json({ empty: true, stats: numbers, sources: [] })
+  // Trop peu d'actualités pour une analyse sérieuse : signalé au lieu d'un texte creux
+  const analysis = ANALYSES.includes(agent)
+  if (analysis && found.length < 5) return res.json({ insufficient: true, considered: found.length, stats: numbers, sources: [] })
   const picked = agentItems(stats, subject)
   askRunning++
   try {
     const key = `agent|${req.body?.regen ? Date.now() : ''}|${agent}|${lang}|${days}|${watch?.id || ''}|${req.body?.flux || ''}|${lastUpdate}|${subject}`
     const prompt = `${agentFacts(stats, subject, label, lang)}\n\nActualités :\n${itemLines(picked)}`
-    const r = await aroundRun(key, prompt, specFor(agent))
+    const r = await aroundRun(key, prompt, specFor(agent), { economy: analysis })
     const used = [...new Set(r.sources)].filter((n) => n >= 1 && n <= picked.length)
     const cards = await withImages(used.map((n) => picked[n - 1]))
     res.json({
@@ -1043,6 +1064,9 @@ mountAlertFlow(app, { visibleWatches: watchIdsFor })
 initPinboards(path.join(root, 'data'))
 mountPinboards(app, { getItems })
 initMailingLists(path.join(root, 'data'))
+// الدعم الفني : chat d'aide et demandes envoyées par e-mail à l'adresse du support
+initSupport(path.join(root, 'data'))
+mountSupport(app, { sendSupport: sendSupportMail })
 mountMailingLists(app, {
   // Journal d'audit de la console Super Admin : qui a créé, modifié ou supprimé une liste
   audit: (req, action, target, detail) => logAudit(req.user.email, String(req.ip || '').replace(/^::ffff:/, ''), action, target, detail),

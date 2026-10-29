@@ -79,6 +79,7 @@ export type Count = { name: string; count: number }
 export type NewsResponse = {
   newest?: string | null
   unique?: number
+  typeCounts?: Record<string, number>
   total: number
   page: number
   pages: number

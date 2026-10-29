@@ -69,6 +69,29 @@ sections attendues : « À retenir », « Principales actualités », « Acteurs
 Les recommandations sont les sujets à suivre.`,
 }
 
+// Types d'analyse (demande du client, 29/10) : chacun sa logique et ses sections, toujours appuyés sur les actualités
+// fournies (citées par numéro), les chiffres de MMS (actualités sans doublons) et rien d'autre
+const ANALYSIS_TASKS = {
+  overview: `Analyse « نظرة عامة » (vue d'ensemble). Sections : « الصورة العامة » (volume, rythme, sources, tonalité), « أبرز المواضيع », « الفاعلون الرئيسيون », « ما تغيّر مقارنة بالفترة السابقة ». Recommandations : recommandations stratégiques pour la communication du client.`,
+  crisis: `Analyse « أزمة » (détection de crise). Sections : « مؤشرات الأزمة » (signaux : hausse soudaine, tonalité négative, reprise par de nombreuses sources, mots alarmants), « درجة الخطورة » (faible / moyenne / élevée, justifiée par les chiffres), « مصادر الاشتعال » (actualités et sources qui déclenchent), « المسار المتوقع ». S'il n'y a pas de signe de crise, dis-le clairement avec les chiffres. Recommandations : actions immédiates de gestion de crise.`,
+  media: `Analyse « الوسائل الإعلامية » (rôle et visibilité de chaque média). Sections : « أكثر الوسائل نشاطاً » (avec nombres), « نبرة كل وسيلة », « ما تركّز عليه كل وسيلة », « الوسائل المؤثرة والانتشار ». Recommandations : médias à cibler ou à suivre.`,
+  topics: `Analyse « المواضيع ». Sections : une section par grand sujet (3 à 6), avec son poids (nombre d'actualités), sa tonalité et les sources qui le portent ; puis « مواضيع صاعدة ». Recommandations : sujets à suivre ou à investir.`,
+  narratives: `Analyse « السرديات والمشاعر » (récits et émotions). Sections : « السرديات الرئيسية » (comment les médias racontent le sujet, 2 à 4 récits), « المشاعر الغالبة » (colère, inquiétude, espoir, satisfaction… appuyées sur les actualités), « السرديات المتعارضة ». Recommandations : récits à porter ou à corriger.`,
+  audiences: `Analyse « الفئات المستهدفة ». Sections : « الفئات المعنية » (citoyens, institutions, secteurs, régions… cités dans les actualités), « ما يهم كل فئة », « القنوات التي تصل إليها ». Recommandations : messages par catégorie de public.`,
+  swot: `Analyse « SWOT » de l'image médiatique du sujet. Sections exactement : « نقاط القوة », « نقاط الضعف », « الفرص », « التهديدات », chacune appuyée sur des actualités citées. Recommandations : actions qui exploitent les forces et réduisent les menaces.`,
+  esg: `Analyse « ESG » (البيئة والمجتمع والحوكمة). Sections : « البيئة », « المجتمع », « الحوكمة », chacune avec les actualités qui s'y rapportent ; si une dimension n'apparaît pas dans les données, dis-le. Recommandations : points de vigilance ESG.`,
+  reputation: `Analyse « السمعة ». Sections : « صورة الجهة في الإعلام » (tonalité, volume), « عوامل تحسين السمعة », « عوامل الإضرار بالسمعة », « من يؤثر في السمعة » (médias et acteurs). Recommandations : actions pour protéger ou améliorer la réputation.`,
+  benchmark: `Analyse « مقارنة » (benchmark). Compare les principaux acteurs ou institutions cités (ou les deux périodes si un seul acteur domine). Sections : « حجم الحضور » (chiffres par acteur), « النبرة لكل طرف », « المواضيع المرتبطة بكل طرف », « الخلاصة ». Recommandations : positionnement par rapport aux autres.`,
+  touchpoints: `Analyse « نقاط التواصل » (points de contact médiatiques). Sections : « القنوات » (sites, télévision, radio, réseaux sociaux : part et rôle), « التوقيت » (jours et moments de forte présence), « الوسائط الأكثر تفاعلاً ». Recommandations : où et quand communiquer.`,
+  bias: `Analyse « التحيّز السياسي » (biais par source). Sections : « اتجاهات المصادر » (pour chaque source importante : orientation perçue d'après sa tonalité et ses choix de sujets, prudemment), « التوازن في التغطية », « المصادر الأكثر انحيازاً ». Reste factuel, sans jugement personnel ; appuie-toi sur la tonalité et les sujets observés. Recommandations : comment équilibrer la veille.`,
+  framing: `Analyse « التأطير » (framing). Sections : « الأطر المستعملة » (sécurité, économie, légitimité, humanitaire, conflit…), « كيف يُؤطَّر الفاعلون », « اختلاف التأطير بين المصادر ». Recommandations : cadrage à privilégier dans la communication.`,
+  summary: `Analyse « ملخص ». Un résumé clair et court de l'actualité du périmètre. Sections : « أهم الأخبار » (5 à 8 points), « في سطور ». Recommandations : 3 points à retenir.`,
+  executive: `Analyse « ملخص تنفيذي » pour un décideur pressé. Sections : « الخلاصة في دقيقة », « الأرقام الأساسية », « ما يجب معرفته », « القرارات المطلوبة ». Phrases très courtes. Recommandations : décisions proposées.`,
+  management: `Analyse « ملخص للإدارة » (rapport de gestion). Sections : « الوضع الحالي », « المخاطر », « الفرص », « الأولويات للأسبوع القادم ». Recommandations : priorités opérationnelles avec responsable suggéré (fonction, pas de nom inventé).`,
+}
+export const ANALYSES = Object.keys(ANALYSIS_TASKS)
+Object.assign(AGENT_TASKS, ANALYSIS_TASKS)
+
 export const AGENTS = Object.keys(AGENT_TASKS)
 
 const agentSpec = (agent) => ({

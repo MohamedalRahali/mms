@@ -11,7 +11,7 @@ import { MediaSelect } from './MediaParts'
 import { PickPage } from './ReportPick'
 import { canDo, hasModule, useAuth } from '../lib/auth'
 import { SavedSearches } from './SavedSearches'
-import { type Overview, type ResultTab, ChartsTab, GroupHeader, ListToolbar, NetworkChips, PeopleTab, ResultTabs, SaveSearchButton, SourcesTab, groupLabel, useListText } from './Listing'
+import { type Overview, type ResultTab, ChartsTab, GroupHeader, ListToolbar, NetworkChips, PeopleTab, SaveSearchButton, SourcesTab, groupLabel, useListText } from './Listing'
 import { countryName, flagOf, useListPrefs } from '../lib/listing'
 import { PinboardsDialog } from './Pinboards'
 import { AddItemButton } from './ItemEdit'
@@ -98,7 +98,19 @@ export function NewsList({
   const l = useListText()
   // Présentation (regroupement, tri, sens, vue, histoires repliées) : gardée par compte
   const [prefs, setPrefs] = useListPrefs(auth?.user.email ?? '')
-  const [tab, setTab] = useState<ResultTab>('news')
+  // Onglet gardé dans l'adresse (nf_tab) : rechargement et « رجوع » le retrouvent
+  const [tab, setTabState] = useState<ResultTab>(() => {
+    const v = new URLSearchParams(location.search).get('nf_tab')
+    return syncUrl && (v === 'sources' || v === 'people' || v === 'charts') ? v : 'news'
+  })
+  const setTab = (next: ResultTab) => {
+    setTabState(next)
+    if (!syncUrl) return
+    const url = new URL(location.href)
+    if (next === 'news') url.searchParams.delete('nf_tab')
+    else url.searchParams.set('nf_tab', next)
+    history.replaceState(history.state, '', url)
+  }
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const facets = useFetch<Facets>('/api/news/facets').data
   const health = useFetch<Health>('/api/health', 0).data
@@ -189,17 +201,6 @@ export function NewsList({
             </option>
           ))}
         </select>
-        <MediaSelect
-          className={filters.media ? 'news-filters__media is-on' : 'news-filters__media'}
-          value={filters.media}
-          onChange={(media) => update({ media, sub: '' })}
-          label={m.menu}
-          current={filters.media ? undefined : `${m.menu}: ${m.all}`}
-          options={[
-            { value: '', label: m.all, icon: 'all' },
-            ...MEDIA_TYPES.map((type) => ({ value: type, label: m.types[type], icon: type, count: facets?.media?.find((c) => c.name === type)?.count })),
-          ]}
-        />
         {filters.media === 'broadcast' && (
           <MediaSelect
             value={filters.sub}
@@ -465,7 +466,39 @@ export function NewsList({
 
         </>
       )}
-      <ResultTabs tab={tab} onTab={setTab} total={data?.found ?? data?.total} overview={overview} />
+      {/* Barre d'onglets par type de contenu MMS (remplace le sélecteur « الوسائط ») : chiffres sans doublons qui suivent
+          les filtres et la période ; types sans contenu masqués ; puis المصادر, الشخصيات et الرسوم البيانية */}
+      <div className="mms-rtabs mms-typetabs" role="tablist">
+        {(['', ...MEDIA_TYPES] as string[])
+          .filter((type) => !type || (data?.typeCounts?.[type] ?? 0) > 0 || filters.media === type)
+          .map((type) => {
+            const n = type ? (data?.typeCounts?.[type] ?? 0) : Object.values(data?.typeCounts ?? {}).reduce((a, b) => a + b, 0)
+            const on = tab === 'news' && filters.media === type
+            return (
+              <button
+                key={type || 'all'}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                className={on ? 'is-on' : ''}
+                onClick={() => {
+                  setTab('news')
+                  update({ media: type, sub: '' })
+                }}
+              >
+                {type ? m.types[type as (typeof MEDIA_TYPES)[number]] : m.all}
+                {data?.typeCounts && <b>{i.num(n)}</b>}
+              </button>
+            )
+          })}
+        {(['sources', 'people', 'charts'] as const).map((k) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'is-on' : ''} onClick={() => setTab(k)}>
+            {l.tabs[k]}
+            {k === 'sources' && overview?.sourcesCount != null && <b>{i.num(overview.sourcesCount)}</b>}
+            {k === 'people' && overview?.peopleCount != null && <b>{i.num(overview.peopleCount)}</b>}
+          </button>
+        ))}
+      </div>
       {tab === 'sources' && (
         <SourcesTab
           data={overview}

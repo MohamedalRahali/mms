@@ -16,6 +16,7 @@ import {
   saveFavorites,
   uid,
   useAround,
+  ANALYSIS_IDS,
 } from '../lib/around'
 import { type Block, parseInline, parseMd } from '../lib/aroundMd'
 import { downloadPptx, kpiRows, openReport, turnText, turnTitle } from '../lib/aroundExport'
@@ -850,6 +851,37 @@ function TurnView({ t, last, act, compact }: { t: Turn; last: boolean; act: Acti
 
 /* ---------------------------------------------------------------- pages : accueil, bibliothèque, historique */
 
+/** Types d'analyse : « سريع » (tout le périmètre choisi, en un clic) ou « مخصّص » (sujet, période, veille) */
+function AnalysisCards({ onExpress, onCustom }: { onExpress: (id: AgentId) => void; onCustom: (id: AgentId) => void }) {
+  const a = useAround()
+  return (
+    <section className="around-analyses">
+      <h3>
+        {a.analyses} <small>{a.analysesInfo}</small>
+      </h3>
+      <div className="around-grid around-grid--analyses">
+        {ANALYSIS_IDS.map((id) => {
+          const d = a.agentDefs.find((x) => x.id === id)!
+          return (
+            <div key={id} className="around-analysis">
+              <strong>{d.title}</strong>
+              <small>{d.desc}</small>
+              <span className="around-analysis__actions">
+                <button type="button" className="news-btn" onClick={() => onExpress(id)}>
+                  {a.express}
+                </button>
+                <button type="button" className="news-btn news-btn--ghost" onClick={() => onCustom(id)}>
+                  {a.custom}
+                </button>
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 function AgentCards({ onPick }: { onPick: (id: AgentId) => void }) {
   const a = useAround()
   return (
@@ -1080,6 +1112,7 @@ export function Around({ flux }: { flux: Flux | '' }) {
     try {
       const r = await postJson<{
         empty?: boolean
+        insufficient?: boolean
         title: string
         summary: string
         sections: Turn['sections']
@@ -1089,7 +1122,9 @@ export function Around({ flux }: { flux: Flux | '' }) {
         stats: AgentStats
         considered: number
       }>('/api/ai/agent', { agent: t.agent, subject: t.subject, days: t.days, watch: t.watch, flux, lang: i.lang, regen })
-      patch(t.id, { status: 'done', ...r, at: new Date().toISOString() })
+      // Trop peu d'actualités pour un type d'analyse : message clair plutôt qu'un texte creux
+      if (r.insufficient) patch(t.id, { status: 'error', error: a.tooFew })
+      else patch(t.id, { status: 'done', ...r, at: new Date().toISOString() })
     } catch (err) {
       patch(t.id, { status: 'error', error: errorOf(err) })
     }
@@ -1160,6 +1195,16 @@ export function Around({ flux }: { flux: Flux | '' }) {
       const stop = text.indexOf(']', start)
       if (start >= 0 && stop > start) el.setSelectionRange(start, stop + 1)
     }, 60)
+  }
+
+  // Analyse « سريع » : tout le périmètre et la période choisis, lancée tout de suite (sans sujet ni confirmation)
+  function expressAgent(id: AgentId) {
+    if (busy) return
+    const def = a.agentDefs.find((x) => x.id === id)!
+    const t: Turn = { id: uid(), days, watch, watchName, at: new Date().toISOString(), kind: 'agent', agent: id, subject: '', q: `${def.title} : ${a.allSubject}`, status: 'running' }
+    setPage('home')
+    setConv((c) => ({ ...c, turns: [...c.turns, t] }))
+    runAgent(t)
   }
 
   function pickAgent(id: AgentId) {
@@ -1248,7 +1293,10 @@ export function Around({ flux }: { flux: Flux | '' }) {
           </button>
         </div>
         {tab === 'agents' ? (
-          <AgentCards onPick={pickAgent} />
+          <>
+            <AgentCards onPick={pickAgent} />
+            <AnalysisCards onExpress={expressAgent} onCustom={pickAgent} />
+          </>
         ) : favs.length ? (
           <div className="around-grid around-grid--prompts">
             {favs

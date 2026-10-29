@@ -134,7 +134,10 @@ export function ClipCard({ clip, terms, query, focus, range }: { clip: Clip; ter
   const [copied, setCopied] = useState(-1)
   const audio = useRef<HTMLAudioElement>(null)
   const focused = useRef<HTMLLIElement>(null)
-  useEffect(() => focused.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }), [])
+  // Corps en bloc : scrollIntoView renvoie une promesse dans les navigateurs récents (React la prendrait pour un nettoyage)
+  useEffect(() => {
+    focused.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [])
   const shown = all ? clip.passages : clip.passages.filter((p) => p.hit)
   const pick = (p: Passage) => {
     if (audio.current) {

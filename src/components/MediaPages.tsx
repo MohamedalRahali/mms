@@ -6,6 +6,7 @@ import { type MediaIconName, type MediaPageType, MEDIA_PAGE_TEXT, MEDIA_SUBS, us
 import { BuzzBars } from './Dashboard'
 import { Donut, Line } from './Charts'
 import { Diffusion } from './Diffusion'
+import { Recordings } from './Recordings'
 import { MediaIcon } from './MediaParts'
 import { NewsCard } from './NewsCard'
 import { PickPage } from './ReportPick'
@@ -118,6 +119,13 @@ export function MediaPage({
       {!data && !error && <p className="news-status">{i.t.loading}</p>}
       {data && <Board type={type} data={data} days={days} />}
       {type === 'broadcast' && <Diffusion />}
+      {/* تسجيل حسب الطلب (برمجة التسجيل، الرصد المبرمج، البحث الذكي) : sur la page Broadcasts, ouvert par défaut */}
+      {type === 'broadcast' && (
+        <details className="lw-rec" id="rec" open>
+          <summary>⏺ {i.lang === 'ar' ? 'تسجيل حسب الطلب: اختيار قناة وفترة محددة، تفريغ النص وتنزيله' : 'Record on demand: pick a channel and a period, then read and download the transcript'}</summary>
+          <Recordings />
+        </details>
+      )}
       {type === 'broadcast' ? (
         <BroadcastStudio days={days} sub={sub} flux={flux} channels={(data?.sources ?? []).map((s) => s.name)} />
       ) : (

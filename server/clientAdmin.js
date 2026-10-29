@@ -13,6 +13,7 @@ import { listEntities, saveEntities } from './entities.js'
 import { setSourcePolicy, sourcePolicy } from './sourcePolicy.js'
 import { getItems, refreshSourcePolicy } from './store.js'
 import { entityAIState, runEntityAI, setDecision } from './entityAI.js'
+import { listTickets, setSupportConf, setTicketStatus, supportConf } from './support.js'
 import { aiEnabled, aiProvider, runEconomy } from './ai.js'
 import { reviewOption, setReviewOption } from './alertFlow.js'
 
@@ -136,6 +137,24 @@ export function mountClientAdmin(sa, { audit }) {
     const d = setDecision(raw, req.body || {})
     audit(req, 'entity_ai_edit', raw, req.body?.remove ? 'annulée' : d?.reject ? 'rejeté' : d?.canonical || '')
     res.json({ decision: d, ...entityAIState() })
+  })
+
+  /* الدعم الفني : adresse de réception et demandes (statut جديد / قيد المعالجة / مغلق) */
+  sa.get('/support', (_req, res) => res.json({ conf: supportConf(), tickets: listTickets().slice(0, 300) }))
+  sa.put('/support', (req, res) => {
+    try {
+      const conf = setSupportConf(req.body)
+      audit(req, 'support_email', conf.email, '')
+      res.json({ conf })
+    } catch (err) {
+      fail(res, err.status || 400, err.code || 'FAILED')
+    }
+  })
+  sa.put('/support/tickets/:id', (req, res) => {
+    const t = setTicketStatus(String(req.params.id), String(req.body?.status || ''))
+    if (!t) return fail(res, 404, 'NOT_FOUND')
+    audit(req, 'support_ticket', t.id, t.status)
+    res.json({ ticket: t })
   })
 
   sa.get('/shares', (_req, res) => res.json({ shares: listShares() }))

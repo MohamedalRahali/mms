@@ -4442,3 +4442,128 @@ img.mms-user__avatar--img {
   align-items: center;
   gap: 0.35rem;
 }
+
+/* Types d'analyse de l'assistant (Around.tsx AnalysisCards) */
+.around-analyses {
+  margin-top: 1.2rem;
+}
+.around-analyses h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+.around-analyses h3 small {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+.around-grid--analyses {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: 0.6rem;
+}
+.around-analysis {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.around-analysis small {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.around-analysis__actions {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: auto;
+  padding-top: 0.3rem;
+}
+
+/* Onglets par type de contenu (NewsList) : défilement horizontal sur mobile */
+.mms-typetabs {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.mms-typetabs button {
+  flex: 0 0 auto;
+}
+
+/* الدعم الفني (SupportChat.tsx) : pastille en bas, du côté opposé à l'onglet « استطلاع » */
+.mms-support__tab {
+  position: fixed;
+  bottom: 18px;
+  inset-inline-end: 18px;
+  z-index: 31;
+  padding: 0.55rem 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--night, #0b2e22);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+.mms-support {
+  position: fixed;
+  bottom: 70px;
+  inset-inline-end: 18px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(560px, calc(100vh - 110px));
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+}
+.mms-support header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.mms-support__msgs {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.mms-support__msg {
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.mms-support__msg.is-bot {
+  background: var(--surface-2);
+}
+.mms-support__msg.is-user {
+  align-self: flex-end;
+  background: var(--green-soft);
+}
+.mms-support__form {
+  display: flex;
+  gap: 0.4rem;
+}
+.mms-support__form input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+}
