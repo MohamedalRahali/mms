@@ -36,7 +36,7 @@ import { mountGeo } from './geo.js'
 import { mountCatalog } from './catalog.js'
 import { canSendAlert, initAlertFlow, mountAlertFlow, openWatchAlert, withFlow } from './alertFlow.js'
 import { intlRegion } from './themes.js'
-import { SOCIAL_CHANNELS, dedupeKeyer } from './dedupe.js'
+import { SOCIAL_CHANNELS, dedupeKeyer, uniqueItems } from './dedupe.js'
 import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionOf, regionStats, resolveEntities } from './entities.js'
 import { initPinboards, mountPinboards, pinnedKeys } from './pinboards.js'
 import { initMailingLists, mountMailingLists } from './mailingLists.js'
@@ -389,6 +389,18 @@ function storiesOf(items) {
  * Liste des actualités : filtres, tri (date, portée, source, interactions, importance ; sens ↑/↓), histoires
  * similaires repliées (fold=1), regroupement (group=category|source|channel|country|day) avec chiffres par groupe
  */
+// Nombre d'actualités sans doublons d'une recherche, gardé tant que la base et les filtres ne changent pas
+const uniqueMemo = new Map()
+function uniqueCount(found, cache, q) {
+  const { page, size, sort, dir, group, ...rest } = q
+  const key = `${cache.at}|${JSON.stringify(rest)}`
+  if (!uniqueMemo.has(key)) {
+    if (uniqueMemo.size > 200) uniqueMemo.clear()
+    uniqueMemo.set(key, uniqueItems(found).length)
+  }
+  return uniqueMemo.get(key)
+}
+
 async function newsData(q) {
   const cache = getItems()
   const { lastUpdate, demo } = cache
@@ -413,6 +425,10 @@ async function newsData(q) {
     items: withReactions(forList(await withImages(list.slice((page - 1) * size, page * size)))),
     queryError: q.q ? queryError(String(q.q)) : '',
     lastUpdate,
+    // Date du dernier article reçu (et non de la dernière relecture des fichiers, refaite toutes les 10 minutes)
+    newest: cache.items.find((it) => Date.parse(it.date) <= Date.now())?.date || null,
+    // Actualités sans doublons (même règle que التحليل et le rapport exécutif), à côté des histoires et des publications
+    unique: uniqueCount(found, cache, q),
     demo,
   }
 }

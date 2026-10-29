@@ -77,6 +77,8 @@ export const TONES: Tone[] = ['positive', 'neutral', 'negative']
 export type Count = { name: string; count: number }
 
 export type NewsResponse = {
+  newest?: string | null
+  unique?: number
   total: number
   page: number
   pages: number

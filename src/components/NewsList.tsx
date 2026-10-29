@@ -72,7 +72,11 @@ export function NewsList({
   syncUrl?: boolean
 }) {
   // Sans filtres transmis (ouverture directe, rechargement), ceux de l'adresse
-  if (syncUrl && !initialFilters) initialFilters = filtersFromUrl()
+  if (syncUrl && !initialFilters) {
+    // Ouverture directe sans filtre : même période par défaut que les autres pages (7 derniers jours), retirable
+    const fromUrl = filtersFromUrl()
+    initialFilters = Object.keys(fromUrl).length ? fromUrl : { days: '7' }
+  }
   const i = useI18n()
   const x = useIntel()
   const p = usePro()
@@ -490,11 +494,20 @@ export function NewsList({
       {!error && data && (
         <div className="rpt-pickrow">
           <p className="news-status" role="status">
-            {data.total === 0 ? t.noMatch : t.countNews(i.num(data.total))}
-            {data.lastUpdate && (
+            {data.total === 0 ? t.noMatch : t.countNews(i.num(data.unique ?? data.total))}
+            {/* Base du chiffre écrite en clair : période, sans doublons (comme التحليل), histoires affichées, publications */}
+            {data.total > 0 && (
+              <small>
+                {' '}
+                {t.countBasis(filters.from || filters.to ? `${filters.from || '…'} → ${filters.to || '…'}` : (PERIODS.find((p) => p.value === filters.days)?.label ?? t.allTime))}
+                {data.total < (data.unique ?? data.total) && ` · ${t.countStories(i.num(data.total))}`}
+                {` · ${t.countPubs(i.num(data.found ?? data.total))}`}
+              </small>
+            )}
+            {data.newest && (
               <span>
                 {' '}
-                · {t.updated} : {i.dateTime(data.lastUpdate)}
+                · {t.newest} : {i.dateTime(data.newest)}
               </span>
             )}
           </p>
