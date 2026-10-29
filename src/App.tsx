@@ -578,9 +578,11 @@ export default function App() {
                   </aside>
 
                   <main className="mms-main">
-                    {depth > 0 && prevView && (
-                      <button type="button" className="mms-back" onClick={() => history.back()}>
-                        <span aria-hidden>{i18n.dir === 'rtl' ? '→' : '←'}</span> {lang === 'ar' ? 'رجوع إلى' : 'Back to'} {TABS.find((x) => x.key === prevView)?.label ?? (lang === 'ar' ? 'الصفحة السابقة' : 'previous page')}
+                    {/* Bouton « رجوع » : toujours vers les tableaux de bord (demande du client) ; le retour du navigateur garde
+                        l'historique page par page */}
+                    {shown !== 'dashboard' && (
+                      <button type="button" className="mms-back" onClick={() => go('dashboard')}>
+                        <span aria-hidden>{i18n.dir === 'rtl' ? '→' : '←'}</span> {lang === 'ar' ? 'رجوع إلى لوحات التحكم' : 'Back to dashboards'}
                       </button>
                     )}
                     <div key={shown} className="mms-view">
