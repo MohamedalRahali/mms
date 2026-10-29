@@ -177,6 +177,78 @@ export function watchSignature(w) {
   return JSON.stringify({ words, filters, flux: w.flux || '', to: w.to || null })
 }
 
+const wordsOf = (w) => new Set(JSON.parse(watchSignature(w)).words)
+const sameFrame = (a, b) => (a.flux || '') === (b.flux || '') && (a.query || '') === (b.query || '') && JSON.stringify(JSON.parse(watchSignature(a)).filters) === JSON.stringify(JSON.parse(watchSignature(b)).filters)
+const jaccard = (a, b) => {
+  let n = 0
+  for (const x of a) if (b.has(x)) n++
+  return a.size + b.size - n ? n / (a.size + b.size - n) : 1
+}
+
+/**
+ * Groupes de veilles actives presque identiques (même cadre : source, requête, filtres ; mots communs à 50 % au moins),
+ * proposés à la fusion. Rien n'est fusionné sans confirmation.
+ */
+export function similarWatches(min = 0.5) {
+  const live = watches.filter((w) => w.enabled && statusOf(w) !== 'finished')
+  const words = new Map(live.map((w) => [w.id, wordsOf(w)]))
+  const seen = new Set()
+  const groups = []
+  for (const w of live) {
+    if (seen.has(w.id)) continue
+    const group = [w, ...live.filter((o) => o.id !== w.id && !seen.has(o.id) && sameFrame(w, o) && jaccard(words.get(w.id), words.get(o.id)) >= min)]
+    if (group.length < 2) continue
+    for (const g of group) seen.add(g.id)
+    const all = group.map((g) => words.get(g.id))
+    const common = [...all[0]].filter((x) => all.every((s) => s.has(x)))
+    groups.push({ ids: group.map((g) => g.id), names: group.map((g) => g.name), common: common.length, words: new Set(all.flatMap((s) => [...s])).size })
+  }
+  return groups
+}
+
+/**
+ * Fusion de veilles : une nouvelle veille réunit leurs règles, destinataires et périodes ; les veilles d'origine sont
+ * désactivées (jamais supprimées) et pointent vers la nouvelle. Les actualités déjà envoyées ne repartent pas.
+ */
+export function mergeWatches(ids, by = '', name = '') {
+  const group = [...new Set((Array.isArray(ids) ? ids : []).map(String))].map((id) => watches.find((w) => w.id === id))
+  if (group.length < 2 || group.some((w) => !w)) throw fail('BAD_MERGE')
+  if (group.some((w) => !sameFrame(group[0], w))) throw fail('NOT_SIMILAR')
+  if (watches.length >= MAX_WATCHES) throw fail('TOO_MANY')
+  const rules = [...new Set(group.flatMap((w) => w.rules))].slice(0, MAX_RULES)
+  const recipients = [...new Set(group.flatMap((w) => w.recipients))].slice(0, MAX_RECIPIENTS)
+  const tos = group.map((w) => w.to)
+  const merged = {
+    ...group[0],
+    id: Math.random().toString(36).slice(2, 10),
+    name: String(name || '').trim().slice(0, 120) || `${group[0].name} (دمج ${group.length})`,
+    rules,
+    themes: [...new Set(group.flatMap((w) => w.themes || []))].slice(0, 20),
+    scope: [...new Set(group.flatMap((w) => w.scope || []))].slice(0, 50),
+    from: group.map((w) => w.from).sort()[0],
+    to: tos.includes(null) ? null : tos.sort().at(-1),
+    recipients,
+    blockedRecipients: [...new Set(group.flatMap((w) => w.blockedRecipients || []))],
+    alert: group[0].alert || cleanAlert(),
+    enabled: true,
+    createdAt: new Date().toISOString(),
+    createdBy: String(by || '').slice(0, 120),
+    mergedFrom: group.map((w) => ({ id: w.id, name: w.name })),
+    lastRun: null,
+    lastError: null,
+    matchCount: 0,
+    matches: [],
+    notified: [...new Set(group.flatMap((w) => w.notified))].slice(-5000),
+  }
+  for (const w of group) {
+    w.enabled = false
+    w.mergedInto = merged.id
+  }
+  watches.push(merged)
+  save()
+  return publicWatch(merged)
+}
+
 /** Veille déjà active qui surveille la même chose (mêmes mots, filtres, veille et fin de période), ou null */
 export function duplicateOf(candidate) {
   const sig = watchSignature(candidate)

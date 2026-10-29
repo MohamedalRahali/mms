@@ -6,7 +6,7 @@ import { canDo, useAuth } from '../lib/auth'
 import { THEMES, type Watch, WATCH_TEXT, ZONES, themesToRules } from '../lib/watches'
 import { DispatchHistory } from './DispatchHistory'
 import { LoadState } from './LoadState'
-import { AlertFields, DEFAULT_ALERT, WatchAlertRow, WatchAlertTracker } from './WatchAlerts'
+import { AlertFields, DEFAULT_ALERT, MergeProposals, WatchAlertRow, WatchAlertTracker } from './WatchAlerts'
 
 /** Écran « الرصد المبرمج » : zone surveillée, thèmes à cocher, période, destinataires, puis liste des veilles */
 
@@ -216,7 +216,7 @@ function WatchForm({ onCreated }: { onCreated: () => void }) {
   )
 }
 
-function WatchRow({ watch, onChange, onOpen }: { watch: Watch; onChange: () => void; onOpen: (id: string) => void }) {
+function WatchRow({ watch, onChange, onOpen, nameOf }: { watch: Watch; onChange: () => void; onOpen: (id: string) => void; nameOf: (id: string) => string }) {
   const i = useI18n()
   // Activer, désactiver, supprimer : action « manage_watches » du profil
   const mayEdit = canDo(useAuth()?.user, 'manage_watches')
@@ -263,6 +263,16 @@ function WatchRow({ watch, onChange, onOpen }: { watch: Watch; onChange: () => v
           </>
         )}
       </p>
+      {watch.mergedInto && (
+        <p className="mms-watch__meta">
+          {i.lang === 'ar' ? 'مدمج في' : 'Merged into'}: <b dir="auto">{nameOf(watch.mergedInto)}</b>
+        </p>
+      )}
+      {watch.mergedFrom && (
+        <p className="mms-watch__meta">
+          {i.lang === 'ar' ? 'يجمع' : 'Combines'}: <span dir="auto">{watch.mergedFrom.map((m) => m.name).join(' · ')}</span>
+        </p>
+      )}
       <WatchAlertRow id={watch.id} alert={watch.alert} pending={watch.pending} onSaved={onChange} />
       {watch.lastError && <p className="news-status news-status--error">{watch.lastError === 'smtp_missing' ? w.smtpMissing : w.smtpError}</p>}
       {watch.matches.length > 0 && (
@@ -332,6 +342,7 @@ export function Watches({ onOpen }: { onOpen: (id: string) => void }) {
     <>
       <PageHead title={w.title} intro={w.intro} />
       {!smtp && <p className="mms-note">{w.smtpMissing}</p>}
+      <MergeProposals tick={tick} onMerged={reload} />
       <div className="mms-watchpage">
         {canDo(auth?.user, 'manage_watches') && <WatchForm onCreated={reload} />}
         <section className="mms-widget">
@@ -347,7 +358,7 @@ export function Watches({ onOpen }: { onOpen: (id: string) => void }) {
             {!list && <LoadState error={failed} />}
             {list?.length === 0 && <p className="news-status">{w.empty}</p>}
             {list?.map((x) => (
-              <WatchRow key={x.id} watch={x} onChange={reload} onOpen={onOpen} />
+              <WatchRow key={x.id} watch={x} onChange={reload} onOpen={onOpen} nameOf={(id) => list.find((o) => o.id === id)?.name ?? id} />
             ))}
           </div>
         </section>

@@ -29,6 +29,9 @@ export type Watch = {
   // Réglages d'alerte (canaux, seuil, gravité, suivi) ; absents sur les veilles créées avant
   alert?: WatchAlert
   pending?: number
+  // Fusion de veilles presque identiques : la veille d'origine (désactivée) pointe vers la nouvelle
+  mergedInto?: string
+  mergedFrom?: { id: string; name: string }[]
 }
 
 /** Zones prêtes à l'emploi : MMS suit la Tunisie (Mosaïque FM) et la Libye */

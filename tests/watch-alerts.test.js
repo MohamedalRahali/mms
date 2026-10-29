@@ -51,3 +51,29 @@ test('suivi des alertes : ouverture, retard, clôture', () => {
   assert.equal(closed[0].id, late)
   assert.equal(closed[0].overdue, false)
 })
+
+test('veilles presque identiques : proposées à la fusion, originaux désactivés et gardés', async () => {
+  const { similarWatches, mergeWatches, listWatches } = await import('../server/watches.js')
+  startWatches(fs.mkdtempSync(path.join(os.tmpdir(), 'mms-merge-')))
+  const a = createWatch({ name: 'نفط 1', rules: ['(ليبيا OR طرابلس) AND (النفط OR الغاز OR المؤسسة الوطنية للنفط)'], recipients: 'a@npdc.gov.ly' })
+  const b = createWatch({ name: 'نفط 2', rules: ['(ليبيا OR طرابلس) AND (النفط OR الغاز OR الصادرات)'], recipients: 'b@npdc.gov.ly' })
+  const c = createWatch({ name: 'أمن', rules: ['(ليبيا) AND (اشتباكات OR هجوم)'] })
+  const groups = similarWatches()
+  assert.equal(groups.length, 1)
+  assert.deepEqual(groups[0].ids.sort(), [a.id, b.id].sort())
+  const m = mergeWatches([a.id, b.id], 'chef@npdc.gov.ly')
+  assert.equal(m.rules.length, 2)
+  assert.deepEqual(m.recipients.sort(), ['a@npdc.gov.ly', 'b@npdc.gov.ly'])
+  assert.deepEqual(m.mergedFrom.map((x) => x.id), [a.id, b.id])
+  const all = listWatches()
+  // Rien n'est supprimé : 3 veilles d'origine + la fusion ; les deux fusionnées sont désactivées
+  assert.equal(all.length, 4)
+  for (const id of [a.id, b.id]) {
+    const w = all.find((x) => x.id === id)
+    assert.equal(w.enabled, false)
+    assert.equal(w.mergedInto, m.id)
+  }
+  assert.equal(all.find((x) => x.id === c.id).enabled, true)
+  assert.equal(similarWatches().length, 0)
+  assert.throws(() => mergeWatches([c.id]), /BAD_MERGE/)
+})

@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { normalize } from './watches.js'
 import { findSpikes, spikeItems } from './intel.js'
-import { libyaRelevant } from './entities.js'
+import { libyaRelevant, lookup } from './entities.js'
 
 /**
  * « Radar intelligent » de MMS : ce que la veille fait remonter sans qu'on ait à le chercher.
@@ -411,6 +411,8 @@ export function sentimentBarometer(items, { days = 14, now = Date.now() } = {}) 
     inferredShare: n ? Math.round((inferred / n) * 100) : 0,
     perDay: perDay.map((d) => ({ ...d, sentiment: net(d) })),
     actors: rank(actors, 12),
+    // Acteurs libyens (référentiel des entités) : vue par défaut de l'écran quand il y en a
+    actorsLy: rank(new Map([...actors].filter(([name]) => lookup(name)?.libyan)), 12),
     sources: rank(sources, 10),
   }
 }

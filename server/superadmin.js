@@ -9,7 +9,7 @@ import { keyStatus } from './keys.js'
 import { aiUsage } from './ai.js'
 import { mountPermissionsAdmin, permsOf, profileExists } from './permissions.js'
 import { initBrand, mountClientAdmin } from './clientAdmin.js'
-import { countryOf as sourceCountry, initSourceMeta, reachIsSet, reachOf } from './sourceMeta.js'
+import { countryOf as sourceCountry, initSourceMeta, reachIsSet, reachOf, reliabilityIsSet, reliabilityOf } from './sourceMeta.js'
 import {
   all,
   countryOf,
@@ -782,7 +782,7 @@ export function mountSuperAdmin(app, root) {
     // Pays et portée : réglage du Super Admin, sinon valeur déduite (catalogue, domaine, canal)
     const originMeta = (o) => {
       const probe = { origin: o.name, url: o.url || inCatalog.get(o.name)?.url || '', channel: [...o.channels][0] || 'site' }
-      return { country: sourceCountry(probe), reach: reachOf(probe), reachSet: reachIsSet(o.name) }
+      return { country: sourceCountry(probe), reach: reachOf(probe), reachSet: reachIsSet(o.name), reliability: reliabilityOf(probe), reliabilitySet: reliabilityIsSet(o.name) }
     }
     res.json({
       lastUpdate,

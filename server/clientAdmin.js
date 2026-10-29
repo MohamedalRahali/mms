@@ -42,8 +42,8 @@ export function mountClientAdmin(sa, { audit }) {
   sa.put('/sources/meta', (req, res) => {
     const name = String(req.body?.name || '').slice(0, 200)
     if (!name) return fail(res, 400, 'NO_NAME')
-    const row = setSourceMeta(name, { country: req.body?.country, reach: req.body?.reach })
-    audit(req, 'source_meta', name, row ? `${row.country || '—'} · ${row.reach ?? 'افتراضي'}` : 'افتراضي')
+    const row = setSourceMeta(name, { country: req.body?.country, reach: req.body?.reach, reliability: req.body?.reliability })
+    audit(req, 'source_meta', name, row ? `${row.country || '—'} · ${row.reach ?? 'افتراضي'} · ${row.reliability || 'موثوقية افتراضية'}` : 'افتراضي')
     res.json({ meta: row })
   })
 

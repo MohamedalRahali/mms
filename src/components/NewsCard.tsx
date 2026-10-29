@@ -14,6 +14,18 @@ import { EditItemButton } from './ItemEdit'
 import { TranslateButton } from './Translate'
 import { isNetwork } from '../lib/listing'
 
+/** Fiabilité de la source : seules « موثوق » et « غير مؤكد » sont signalées, le niveau moyen reste discret */
+function ReliabilityMark({ level }: { level?: NewsItem['reliability'] }) {
+  const ar = useI18n().lang === 'ar'
+  if (level !== 'high' && level !== 'low') return null
+  const label = level === 'high' ? (ar ? 'مصدر موثوق' : 'Reliable source') : ar ? 'مصدر غير مؤكد' : 'Unverified source'
+  return (
+    <span className={`news-rel news-rel--${level}`} title={label}>
+      {level === 'high' ? '✓' : '?'} <span className="news-rel__label">{label}</span>
+    </span>
+  )
+}
+
 export const HEART = 'M12 21s-7.5-4.6-9.6-9.3C1 8.4 3 5 6.4 5c2 0 3.3 1 4.1 2.2h3C14.3 6 15.6 5 17.6 5 21 5 23 8.4 21.6 11.7 19.5 16.4 12 21 12 21z'
 
 /** Couleur et pictogramme de l'image de repli, par thème */
@@ -95,6 +107,7 @@ function CompactCard({ item, brief }: { item: NewsItem; brief: boolean }) {
         <CountryFlag cc={item.country} />
         {isNetwork(item.channel) && <NetworkIcon name={item.channel} size={14} />}
         <span dir="auto">{item.origin}</span>
+        <ReliabilityMark level={item.reliability} />
         <time>{i.dateTime(item.date)}</time>
       </p>
       <h4 dir="auto">
@@ -141,6 +154,7 @@ function FullCard({ item, variant, brief }: { item: NewsItem; variant: 'list' | 
             <span dir="auto">{item.origin}</span>
             <CountryFlag cc={item.country} />
             {isNetwork(item.channel) && <NetworkIcon name={item.channel} size={15} />}
+            <ReliabilityMark level={item.reliability} />
           </span>
           <span className="news-card__tools">
             {variant === 'list' && <ProcessedToggle item={item} />}

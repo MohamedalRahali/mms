@@ -8,6 +8,8 @@ import path from 'node:path'
  * - Pays par défaut : catalogue du collecteur (libyen: true → LY), sinon domaine du site (.ly, .tn, aljazeera.net…), sinon inconnu.
  * - Portée par défaut : estimation selon le canal (télévision, radio, site, réseau social…). C'est un ordre de grandeur,
  *   affiché comme « تقديري » tant que le Super Admin n'a pas saisi de chiffre.
+ * - Fiabilité (high, medium, low) : réglée par le Super Admin ; par défaut, site officiel (.gov) → high, réseaux sociaux,
+ *   forums, blogs et commentaires → low, autres médias et réseaux sociaux → medium.
  */
 
 let file = ''
@@ -81,14 +83,17 @@ function cleanRow(v) {
   const country = /^[A-Z]{2}$/.test(String(v?.country || '').toUpperCase()) ? String(v.country).toUpperCase() : ''
   const n = Number(v?.reach)
   const reach = v?.reach === null || v?.reach === '' || v?.reach === undefined || !Number.isFinite(n) ? null : Math.min(Math.max(Math.round(n), 0), MAX_REACH)
-  return country || reach !== null ? { country, reach } : null
+  const reliability = RELIABILITY.includes(v?.reliability) ? v.reliability : ''
+  return country || reach !== null || reliability ? { country, reach, ...(reliability ? { reliability } : {}) } : null
 }
 
 /** Réglage d'une source par le Super Admin ; pays '' et portée null = retour aux valeurs par défaut */
 export function setSourceMeta(name, value) {
   const key = String(name || '').slice(0, 200)
   if (!key) return null
-  const row = cleanRow(value)
+  // Champs absents de la demande : valeur enregistrée gardée (le pays et la portée se règlent sans toucher la fiabilité)
+  const given = Object.fromEntries(Object.entries(value || {}).filter(([, v]) => v !== undefined))
+  const row = cleanRow({ ...(meta[key] || {}), ...given })
   if (row) meta[key] = row
   else delete meta[key]
   guessMemo.delete(key)
@@ -97,6 +102,25 @@ export function setSourceMeta(name, value) {
 }
 
 export const sourceMetaOf = (name) => meta[name] || null
+
+export const RELIABILITY = ['high', 'medium', 'low']
+// Réseaux sociaux : niveau moyen par défaut (comptes officiels et anonymes s'y côtoient, au Super Admin de trancher)
+const LOW_CHANNELS = new Set(['reddit', 'blog', 'forum', 'comment'])
+/** Fiabilité d'une source : réglage du Super Admin, sinon déduite (site officiel, réseau social, média) */
+export function reliabilityOf(it) {
+  const set = meta[it?.origin]?.reliability
+  if (set) return set
+  let host = ''
+  try {
+    host = new URL(it?.url || '').hostname.toLowerCase()
+  } catch {
+    host = ''
+  }
+  if (/(^|\.)gov(\.[a-z]{2})?$|\.gov\.|(^|\.)gouv\./.test(host)) return 'high'
+  if (LOW_CHANNELS.has(it?.channel) || ['forum', 'comment'].includes(it?.media)) return 'low'
+  return 'medium'
+}
+export const reliabilityIsSet = (origin) => Boolean(meta[origin]?.reliability)
 
 /** Catalogue du collecteur Libye : nom → { libyen, url } (lu une fois) */
 function readCatalog() {

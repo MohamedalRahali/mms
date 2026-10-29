@@ -3,6 +3,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import express from 'express'
 import { words } from './radar.js'
+import { reliabilityOf } from './sourceMeta.js'
 
 /**
  * Générateur de rapports médias (التقارير) : l'utilisateur coche des publications, MMS calcule les chiffres
@@ -33,6 +34,7 @@ const L = {
     channel: { radio: 'إذاعة', tv: 'تلفزيون', site: 'أونلاين', presse: 'صحافة مطبوعة', x: 'إكس', facebook: 'فيسبوك', instagram: 'إنستغرام', linkedin: 'لينكدإن', youtube: 'يوتيوب', tiktok: 'تيك توك', telegram: 'تيليغرام', bluesky: 'بلوسكاي', reddit: 'ريديت', mastodon: 'ماستودون', podcast: 'بودكاست', forum: 'منتديات', blog: 'مدونات' },
     lang: { ar: 'العربية', fr: 'الفرنسية', en: 'الإنجليزية', mixte: 'عربي وفرنسي' },
     tone: { positive: 'إيجابي', neutral: 'محايد', negative: 'سلبي', unknown: 'غير مصنّف' },
+    rel: { high: 'مصدر موثوق', medium: 'موثوقية متوسطة', low: 'مصدر غير مؤكد' },
     title: 'تقرير التحليل الإعلامي',
     org: 'المركز الوطني لدعم القرار',
     period: 'الفترة المشمولة',
@@ -81,6 +83,7 @@ const L = {
     channel: { radio: 'Radio', tv: 'Television', site: 'Websites', presse: 'Print press', x: 'X', facebook: 'Facebook', instagram: 'Instagram', linkedin: 'LinkedIn', youtube: 'YouTube', tiktok: 'TikTok', telegram: 'Telegram', bluesky: 'Bluesky', reddit: 'Reddit', mastodon: 'Mastodon', podcast: 'Podcast', forum: 'Forums', blog: 'Blogs' },
     lang: { ar: 'Arabic', fr: 'French', en: 'English', mixte: 'Arabic and French' },
     tone: { positive: 'Positive', neutral: 'Neutral', negative: 'Negative', unknown: 'Unclassified' },
+    rel: { high: 'Reliable source', medium: 'Medium reliability', low: 'Unverified source' },
     title: 'Media Analysis Report',
     org: 'National Decision Support Centre',
     period: 'Reporting period',
@@ -214,6 +217,7 @@ export function snapshot(it) {
     summary: String(it.summary || '').slice(0, 2000),
     date: it.date,
     origin: it.origin || '',
+    reliability: it.reliability || reliabilityOf(it),
     channel: it.channel || '',
     media: it.media || 'article',
     lang: it.lang || '',
@@ -433,7 +437,7 @@ export function buildDoc({ lang, title, org, author, logo, posts, stats, ai, gen
     const titleNode = p.url ? text(p.title, [{ type: 'link', attrs: { href: p.url, target: '_blank', rel: 'noopener noreferrer nofollow' } }]) : text(p.title)
     content.push(
       { type: 'heading', attrs: { level: 3 }, content: [...text(`${idx + 1}. `), ...titleNode] },
-      para([p.origin, fmtDateTime(p.date, lang), name.media(p.media), name.lang(p.lang), p.category && name.cat(p.category), p.tone && t.tone[p.tone]].filter(Boolean).join(' · '), null, [
+      para([p.origin, p.reliability && t.rel[p.reliability], fmtDateTime(p.date, lang), name.media(p.media), name.lang(p.lang), p.category && name.cat(p.category), p.tone && t.tone[p.tone]].filter(Boolean).join(' · '), null, [
         { type: 'textStyle', attrs: { color: '#6b7a90', fontSize: '13px' } },
       ]),
       para(p.summary || t.noSummary),

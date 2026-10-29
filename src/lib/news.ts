@@ -48,6 +48,8 @@ export type NewsItem = {
   // Liste enrichie : pays et portée de la source, statut « تمت المعالجة », histoire repliée, groupe, résumé IA
   country?: string
   reach?: number
+  // Fiabilité de la source (réglage du Super Admin, sinon déduite) : affichée sur la carte et dans les rapports
+  reliability?: 'high' | 'medium' | 'low'
   processed?: { by: string; at: string } | null
   similar?: SimilarItem[]
   similarMore?: number

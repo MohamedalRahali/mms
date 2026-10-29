@@ -45,6 +45,7 @@ export type Barometer = ToneCount & {
   inferredShare: number
   perDay: (ToneCount & { date: string; sentiment: number })[]
   actors: ToneRow[]
+  actorsLy?: ToneRow[]
   sources: ToneRow[]
 }
 
@@ -99,6 +100,8 @@ export const RADAR_TEXT = {
     netLabel: 'صافي المزاج',
     inferred: (n: string) => `${n}٪ من الأخبار قُدّرت نبرتها آلياً لأن الرصد لم يحددها.`,
     byActor: 'حسب الفاعلين',
+    actorsLy: 'الفاعلون الليبيون',
+    actorsAll: 'الكل',
     bySource: 'حسب المصادر',
     actor: 'الفاعل',
     source: 'المصدر',
@@ -146,6 +149,8 @@ export const RADAR_TEXT = {
     netLabel: 'Net mood',
     inferred: (n: string) => `${n}% of items had their tone estimated automatically because the monitoring did not set it.`,
     byActor: 'By actor',
+    actorsLy: 'Libyan actors',
+    actorsAll: 'All',
     bySource: 'By source',
     actor: 'Actor',
     source: 'Source',

@@ -4244,3 +4244,36 @@ img.mms-user__avatar--img {
 .mms-alertrow__flow .alert-flow {
   flex: 1 1 260px;
 }
+.mms-merge ul {
+  margin: 0.4rem 0 0;
+  padding-inline-start: 1.1rem;
+}
+.mms-merge li {
+  margin: 0.35rem 0;
+}
+.mms-merge small {
+  color: var(--ink-soft);
+}
+
+/* Fiabilité de la source (NewsCard) */
+.news-rel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.news-rel--high {
+  background: rgba(29, 122, 78, 0.12);
+  color: var(--green-deep);
+}
+.news-rel--low {
+  background: rgba(230, 145, 56, 0.16);
+  color: light-dark(#a35b0c, #f0b26b);
+}
+.news-mini .news-rel__label {
+  display: none;
+}

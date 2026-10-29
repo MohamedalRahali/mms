@@ -23,7 +23,7 @@ import { mountReports } from './reports.js'
 import { AGENTS, ASK_SPEC, agentFacts, agentItems, agentStats, askPrompt, itemLines, sourceCard, specFor } from './around.js'
 import { emergingTopics, historyOf, sentimentBarometer, smartAlerts, startRadarAlerts, storyClusters, storyIndex } from './radar.js'
 import { startRadarWorker } from './radarWorker.js'
-import { createWatch, deleteWatch, enabledWatches, itemsForWatch, listWatches, sendMail, sendTelegram, setEnabled, setMailBlockedListener, setWatchAlert, setWatchAlertListener, setWatchTools, startWatches, telegramReady } from './watches.js'
+import { createWatch, deleteWatch, enabledWatches, itemsForWatch, listWatches, mergeWatches, sendMail, similarWatches, sendTelegram, setEnabled, setMailBlockedListener, setWatchAlert, setWatchAlertListener, setWatchTools, startWatches, telegramReady } from './watches.js'
 import { countryOf } from './sourceMeta.js'
 import { initProcessed, isProcessed, processedOf, setProcessed } from './processed.js'
 import { GROUPS, decorate, foldStories, groupNews, overview, sortNews } from './newsView.js'
@@ -855,6 +855,15 @@ app.post('/api/watches', express.json({ limit: '100kb' }), (req, res) => {
     res.status(201).json({ watch: createWatch(req.body || {}, req.user.email) })
   } catch (err) {
     res.status(err.status || 500).json({ error: err.code || 'FAILED', ...(err.existing ? { existing: err.existing } : {}) })
+  }
+})
+// Veilles presque identiques : proposition de fusion, puis fusion confirmée (originaux désactivés, jamais supprimés)
+app.get('/api/watches/similar', (_req, res) => res.json({ groups: similarWatches() }))
+app.post('/api/watches/merge', express.json({ limit: '4kb' }), (req, res) => {
+  try {
+    res.status(201).json({ watch: mergeWatches(req.body?.ids, req.user.email, req.body?.name) })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.code || 'FAILED' })
   }
 })
 app.patch('/api/watches/:id', express.json({ limit: '2kb' }), (req, res) => {

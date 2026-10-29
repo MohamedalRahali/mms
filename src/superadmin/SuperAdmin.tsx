@@ -1335,7 +1335,7 @@ function Security() {
 
 type SourcesData = {
   lastUpdate: string | null
-  origins: { name: string; flux: string; url: string; total: number; week: number; last: string | null; channels: string[]; langs: string[]; topics: string[]; collector: string; enabled: boolean; country?: string; reach?: number; reachSet?: boolean }[]
+  origins: { name: string; flux: string; url: string; total: number; week: number; last: string | null; channels: string[]; langs: string[]; topics: string[]; collector: string; enabled: boolean; country?: string; reach?: number; reachSet?: boolean; reliability?: string; reliabilitySet?: boolean }[]
   channels: { name: string; total: number; week: number; origins: number; enabled: boolean }[]
 }
 
@@ -1388,13 +1388,15 @@ function Sources() {
             ],
             ['القناة', (o) => <small dir="ltr">{o.channels.join(', ')}</small>],
             [
-              'البلد · مدى الانتشار',
+              'البلد · مدى الانتشار · الموثوقية',
               (o) => (
                 <SourceMetaCell
                   name={o.name}
                   country={o.country ?? ''}
                   reach={o.reach ?? 0}
                   reachSet={Boolean(o.reachSet)}
+                  reliability={o.reliability}
+                  reliabilitySet={Boolean(o.reliabilitySet)}
                   onSaved={(m) => {
                     setMsg(m)
                     reload()

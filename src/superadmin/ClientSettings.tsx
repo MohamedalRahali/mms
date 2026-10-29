@@ -22,16 +22,36 @@ function useList<T>(path: string) {
 }
 
 /** Pays (code ISO) et portée d'une source, modifiables sur place */
-export function SourceMetaCell({ name, country, reach, reachSet, onSaved }: { name: string; country: string; reach: number; reachSet: boolean; onSaved: (msg: string) => void }) {
+const RELIABILITY: Record<string, string> = { high: 'موثوق', medium: 'متوسط', low: 'غير مؤكد' }
+
+export function SourceMetaCell({
+  name,
+  country,
+  reach,
+  reachSet,
+  reliability = 'medium',
+  reliabilitySet = false,
+  onSaved,
+}: {
+  name: string
+  country: string
+  reach: number
+  reachSet: boolean
+  reliability?: string
+  reliabilitySet?: boolean
+  onSaved: (msg: string) => void
+}) {
   const [cc, setCc] = useState(country)
   const [r, setR] = useState(reachSet ? String(reach) : '')
+  // '' = valeur déduite (site officiel, réseau social, média)
+  const [rel, setRel] = useState(reliabilitySet ? reliability : '')
   const [busy, setBusy] = useState(false)
-  const dirty = cc !== country || r !== (reachSet ? String(reach) : '')
+  const dirty = cc !== country || r !== (reachSet ? String(reach) : '') || rel !== (reliabilitySet ? reliability : '')
   async function save() {
     setBusy(true)
     try {
-      await api('/sources/meta', 'PUT', { name, country: cc.trim().toUpperCase(), reach: r.trim() === '' ? null : Number(r) })
-      onSaved(`تم حفظ بلد «${name}» ومدى انتشاره.`)
+      await api('/sources/meta', 'PUT', { name, country: cc.trim().toUpperCase(), reach: r.trim() === '' ? null : Number(r), reliability: rel })
+      onSaved(`تم حفظ بلد «${name}» ومدى انتشاره وموثوقيته.`)
     } catch (e) {
       onSaved(errText(e))
     } finally {
@@ -51,6 +71,14 @@ export function SourceMetaCell({ name, country, reach, reachSet, onSaved }: { na
         aria-label={`مدى انتشار ${name}`}
         dir="ltr"
       />
+      <select className="sa-input sa-meta__rel" value={rel} onChange={(e) => setRel(e.target.value)} aria-label={`موثوقية ${name}`}>
+        <option value="">{`${RELIABILITY[reliability] ?? RELIABILITY.medium} (تلقائي)`}</option>
+        {Object.entries(RELIABILITY).map(([k, v]) => (
+          <option key={k} value={k}>
+            {v}
+          </option>
+        ))}
+      </select>
       {dirty && (
         <button type="button" className="sa-btn sa-btn--small" onClick={save} disabled={busy}>
           حفظ

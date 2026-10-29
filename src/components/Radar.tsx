@@ -344,7 +344,11 @@ function SentimentBarometer({ flux }: { flux: Flux | '' }) {
   const x = useIntel()
   const drill = useContext(DrillContext)
   const { data, error } = useFetch<Barometer>(`/api/radar/sentiment?days=14${fluxParam(flux, '&')}`)
+  // Vue par défaut : acteurs libyens quand le référentiel en trouve, sinon tous les acteurs
+  const [allActors, setAllActors] = useState(false)
   if (!data) return <LoadState error={error} />
+  const hasLy = Boolean(data.actorsLy?.length)
+  const actorRows = hasLy && !allActors ? data.actorsLy! : data.actors
   const max = Math.max(1, ...data.perDay.map((d) => Math.max(d.positive, d.negative)))
   return (
     <section className="radar-block">
@@ -385,8 +389,20 @@ function SentimentBarometer({ flux }: { flux: Flux | '' }) {
       </div>
       <div className="radar-baro__tables">
         <div className="news-panel">
-          <h4>{r.byActor}</h4>
-          <ToneTable rows={data.actors} head={r.actor} onPick={(name) => drill({ entity: name, days: '14' })} />
+          <h4>
+            {r.byActor}
+            {hasLy && (
+              <span className="mms-seg radar-baro__seg" role="group">
+                <button type="button" className={!allActors ? 'is-active' : ''} aria-pressed={!allActors} onClick={() => setAllActors(false)}>
+                  {r.actorsLy}
+                </button>
+                <button type="button" className={allActors ? 'is-active' : ''} aria-pressed={allActors} onClick={() => setAllActors(true)}>
+                  {r.actorsAll}
+                </button>
+              </span>
+            )}
+          </h4>
+          <ToneTable rows={actorRows} head={r.actor} onPick={(name) => drill({ entity: name, days: '14' })} />
         </div>
         <div className="news-panel">
           <h4>{r.bySource}</h4>

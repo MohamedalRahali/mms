@@ -146,6 +146,76 @@ export function WatchAlertRow({ id, alert, pending, onSaved }: { id: string; ale
   )
 }
 
+const MERGE_TEXT = {
+  ar: {
+    title: 'عمليات رصد متشابهة',
+    intro: 'هذه العمليات تراقب تقريباً الكلمات نفسها. الدمج ينشئ رصداً واحداً يجمع قواعدها والمرسَل إليهم، ويعطّل العمليات الأصلية دون حذفها (يمكن إعادة تفعيلها).',
+    group: (n: number, common: number, words: number) => `${n} عمليات · ${common} كلمة مشتركة من ${words}`,
+    merge: 'دمج في رصد واحد',
+    confirm: (names: string[]) => `دمج: ${names.join('، ')}؟
+ستُعطَّل العمليات الأصلية ولن تُحذف.`,
+    done: 'تم الدمج. العمليات الأصلية معطّلة ومحفوظة.',
+    failed: 'تعذّر الدمج.',
+  },
+  en: {
+    title: 'Similar watches',
+    intro: 'These watches monitor nearly the same words. Merging creates one watch with all their rules and recipients, and disables the originals without deleting them (they can be re-enabled).',
+    group: (n: number, common: number, words: number) => `${n} watches · ${common} of ${words} words in common`,
+    merge: 'Merge into one watch',
+    confirm: (names: string[]) => `Merge: ${names.join(', ')}?
+The originals will be disabled, not deleted.`,
+    done: 'Merged. The originals are disabled and kept.',
+    failed: 'The merge failed.',
+  },
+}
+
+/** Proposition de fusion des veilles presque identiques (confirmée par l'utilisateur, rien n'est supprimé) */
+export function MergeProposals({ tick, onMerged }: { tick: number; onMerged: () => void }) {
+  const t = MERGE_TEXT[useI18n().lang === 'ar' ? 'ar' : 'en']
+  const mayEdit = canDo(useAuth()?.user, 'manage_watches')
+  const [groups, setGroups] = useState<{ ids: string[]; names: string[]; common: number; words: number }[]>([])
+  const [msg, setMsg] = useState('')
+  useEffect(() => {
+    let off = false
+    fetch('/api/watches/similar')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => !off && json && setGroups(json.groups ?? []))
+      .catch(() => {})
+    return () => {
+      off = true
+    }
+  }, [tick])
+  async function merge(ids: string[], names: string[]) {
+    if (!window.confirm(t.confirm(names))) return
+    const res = await fetch('/api/watches/merge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) })
+    setMsg(res.ok ? t.done : t.failed)
+    if (res.ok) onMerged()
+  }
+  if (!mayEdit || (!groups.length && !msg)) return null
+  return (
+    <section className="mms-note mms-merge">
+      {groups.length > 0 && (
+        <>
+          <strong>{t.title}</strong>
+          <p>{t.intro}</p>
+          <ul>
+            {groups.map((g) => (
+              <li key={g.ids.join()}>
+                <span dir="auto">{g.names.join(' · ')}</span>
+                <small> ({t.group(g.ids.length, g.common, g.words)})</small>{' '}
+                <button type="button" className="news-btn" onClick={() => merge(g.ids, g.names)}>
+                  {t.merge}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {msg && <p className="news-status is-ok">{msg}</p>}
+    </section>
+  )
+}
+
 type Row = AlertFlow & {
   id: string
   overdue: boolean
