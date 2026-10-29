@@ -23,7 +23,7 @@ import { mountReports } from './reports.js'
 import { AGENTS, ASK_SPEC, agentFacts, agentItems, agentStats, askPrompt, itemLines, sourceCard, specFor } from './around.js'
 import { emergingTopics, historyOf, sentimentBarometer, smartAlerts, startRadarAlerts, storyClusters, storyIndex } from './radar.js'
 import { startRadarWorker } from './radarWorker.js'
-import { createWatch, deleteWatch, enabledWatches, itemsForWatch, listWatches, sendMail, sendTelegram, setEnabled, setMailBlockedListener, setWatchTools, startWatches, telegramReady } from './watches.js'
+import { createWatch, deleteWatch, enabledWatches, itemsForWatch, listWatches, sendMail, sendTelegram, setEnabled, setMailBlockedListener, setWatchAlert, setWatchAlertListener, setWatchTools, startWatches, telegramReady } from './watches.js'
 import { countryOf } from './sourceMeta.js'
 import { initProcessed, isProcessed, processedOf, setProcessed } from './processed.js'
 import { GROUPS, decorate, foldStories, groupNews, overview, sortNews } from './newsView.js'
@@ -33,7 +33,7 @@ import { brandOf } from './clientAdmin.js'
 import { cachedBrief, initBrief, itemBrief } from './brief.js'
 import { mountGeo } from './geo.js'
 import { mountCatalog } from './catalog.js'
-import { canSendAlert, initAlertFlow, mountAlertFlow, withFlow } from './alertFlow.js'
+import { canSendAlert, initAlertFlow, mountAlertFlow, openWatchAlert, withFlow } from './alertFlow.js'
 import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionOf, regionStats, resolveEntities } from './entities.js'
 import { initPinboards, mountPinboards, pinnedKeys } from './pinboards.js'
 import { mountRasd } from './rasd.js'
@@ -858,7 +858,8 @@ app.post('/api/watches', express.json({ limit: '100kb' }), (req, res) => {
   }
 })
 app.patch('/api/watches/:id', express.json({ limit: '2kb' }), (req, res) => {
-  const watch = setEnabled(req.params.id, req.body?.enabled)
+  // Réglages d'alerte (canaux, seuil, gravité, suivi) ou activation
+  const watch = req.body?.alert ? setWatchAlert(req.params.id, req.body.alert) : setEnabled(req.params.id, req.body?.enabled)
   if (!watch) return res.status(404).json({ error: 'NO_WATCH' })
   res.json({ watch })
 })
@@ -912,6 +913,7 @@ for (const view of Object.keys(RADAR_VIEWS))
   })
 // Traitement des alertes : étapes et historique (action « تحديد الأخبار كمُعالَجة » du profil)
 initAlertFlow(path.join(root, 'data'))
+setWatchAlertListener(openWatchAlert)
 mountAlertFlow(app)
 // لوحات التثبيت : collections d'articles épinglés, communes à l'équipe
 initPinboards(path.join(root, 'data'))

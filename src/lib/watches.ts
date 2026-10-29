@@ -3,6 +3,7 @@
 export type WatchStatus = 'upcoming' | 'active' | 'finished'
 export type WatchOption = { id: string; name: string; status: WatchStatus }
 export type WatchMatch = { id: string; title: string; flux: string; origin: string; date: string; url: string; hits: string[] }
+export type WatchAlert = { channels: ('email' | 'telegram')[]; threshold: number; severity: 'info' | 'high' | 'critical'; assignee: string; dueHours: number }
 export type Watch = {
   id: string
   name: string
@@ -25,6 +26,9 @@ export type Watch = {
   filters?: Record<string, string>
   createdBy?: string
   blockedRecipients?: string[]
+  // Réglages d'alerte (canaux, seuil, gravité, suivi) ; absents sur les veilles créées avant
+  alert?: WatchAlert
+  pending?: number
 }
 
 /** Zones prêtes à l'emploi : MMS suit la Tunisie (Mosaïque FM) et la Libye */

@@ -72,10 +72,51 @@ export function updateFlow(id, { status, assignee, comment }, by) {
   return f
 }
 
+/** Alerte d'une veille envoyée : ouverte dans le suivi, avec gravité, personne chargée et échéance */
+export function openWatchAlert({ watch, count, titles = [], severity = 'info', assignee = '', dueHours = 0 }, now = new Date()) {
+  const at = now.toISOString()
+  const key = `watch:${watch.id}:${now.getTime()}`
+  flows[key] = {
+    status: assignee ? 'assigned' : 'new',
+    assignee: String(assignee || '').slice(0, 120),
+    meta: {
+      kind: 'watch',
+      watchId: watch.id,
+      name: String(watch.name || '').slice(0, 120),
+      count,
+      titles: titles.map((t) => String(t).slice(0, 200)).slice(0, 5),
+      severity,
+      openedAt: at,
+      dueAt: dueHours ? new Date(now.getTime() + dueHours * 3_600_000).toISOString() : null,
+    },
+    history: [{ at, by: 'MMS', status: assignee ? 'assigned' : 'new', ...(assignee ? { assignee } : {}) }],
+    updatedAt: at,
+  }
+  save()
+  return key
+}
+
+const SEV_RANK = { critical: 3, high: 2, info: 1 }
+/** Suivi des alertes des veilles : ouvertes (non clôturées) d'abord, en retard signalées, puis les 30 dernières clôturées */
+export function watchAlerts(now = Date.now()) {
+  const rows = Object.entries(flows)
+    .filter(([, f]) => f.meta?.kind === 'watch')
+    .map(([id, f]) => ({ id, ...f, overdue: f.status !== 'closed' && Boolean(f.meta.dueAt) && Date.parse(f.meta.dueAt) < now }))
+  const open = rows
+    .filter((r) => r.status !== 'closed')
+    .sort((a, b) => Number(b.overdue) - Number(a.overdue) || (SEV_RANK[b.meta.severity] || 0) - (SEV_RANK[a.meta.severity] || 0) || b.meta.openedAt.localeCompare(a.meta.openedAt))
+  const closed = rows
+    .filter((r) => r.status === 'closed')
+    .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+    .slice(0, 30)
+  return { open, closed }
+}
+
 /** Une alerte critique peut-elle partir automatiquement ? (validation exigée ou non) */
 export const canSendAlert = (a) => !review.critical || flows[a.id]?.status === 'validated'
 
 export function mountAlertFlow(app) {
+  app.get('/api/watches/alerts', (_req, res) => res.json(watchAlerts()))
   app.post('/api/radar/alerts/:id', express.json({ limit: '4kb' }), (req, res) => {
     try {
       res.json({ flow: updateFlow(req.params.id, req.body || {}, req.user.name || req.user.email) })

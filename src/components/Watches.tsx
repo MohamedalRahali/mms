@@ -6,6 +6,7 @@ import { canDo, useAuth } from '../lib/auth'
 import { THEMES, type Watch, WATCH_TEXT, ZONES, themesToRules } from '../lib/watches'
 import { DispatchHistory } from './DispatchHistory'
 import { LoadState } from './LoadState'
+import { AlertFields, DEFAULT_ALERT, WatchAlertRow, WatchAlertTracker } from './WatchAlerts'
 
 /** Écran « الرصد المبرمج » : zone surveillée, thèmes à cocher, période, destinataires, puis liste des veilles */
 
@@ -57,6 +58,7 @@ function WatchForm({ onCreated }: { onCreated: () => void }) {
   const [to, setTo] = useState(tomorrow())
   const [permanent, setPermanent] = useState(false)
   const [recipients, setRecipients] = useState('')
+  const [alert, setAlert] = useState(DEFAULT_ALERT)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -83,7 +85,7 @@ function WatchForm({ onCreated }: { onCreated: () => void }) {
         fetch('/api/watches', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name.trim() || autoName, rules, themes: picked, scope, flux, from, to: permanent ? null : to, recipients, force }),
+          body: JSON.stringify({ name: name.trim() || autoName, rules, themes: picked, scope, flux, from, to: permanent ? null : to, recipients, alert, force }),
         })
       let res = await send(false)
       let json = await res.json()
@@ -187,6 +189,8 @@ function WatchForm({ onCreated }: { onCreated: () => void }) {
           <input value={recipients} onChange={(e) => setRecipients(e.target.value)} dir="ltr" placeholder="name@example.com, ..." />
         </label>
 
+        <AlertFields value={alert} onChange={setAlert} />
+
         {rules.length > 0 && (
           <details className="mms-watchform__rules">
             <summary>
@@ -259,6 +263,7 @@ function WatchRow({ watch, onChange, onOpen }: { watch: Watch; onChange: () => v
           </>
         )}
       </p>
+      <WatchAlertRow id={watch.id} alert={watch.alert} pending={watch.pending} onSaved={onChange} />
       {watch.lastError && <p className="news-status news-status--error">{watch.lastError === 'smtp_missing' ? w.smtpMissing : w.smtpError}</p>}
       {watch.matches.length > 0 && (
         <details>
@@ -347,6 +352,7 @@ export function Watches({ onOpen }: { onOpen: (id: string) => void }) {
           </div>
         </section>
       </div>
+      <WatchAlertTracker onOpen={onOpen} tick={tick} />
       <DispatchHistory />
     </>
   )

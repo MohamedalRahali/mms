@@ -184,6 +184,25 @@ export function duplicateOf(candidate) {
   return same ? { id: same.id, name: same.name, createdBy: same.createdBy || '', status: statusOf(same) } : null
 }
 
+/** Réglages d'alerte d'une veille : canaux, seuil, gravité, personne chargée du suivi, délai de traitement */
+export const SEVERITIES = ['info', 'high', 'critical']
+const SEVERITY_AR = { info: 'معلومة', high: 'مرتفع', critical: 'حرج' }
+export function cleanAlert(a = {}) {
+  const channels = (Array.isArray(a.channels) ? a.channels : ['email', 'telegram']).filter((c) => c === 'email' || c === 'telegram')
+  return {
+    channels: channels.length ? [...new Set(channels)] : ['email', 'telegram'],
+    threshold: Math.min(Math.max(Math.round(Number(a.threshold) || 1), 1), 50),
+    severity: SEVERITIES.includes(a.severity) ? a.severity : 'info',
+    assignee: String(a.assignee || '').trim().slice(0, 120),
+    dueHours: Math.min(Math.max(Math.round(Number(a.dueHours) || 0), 0), 720),
+  }
+}
+const alertOf = (w) => w.alert || cleanAlert()
+
+// Alerte envoyée : ouverte dans le suivi des alertes (server/alertFlow.js, branché par server/index.js)
+let onWatchAlert = () => {}
+export const setWatchAlertListener = (fn) => (onWatchAlert = fn)
+
 export function createWatch(body, by = '') {
   if (watches.length >= MAX_WATCHES) throw fail('TOO_MANY')
   const rules = (Array.isArray(body.rules) ? body.rules : []).map((r) => String(r).trim()).filter((r) => r && parseRule(r).length)
@@ -230,6 +249,7 @@ export function createWatch(body, by = '') {
     from,
     to,
     recipients,
+    alert: cleanAlert(body.alert),
     enabled: true,
     createdAt: new Date().toISOString(),
     createdBy: String(by || '').slice(0, 120),
@@ -242,6 +262,15 @@ export function createWatch(body, by = '') {
   watches.push(watch)
   save()
   runWatches().catch(() => {})
+  return publicWatch(watch)
+}
+
+/** Modifie les réglages d'alerte d'une veille existante */
+export function setWatchAlert(id, alert) {
+  const watch = watches.find((w) => w.id === id)
+  if (!watch) return null
+  watch.alert = cleanAlert({ ...alertOf(watch), ...alert })
+  save()
   return publicWatch(watch)
 }
 
@@ -272,7 +301,8 @@ export function buildAlertEmail(watch, found) {
   const link = `${(process.env.PUBLIC_URL || 'http://localhost:5174').replace(/\/$/, '')}/?watch=${watch.id}`
   const shown = found.slice(0, MAIL_ITEMS)
   const more = found.length - shown.length
-  const subject = `MMS · رصد مبرمج: ${watch.name} (${found.length} أخبار جديدة)`
+  const sev = alertOf(watch).severity
+  const subject = `${sev !== 'info' ? `[${SEVERITY_AR[sev]}] ` : ''}MMS · رصد مبرمج: ${watch.name} (${found.length} أخبار جديدة)`
   const rows = shown
     .map(
       ({ it, hits }) => `<tr><td style="padding:12px 0;border-bottom:1px solid #e5e5e5">
@@ -351,7 +381,7 @@ export function buildAlertTelegram(watch, found) {
   )
   const more = found.length - shown.length
   return [
-    `🔔 <b>MMS · رصد مبرمج: ${esc(watch.name)}</b>`,
+    `${alertOf(watch).severity === 'critical' ? '🚨' : '🔔'} <b>MMS · رصد مبرمج: ${esc(watch.name)}</b>${alertOf(watch).severity !== 'info' ? ` · ${SEVERITY_AR[alertOf(watch).severity]}` : ''}`,
     `${found.length} خبر جديد`,
     '',
     ...lines,
@@ -401,7 +431,10 @@ export async function runWatches() {
       }
       watch.lastRun = new Date().toISOString()
       changed = true
-      if (!found.length) continue
+      // Seuil : en dessous, les actualités attendent le passage suivant (elles ne sont pas marquées envoyées)
+      const conf = alertOf(watch)
+      watch.pending = found.length < conf.threshold ? found.length : 0
+      if (!found.length || found.length < conf.threshold) continue
       found.sort((a, b) => b.it.date.localeCompare(a.it.date))
       watch.matches = [
         ...found.map(({ it, hits }) => ({ id: it.id, title: it.title, flux: it.flux, origin: it.origin, date: it.date, url: it.url, hits })),
@@ -410,12 +443,19 @@ export async function runWatches() {
       watch.matchCount += found.length
       try {
         // Telegram en plus de l'e-mail ; son échec ne fait pas renvoyer l'e-mail
-        if (telegramReady()) await sendTelegram(buildAlertTelegram(watch, found)).catch((err) => console.error(`Veille « ${watch.name} » : ${err.message}`))
+        const byTelegram = telegramReady() && conf.channels.includes('telegram')
+        const byEmail = conf.channels.includes('email')
+        if (byTelegram) await sendTelegram(buildAlertTelegram(watch, found)).catch((err) => console.error(`Veille « ${watch.name} » : ${err.message}`))
         // Sans SMTP mais avec Telegram, l'alerte part seulement sur Telegram, sans erreur
         const smtp = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS)
-        if (watch.recipients.length && (smtp || !telegramReady())) await sendMail(watch.recipients, buildAlertEmail(watch, found))
+        if (byEmail && watch.recipients.length && (smtp || !byTelegram)) await sendMail(watch.recipients, buildAlertEmail(watch, found))
         watch.lastError = null
-        logDispatch({ kind: 'watch', name: watch.name, count: found.length, channels: [...(telegramReady() ? ['telegram'] : []), ...(watch.recipients.length && smtp ? ['email'] : [])], recipients: watch.recipients.length })
+        logDispatch({ kind: 'watch', name: watch.name, count: found.length, channels: [...(byTelegram ? ['telegram'] : []), ...(byEmail && watch.recipients.length && smtp ? ['email'] : [])], recipients: watch.recipients.length })
+        try {
+          onWatchAlert({ watch: { id: watch.id, name: watch.name }, count: found.length, titles: found.slice(0, 5).map(({ it }) => it.title), ...conf })
+        } catch (err) {
+          console.error(`Suivi de l'alerte « ${watch.name} » : ${err.message}`)
+        }
         // Envoyés (ou sans destinataire) : on ne les signalera plus
         watch.notified = [...watch.notified, ...found.map(({ it }) => itemKey(it))].slice(-5000)
       } catch (err) {

@@ -4153,3 +4153,94 @@ img.mms-user__avatar--img {
     display: none;
   }
 }
+
+/* Alertes par mots-clés : réglages et suivi (WatchAlerts.tsx) */
+.mms-alertset {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 0.6rem;
+  margin: 0.4rem 0 0.8rem;
+}
+.mms-alertset fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.9rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.mms-alertset legend {
+  width: 100%;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+.mms-watch__alert details {
+  margin: 0.3rem 0;
+}
+.mms-sev {
+  display: inline-block;
+  padding: 0 0.55rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+.mms-sev--high {
+  background: rgba(230, 145, 56, 0.16);
+  color: light-dark(#a35b0c, #f0b26b);
+}
+.mms-sev--critical {
+  background: rgba(217, 83, 79, 0.16);
+  color: light-dark(#b3302c, #f08a86);
+}
+.mms-alerttracker {
+  margin-top: 1rem;
+}
+.mms-alertlist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mms-alertrow {
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.mms-alertrow:last-child {
+  border-bottom: 0;
+}
+.mms-alertrow.is-overdue {
+  border-inline-start: 3px solid #d9534f;
+  padding-inline-start: 0.6rem;
+}
+.mms-alertrow header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+}
+.mms-alertrow header small {
+  color: var(--ink-soft);
+}
+.mms-alertrow__late {
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: #d9534f;
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+.mms-alertrow ul {
+  margin: 0.3rem 0;
+  padding-inline-start: 1.1rem;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+.mms-alertrow__flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.mms-alertrow__flow .alert-flow {
+  flex: 1 1 260px;
+}
