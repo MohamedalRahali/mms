@@ -243,8 +243,8 @@ export default function App() {
   }, [])
   const closePresent = useCallback(() => setPresenting(false), [])
   // Historique de navigation : chaque changement de page est une entrée du navigateur (bouton « رجوع » de la page
-  // et bouton retour du navigateur). L'état gardé : page, veille ouverte, filtres de la liste ; rien dans l'adresse
-  // à part la page (pas de mots-clés ni de filtres dans l'URL)
+  // et bouton retour du navigateur). L'état gardé : page, veille ouverte, filtres de la liste ; les filtres de la liste
+  // des actualités sont aussi dans l'adresse (nf_…, écrits par NewsList)
   const restoring = useRef(false)
   const [depth, setDepth] = useState(() => (typeof history.state?.depth === 'number' ? history.state.depth : 0))
   const [prevView, setPrevView] = useState<View | null>(() => history.state?.prev ?? null)
@@ -259,6 +259,8 @@ export default function App() {
     const url = new URL(location.href)
     url.searchParams.set('view', view)
     for (const k of ['watch', 'clip', 't', 'e', 'q', 'sub']) if (view !== 'news' || k !== 'watch') url.searchParams.delete(k)
+    // Filtres de la liste (nf_…) : gardés seulement sur la page des actualités
+    if (view !== 'news') for (const k of [...url.searchParams.keys()]) if (k.startsWith('nf_')) url.searchParams.delete(k)
     if (!cur || typeof cur.depth !== 'number') {
       history.replaceState({ view, watch: newsWatch, drill: drill?.n ?? 0, filters: drill?.filters ?? null, depth: 0, prev: null }, '', url)
       return
@@ -589,7 +591,7 @@ export default function App() {
                         </>
                       )}
                       {shown === 'news' && (
-                        <NewsList key={`${newsWatch}|${drill?.n ?? 0}`} flux={flux} initialWatch={newsWatch} initialFilters={drill?.filters} />
+                        <NewsList key={`${newsWatch}|${drill?.n ?? 0}`} flux={flux} initialWatch={newsWatch} initialFilters={drill?.filters} syncUrl />
                       )}
                       {shown === 'watch' && (
                         <Watches

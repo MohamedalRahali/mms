@@ -23,7 +23,7 @@ import { mountReports } from './reports.js'
 import { AGENTS, ASK_SPEC, agentFacts, agentItems, agentStats, askPrompt, itemLines, sourceCard, specFor } from './around.js'
 import { emergingTopics, historyOf, sentimentBarometer, smartAlerts, startRadarAlerts, storyClusters, storyIndex } from './radar.js'
 import { startRadarWorker } from './radarWorker.js'
-import { createWatch, deleteWatch, enabledWatches, itemsForWatch, listWatches, mergeWatches, sendMail, similarWatches, sendTelegram, setEnabled, setMailBlockedListener, setWatchAlert, setWatchAlertListener, setWatchTools, startWatches, telegramReady } from './watches.js'
+import { createWatch, deleteWatch, enabledWatches, guardWatch, itemsForWatch, mergeWatches, sendMail, setWatchAccess, similarWatches, watchesFor, watchIdsFor, sendTelegram, setEnabled, setMailBlockedListener, setWatchAlert, setWatchAlertListener, setWatchTools, startWatches, telegramReady } from './watches.js'
 import { countryOf } from './sourceMeta.js'
 import { initProcessed, isProcessed, processedOf, setProcessed } from './processed.js'
 import { GROUPS, decorate, foldStories, groupNews, overview, sortNews } from './newsView.js'
@@ -86,6 +86,11 @@ function applyFilters(items, q) {
     .filter(Boolean)
   const days = Number(q.days) || 0
   const since = days ? Date.now() - days * 86_400_000 : 0
+  // Période personnalisée (jours de Tripoli, bornes comprises) et tonalités multiples (« negative,neutral »)
+  const DAY = /^\d{4}-\d{2}-\d{2}$/
+  const from = DAY.test(q.from || '') ? Date.parse(`${q.from}T00:00:00+02:00`) : 0
+  const to = DAY.test(q.to || '') ? Date.parse(`${q.to}T23:59:59.999+02:00`) : Infinity
+  const tones = q.tone ? new Set(String(q.tone).split(',').filter(Boolean)) : null
   const haystack = (it) => `${it.title} ${it.summary} ${it.origin}`.toLowerCase()
   const pinned = q.pinboard ? pinnedKeys(String(q.pinboard)) : null
   return items.filter(
@@ -98,7 +103,7 @@ function applyFilters(items, q) {
       (!q.sub || it.subType === q.sub) &&
       (!q.lang || it.lang === q.lang) &&
       (!q.source || it.origin === q.source) &&
-      (!q.tone || it.tone === q.tone) &&
+      (!tones || tones.has(it.tone)) &&
       (!q.entity || entitiesOf(it).includes(q.entity)) &&
       (!q.tag || tagsOf(it).includes(q.tag)) &&
       (!q.important || (it.importance || 1) >= 2) &&
@@ -107,6 +112,8 @@ function applyFilters(items, q) {
       (!pinned || pinned.has(it.url || it.id)) &&
       (!q.processed || (q.processed === 'yes') === isProcessed(itemKey(it))) &&
       (!since || Date.parse(it.date) >= since) &&
+      (!from || Date.parse(it.date) >= from) &&
+      (to === Infinity || Date.parse(it.date) <= to) &&
       (!match || match(searchText(it))) &&
       (!exclude.length || !exclude.some((w) => haystack(it).includes(w))),
   )
@@ -857,9 +864,9 @@ app.post('/api/briefing/send', async (_req, res) => {
 // Comptes et rôles : console Super Admin seulement (/api/superadmin/users), plus de routes ici
 
 // Veille programmée (الرصد المبرمج)
-app.get('/api/news/watches', (_req, res) => res.json({ watches: enabledWatches() }))
-app.get('/api/watches', (_req, res) =>
-  res.json({ watches: listWatches(), smtp: Boolean(process.env.SMTP_USER && process.env.SMTP_PASS), telegram: telegramReady() }),
+app.get('/api/news/watches', (req, res) => res.json({ watches: enabledWatches(req.user) }))
+app.get('/api/watches', (req, res) =>
+  res.json({ watches: watchesFor(req.user), smtp: Boolean(process.env.SMTP_USER && process.env.SMTP_PASS), telegram: telegramReady() }),
 )
 app.post('/api/watches', express.json({ limit: '100kb' }), (req, res) => {
   try {
@@ -869,21 +876,36 @@ app.post('/api/watches', express.json({ limit: '100kb' }), (req, res) => {
   }
 })
 // Veilles presque identiques : proposition de fusion, puis fusion confirmée (originaux désactivés, jamais supprimés)
-app.get('/api/watches/similar', (_req, res) => res.json({ groups: similarWatches() }))
+app.get('/api/watches/similar', (req, res) => res.json({ groups: similarWatches(0.5, req.user) }))
 app.post('/api/watches/merge', express.json({ limit: '4kb' }), (req, res) => {
   try {
+    for (const id of Array.isArray(req.body?.ids) ? req.body.ids : []) guardWatch(String(id), req.user)
     res.status(201).json({ watch: mergeWatches(req.body?.ids, req.user.email, req.body?.name) })
   } catch (err) {
     res.status(err.status || 500).json({ error: err.code || 'FAILED' })
   }
 })
 app.patch('/api/watches/:id', express.json({ limit: '2kb' }), (req, res) => {
-  // Réglages d'alerte (canaux, seuil, gravité, suivi) ou activation
-  const watch = req.body?.alert ? setWatchAlert(req.params.id, req.body.alert) : setEnabled(req.params.id, req.body?.enabled)
+  // Droits de la veille (créateur et administrateurs), réglages d'alerte, ou activation ; droits vérifiés avant tout
+  try {
+    guardWatch(req.params.id, req.user, { share: Boolean(req.body?.access) })
+  } catch (err) {
+    return res.status(err.status).json({ error: err.code })
+  }
+  const watch = req.body?.access
+    ? setWatchAccess(req.params.id, req.body.access)
+    : req.body?.alert
+      ? setWatchAlert(req.params.id, req.body.alert)
+      : setEnabled(req.params.id, req.body?.enabled)
   if (!watch) return res.status(404).json({ error: 'NO_WATCH' })
   res.json({ watch })
 })
 app.delete('/api/watches/:id', (req, res) => {
+  try {
+    guardWatch(req.params.id, req.user)
+  } catch (err) {
+    return res.status(err.status).json({ error: err.code })
+  }
   if (!deleteWatch(req.params.id)) return res.status(404).json({ error: 'NO_WATCH' })
   res.json({ ok: true })
 })
@@ -934,7 +956,7 @@ for (const view of Object.keys(RADAR_VIEWS))
 // Traitement des alertes : étapes et historique (action « تحديد الأخبار كمُعالَجة » du profil)
 initAlertFlow(path.join(root, 'data'))
 setWatchAlertListener(openWatchAlert)
-mountAlertFlow(app)
+mountAlertFlow(app, { visibleWatches: watchIdsFor })
 // لوحات التثبيت : collections d'articles épinglés, communes à l'équipe
 initPinboards(path.join(root, 'data'))
 mountPinboards(app, { getItems })

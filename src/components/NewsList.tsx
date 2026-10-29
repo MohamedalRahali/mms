@@ -18,7 +18,61 @@ import { AddItemButton } from './ItemEdit'
 import { type Health } from '../lib/news'
 
 // bare : la recherche et les filtres sont pilotés par la page appelante (مجمع البحث) ; seuls les résultats sont affichés
-export function NewsList({ flux, initialWatch = '', initialFilters, bare = false }: { flux: Flux | ''; initialWatch?: string; initialFilters?: Partial<Filters>; bare?: boolean }) {
+/** Plages rapides (vidéo « NewsBoard Filtering ») : bornes en jours de Tripoli */
+const tripoliDay = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tripoli', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+function quickRange(key: string): { from: string; to: string } {
+  const now = new Date(Date.now() + 2 * 3_600_000)
+  const day = (offset: number) => tripoliDay(new Date(Date.now() + offset * 86_400_000))
+  const dow = (now.getUTCDay() + 1) % 7 // semaine du samedi au vendredi
+  const y = now.getUTCFullYear()
+  const mo = now.getUTCMonth()
+  const iso = (d: Date) => d.toISOString().slice(0, 10)
+  if (key === 'today') return { from: day(0), to: day(0) }
+  if (key === 'yesterday') return { from: day(-1), to: day(-1) }
+  if (key === 'week') return { from: day(-dow), to: day(0) }
+  if (key === 'lastweek') return { from: day(-dow - 7), to: day(-dow - 1) }
+  if (key === 'month') return { from: iso(new Date(Date.UTC(y, mo, 1))), to: day(0) }
+  if (key === 'lastmonth') return { from: iso(new Date(Date.UTC(y, mo - 1, 1))), to: iso(new Date(Date.UTC(y, mo, 0))) }
+  return { from: '', to: '' }
+}
+const QUICK: Record<'ar' | 'en', [string, string][]> = {
+  ar: [['today', 'اليوم'], ['yesterday', 'أمس'], ['week', 'هذا الأسبوع'], ['lastweek', 'الأسبوع الماضي'], ['month', 'هذا الشهر'], ['lastmonth', 'الشهر الماضي']],
+  en: [['today', 'Today'], ['yesterday', 'Yesterday'], ['week', 'This week'], ['lastweek', 'Last week'], ['month', 'This month'], ['lastmonth', 'Last month']],
+}
+
+/** Libellés des filtres actifs (pastilles sous la barre de filtres) */
+const FILTER_LABELS: Record<'ar' | 'en', Partial<Record<keyof Filters, string>>> = {
+  ar: { from: 'من', to: 'إلى', q: 'البحث', days: 'الفترة', category: 'الموضوع', intl: 'المنطقة', channel: 'القناة', media: 'نوع الوسيلة', sub: 'النوع', lang: 'اللغة', watch: 'الرصد', source: 'المصدر', tone: 'النبرة', tag: 'الوسم', exclude: 'استبعاد', important: 'المهم فقط', sort: 'الترتيب', country: 'البلد', processed: 'الحالة', region: 'المنطقة الليبية', pinboard: 'لوحة التثبيت' },
+  en: { from: 'From', to: 'To', q: 'Search', days: 'Period', category: 'Topic', intl: 'Region', channel: 'Channel', media: 'Media type', sub: 'Type', lang: 'Language', watch: 'Watch', source: 'Source', tone: 'Tone', tag: 'Tag', exclude: 'Exclude', important: 'Important only', sort: 'Sort', country: 'Country', processed: 'Status', region: 'Libyan region', pinboard: 'Pin board' },
+}
+
+/** Filtres de la liste gardés dans l'adresse (nf_<clé>) : lien partageable, rechargement et retour sans perte */
+const URL_PREFIX = 'nf_'
+function filtersFromUrl(): Partial<Filters> {
+  const out: Partial<Filters> = {}
+  const params = new URLSearchParams(location.search)
+  for (const k of Object.keys(EMPTY_FILTERS) as (keyof Filters)[]) {
+    const v = params.get(URL_PREFIX + k)
+    if (v) out[k] = v.slice(0, 500)
+  }
+  return out
+}
+
+export function NewsList({
+  flux,
+  initialWatch = '',
+  initialFilters,
+  bare = false,
+  syncUrl = false,
+}: {
+  flux: Flux | ''
+  initialWatch?: string
+  initialFilters?: Partial<Filters>
+  bare?: boolean
+  syncUrl?: boolean
+}) {
+  // Sans filtres transmis (ouverture directe, rechargement), ceux de l'adresse
+  if (syncUrl && !initialFilters) initialFilters = filtersFromUrl()
   const i = useI18n()
   const x = useIntel()
   const p = usePro()
@@ -48,6 +102,15 @@ export function NewsList({ flux, initialWatch = '', initialFilters, bare = false
   const pinboards = useFetch<{ boards: { id: string; name: string; count: number }[] }>('/api/pinboards').data?.boards ?? []
 
   useEffect(() => setPage(1), [flux, prefs.group, prefs.sort, prefs.dir, prefs.fold, prefs.view])
+  // Adresse et entrée d'historique de la page à jour : « رجوع » et le bouton retour retrouvent ces filtres
+  useEffect(() => {
+    if (!syncUrl || history.state?.view !== 'news') return
+    const url = new URL(location.href)
+    for (const k of [...url.searchParams.keys()]) if (k.startsWith(URL_PREFIX)) url.searchParams.delete(k)
+    const active = Object.fromEntries(Object.entries(filters).filter(([k, v]) => v && k !== 'watch'))
+    for (const [k, v] of Object.entries(active)) url.searchParams.set(URL_PREFIX + k, v)
+    history.replaceState({ ...history.state, filters: Object.keys(active).length ? active : null }, '', url)
+  }, [filters, syncUrl])
   useEffect(() => setCollapsed(new Set()), [prefs.group])
 
   // Mêmes filtres pour la liste, les onglets et l'export CSV
@@ -143,13 +206,33 @@ export function NewsList({ flux, initialWatch = '', initialFilters, bare = false
             ]}
           />
         )}
-        <select value={filters.days} onChange={(e) => update({ days: e.target.value })} aria-label={i.lang === 'ar' ? 'الفترة' : 'Period'}>
+        <select
+          className={filters.days || filters.from || filters.to ? 'is-on' : ''}
+          value={filters.from || filters.to ? 'range' : filters.days}
+          onChange={(e) => (e.target.value === 'range' ? update({ days: '', ...quickRange('week') }) : update({ days: e.target.value, from: '', to: '' }))}
+          aria-label={i.lang === 'ar' ? 'الفترة' : 'Period'}
+        >
           {PERIODS.map((p) => (
             <option key={p.value} value={p.value}>
               {p.label}
             </option>
           ))}
+          <option value="range">{i.lang === 'ar' ? 'فترة محددة…' : 'Custom range…'}</option>
         </select>
+        {(filters.from || filters.to) && (
+          <span className="news-range">
+            <input type="date" value={filters.from} max={filters.to || undefined} onChange={(e) => update({ from: e.target.value })} aria-label={i.lang === 'ar' ? 'من' : 'From'} />
+            <input type="date" value={filters.to} min={filters.from || undefined} onChange={(e) => update({ to: e.target.value })} aria-label={i.lang === 'ar' ? 'إلى' : 'To'} />
+            <select value="" onChange={(e) => e.target.value && update(quickRange(e.target.value))} aria-label={i.lang === 'ar' ? 'فترات جاهزة' : 'Quick ranges'}>
+              <option value="">{i.lang === 'ar' ? 'فترات جاهزة' : 'Quick ranges'}</option>
+              {QUICK[i.lang === 'ar' ? 'ar' : 'en'].map(([k, label]) => (
+                <option key={k} value={k}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </span>
+        )}
         <select value={filters.category} onChange={(e) => update({ category: e.target.value, ...(e.target.value !== 'international' ? { intl: '' } : {}) })} aria-label={i.lang === 'ar' ? 'الموضوع' : 'Category'}>
           <option value="">{t.allCategories}</option>
           {facets?.categories.map((c) => (
@@ -184,14 +267,19 @@ export function NewsList({ flux, initialWatch = '', initialFilters, bare = false
             </option>
           ))}
         </select>
-        <select value={filters.tone} onChange={(e) => update({ tone: e.target.value })} aria-label={x.tone}>
-          <option value="">{x.allTones}</option>
-          {TONES.map((tone) => (
-            <option key={tone} value={tone}>
-              {x.tones[tone]}
-            </option>
-          ))}
-        </select>
+        <fieldset className={filters.tone ? 'news-tones is-on' : 'news-tones'} aria-label={x.tone}>
+          {/* Plusieurs tonalités à la fois (« سلبي » et « محايد »…) : liste séparée par des virgules */}
+          {TONES.map((tone) => {
+            const picked = filters.tone ? filters.tone.split(',') : []
+            const on = picked.includes(tone)
+            return (
+              <label key={tone} className={`news-tones__opt is-${tone}`}>
+                <input type="checkbox" checked={on} onChange={() => update({ tone: (on ? picked.filter((x) => x !== tone) : [...picked, tone]).join(',') })} />
+                {x.tones[tone]}
+              </label>
+            )
+          })}
+        </fieldset>
         <select value={filters.source} onChange={(e) => update({ source: e.target.value })} aria-label={x.source}>
           <option value="">{x.allSources}</option>
           {filters.source && !facets?.sources?.some((c) => c.name === filters.source) && <option value={filters.source}>{filters.source}</option>}
@@ -279,6 +367,53 @@ export function NewsList({ flux, initialWatch = '', initialFilters, bare = false
           </a>
         )}
       </form>
+      {hasFilters && (
+        <p className="news-active" aria-label={i.lang === 'ar' ? 'عوامل التصفية النشطة' : 'Active filters'}>
+          {(Object.entries(filters) as [keyof Filters, string][])
+            .filter(([k, v]) => v && k !== 'entity')
+            .map(([k, v]) => (
+              <span key={k} className="mms-filterchip">
+                {FILTER_LABELS[i.lang === 'ar' ? 'ar' : 'en'][k] ?? k}:{' '}
+                <b dir="auto">
+                  {k === 'category'
+                    ? i.category(v)
+                    : k === 'intl'
+                      ? i.intl(v)
+                      : k === 'channel'
+                        ? i.channel(v)
+                        : k === 'country'
+                          ? countryName(v, i.lang)
+                          : k === 'days'
+                            ? (PERIODS.find((p) => p.value === v)?.label ?? v)
+                            : k === 'tone'
+                              ? v
+                                  .split(',')
+                                  .map((tone) => x.tones[tone as (typeof TONES)[number]] ?? tone)
+                                  .join('، ')
+                            : k === 'watch'
+                              ? (watches.find((w) => w.id === v)?.name ?? v)
+                              : k === 'pinboard'
+                                ? (pinboards.find((b) => b.id === v)?.name ?? v)
+                                : k === 'important'
+                                  ? '✓'
+                                  : v}
+                </b>
+                <button
+                  type="button"
+                  aria-label={`${x.removeFilter}: ${FILTER_LABELS[i.lang === 'ar' ? 'ar' : 'en'][k] ?? k}`}
+                  title={x.removeFilter}
+                  onClick={() => {
+                    if (k === 'q') setDraft('')
+                    if (k === 'exclude') setExclude('')
+                    update({ [k]: '', ...(k === 'category' ? { intl: '' } : {}) })
+                  }}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+        </p>
+      )}
       {canDo(auth?.user, 'ai_ask') && (
         <QueryAssistant
           error={data?.queryError}

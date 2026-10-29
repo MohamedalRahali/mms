@@ -7,7 +7,8 @@ import { THEMES, type Watch, WATCH_TEXT, ZONES, themesToRules } from '../lib/wat
 import { DispatchHistory } from './DispatchHistory'
 import { LoadState } from './LoadState'
 import { MailingListPicker } from './MailingLists'
-import { AlertFields, DEFAULT_ALERT, MergeProposals, WatchAlertRow, WatchAlertTracker } from './WatchAlerts'
+import { AlertFields, DEFAULT_ALERT, MergeProposals, VisibilitySelect, WatchAccessRow, WatchAlertRow, WatchAlertTracker } from './WatchAlerts'
+import { type WatchVisibility } from '../lib/watches'
 
 /** Écran « الرصد المبرمج » : zone surveillée, thèmes à cocher, période, destinataires, puis liste des veilles */
 
@@ -60,6 +61,7 @@ function WatchForm({ onCreated }: { onCreated: () => void }) {
   const [permanent, setPermanent] = useState(false)
   const [recipients, setRecipients] = useState('')
   const [alert, setAlert] = useState(DEFAULT_ALERT)
+  const [visibility, setVisibility] = useState<WatchVisibility>('team')
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -86,7 +88,7 @@ function WatchForm({ onCreated }: { onCreated: () => void }) {
         fetch('/api/watches', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name.trim() || autoName, rules, themes: picked, scope, flux, from, to: permanent ? null : to, recipients, alert, force }),
+          body: JSON.stringify({ name: name.trim() || autoName, rules, themes: picked, scope, flux, from, to: permanent ? null : to, recipients, alert, access: { visibility }, force }),
         })
       let res = await send(false)
       let json = await res.json()
@@ -192,6 +194,7 @@ function WatchForm({ onCreated }: { onCreated: () => void }) {
         <MailingListPicker value={recipients} onChange={setRecipients} />
 
         <AlertFields value={alert} onChange={setAlert} />
+        <VisibilitySelect value={visibility} onChange={setVisibility} />
 
         {rules.length > 0 && (
           <details className="mms-watchform__rules">
@@ -220,8 +223,8 @@ function WatchForm({ onCreated }: { onCreated: () => void }) {
 
 function WatchRow({ watch, onChange, onOpen, nameOf }: { watch: Watch; onChange: () => void; onOpen: (id: string) => void; nameOf: (id: string) => string }) {
   const i = useI18n()
-  // Activer, désactiver, supprimer : action « manage_watches » du profil
-  const mayEdit = canDo(useAuth()?.user, 'manage_watches')
+  // Activer, désactiver, supprimer : action « manage_watches » du profil, et droits de cette veille (serveur)
+  const mayEdit = canDo(useAuth()?.user, 'manage_watches') && watch.mayEdit !== false
   const w = WATCH_TEXT[i.lang]
   async function toggle() {
     await fetch(`/api/watches/${watch.id}`, {
@@ -275,7 +278,8 @@ function WatchRow({ watch, onChange, onOpen, nameOf }: { watch: Watch; onChange:
           {i.lang === 'ar' ? 'يجمع' : 'Combines'}: <span dir="auto">{watch.mergedFrom.map((m) => m.name).join(' · ')}</span>
         </p>
       )}
-      <WatchAlertRow id={watch.id} alert={watch.alert} pending={watch.pending} onSaved={onChange} />
+      <WatchAccessRow watch={watch} onSaved={onChange} />
+      <WatchAlertRow id={watch.id} alert={watch.alert} pending={watch.pending} onSaved={onChange} editable={watch.mayEdit !== false} />
       {watch.lastError && <p className="news-status news-status--error">{watch.lastError === 'smtp_missing' ? w.smtpMissing : w.smtpError}</p>}
       {watch.matches.length > 0 && (
         <details>

@@ -114,6 +114,11 @@ function filterMatch(watch, it) {
     if (!f[k]) continue
     if (k === 'source' && it.origin !== f.source) return false
     if (k === 'country' && tools.country(it) !== f.country) return false
+    // Tonalités multiples enregistrées depuis la liste (« negative,neutral »)
+    if (k === 'tone') {
+      if (!f.tone.split(',').includes(it.tone)) return false
+      continue
+    }
     if (k === 'exclude' && f.exclude.split(/[,،]/).map((w) => w.trim().toLowerCase()).filter(Boolean).some((w) => `${it.title} ${it.summary} ${it.origin}`.toLowerCase().includes(w))) return false
     if (!['source', 'country', 'exclude'].includes(k) && it[k] !== f[k]) return false
   }
@@ -164,7 +169,7 @@ const publicWatch = (w) => {
 }
 
 export const listWatches = () => watches.map(publicWatch)
-export const enabledWatches = () => watches.filter((w) => w.enabled).map((w) => ({ id: w.id, name: w.name, status: statusOf(w) }))
+export const enabledWatches = (user) => watches.filter((w) => w.enabled && (!user || canSeeWatch(w, user))).map((w) => ({ id: w.id, name: w.name, status: statusOf(w) }))
 
 function fail(code) {
   return Object.assign(new Error(code), { status: 400, code })
@@ -189,8 +194,8 @@ const jaccard = (a, b) => {
  * Groupes de veilles actives presque identiques (même cadre : source, requête, filtres ; mots communs à 50 % au moins),
  * proposés à la fusion. Rien n'est fusionné sans confirmation.
  */
-export function similarWatches(min = 0.5) {
-  const live = watches.filter((w) => w.enabled && statusOf(w) !== 'finished')
+export function similarWatches(min = 0.5, user = null) {
+  const live = watches.filter((w) => w.enabled && statusOf(w) !== 'finished' && (!user || canEditWatch(w, user)))
   const words = new Map(live.map((w) => [w.id, wordsOf(w)]))
   const seen = new Set()
   const groups = []
@@ -322,6 +327,7 @@ export function createWatch(body, by = '') {
     to,
     recipients,
     alert: cleanAlert(body.alert),
+    access: cleanAccess(body.access),
     enabled: true,
     createdAt: new Date().toISOString(),
     createdBy: String(by || '').slice(0, 120),
@@ -334,6 +340,53 @@ export function createWatch(body, by = '') {
   watches.push(watch)
   save()
   runWatches().catch(() => {})
+  return publicWatch(watch)
+}
+
+/*
+ * Droits par veille : « team » (par défaut, comme avant : visible par tous, modifiable par tout profil qui gère les
+ * veilles), « restricted » (visible par tous, modifiable seulement par son créateur, ses éditeurs et les
+ * administrateurs), « private » (visible et modifiable seulement par eux). Vérifiés côté serveur à chaque appel.
+ */
+export const ACCESS = ['team', 'restricted', 'private']
+const accessOf = (w) => ({ visibility: ACCESS.includes(w.access?.visibility) ? w.access.visibility : 'team', editors: w.access?.editors || [] })
+const isAdmin = (user) => user?.role === 'admin'
+const isOwner = (w, user) => Boolean(user?.email) && (w.createdBy === user.email || accessOf(w).editors.includes(String(user.email).toLowerCase()))
+export const canSeeWatch = (w, user) => accessOf(w).visibility !== 'private' || isAdmin(user) || isOwner(w, user)
+export const canEditWatch = (w, user) => accessOf(w).visibility === 'team' || isAdmin(user) || isOwner(w, user)
+// Qui peut changer les droits eux-mêmes : le créateur et les administrateurs
+const canSetAccess = (w, user) => isAdmin(user) || (Boolean(user?.email) && w.createdBy === user.email)
+
+export function cleanAccess(a = {}) {
+  const editors = [
+    ...new Set(
+      (Array.isArray(a.editors) ? a.editors : String(a.editors || '').split(/[\s,;،]+/))
+        .map((e) => String(e).trim().toLowerCase())
+        .filter((e) => EMAIL_RE.test(e)),
+    ),
+  ].slice(0, 20)
+  return { visibility: ACCESS.includes(a.visibility) ? a.visibility : 'team', editors }
+}
+
+/** Veilles visibles par l'utilisateur, avec ce qu'il peut y faire */
+export function watchesFor(user) {
+  return watches.filter((w) => canSeeWatch(w, user)).map((w) => ({ ...publicWatch(w), access: accessOf(w), mayEdit: canEditWatch(w, user), mayShare: canSetAccess(w, user) }))
+}
+export const watchIdsFor = (user) => new Set(watches.filter((w) => canSeeWatch(w, user)).map((w) => w.id))
+
+/** Contrôle d'accès avant une modification : 404 si invisible, 403 si non modifiable */
+export function guardWatch(id, user, { share = false } = {}) {
+  const w = watches.find((x) => x.id === id)
+  if (!w || !canSeeWatch(w, user)) throw Object.assign(new Error('NO_WATCH'), { code: 'NO_WATCH', status: 404 })
+  if (!(share ? canSetAccess(w, user) : canEditWatch(w, user))) throw Object.assign(new Error('WATCH_FORBIDDEN'), { code: 'WATCH_FORBIDDEN', status: 403 })
+  return w
+}
+
+export function setWatchAccess(id, access) {
+  const watch = watches.find((w) => w.id === id)
+  if (!watch) return null
+  watch.access = cleanAccess(access)
+  save()
   return publicWatch(watch)
 }
 

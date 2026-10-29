@@ -77,3 +77,30 @@ test('veilles presque identiques : proposées à la fusion, originaux désactiv�
   assert.equal(similarWatches().length, 0)
   assert.throws(() => mergeWatches([c.id]), /BAD_MERGE/)
 })
+
+test('droits par veille : équipe, restreinte, privée', async () => {
+  const { guardWatch, setWatchAccess, watchesFor, enabledWatches } = await import('../server/watches.js')
+  startWatches(fs.mkdtempSync(path.join(os.tmpdir(), 'mms-access-')))
+  const owner = { email: 'a@npdc.gov.ly', role: 'analyst' }
+  const other = { email: 'b@npdc.gov.ly', role: 'analyst' }
+  const admin = { email: 'boss@npdc.gov.ly', role: 'admin' }
+  const team = createWatch({ name: 'فريق', rules: ['النفط'] }, owner.email)
+  const priv = createWatch({ name: 'خاص', rules: ['الغاز'], access: { visibility: 'private' } }, owner.email)
+  const restr = createWatch({ name: 'مقيد', rules: ['الدينار'], access: { visibility: 'restricted', editors: 'B@npdc.gov.ly' } }, owner.email)
+  // Visibilité : le privé est caché aux autres, montré au créateur et aux administrateurs
+  assert.deepEqual(watchesFor(other).map((w) => w.name).sort(), ['فريق', 'مقيد'])
+  assert.equal(watchesFor(owner).length, 3)
+  assert.equal(watchesFor(admin).length, 3)
+  assert.equal(enabledWatches(other).some((w) => w.id === priv.id), false)
+  // Modification : équipe ouverte, restreinte réservée (b est éditeur), privée invisible (404)
+  assert.ok(guardWatch(team.id, other))
+  assert.ok(guardWatch(restr.id, other))
+  assert.throws(() => guardWatch(priv.id, other), /NO_WATCH/)
+  setWatchAccess(restr.id, { visibility: 'restricted', editors: [] })
+  assert.throws(() => guardWatch(restr.id, other), /WATCH_FORBIDDEN/)
+  assert.ok(guardWatch(restr.id, admin))
+  // Changer les droits : créateur et administrateurs seulement
+  assert.throws(() => guardWatch(team.id, other, { share: true }), /WATCH_FORBIDDEN/)
+  assert.ok(guardWatch(team.id, owner, { share: true }))
+  assert.equal(watchesFor(other).find((w) => w.id === team.id).mayShare, false)
+})

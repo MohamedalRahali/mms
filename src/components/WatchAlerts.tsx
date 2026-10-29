@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useI18n } from '../lib/i18n'
 import { canDo, useAuth } from '../lib/auth'
 import { type AlertFlow, type SmartAlert } from '../lib/radar'
-import { type WatchAlert } from '../lib/watches'
+import { type Watch, type WatchAlert, type WatchVisibility } from '../lib/watches'
 import { AlertFlowBar } from './AlertFlow'
 
 /**
@@ -109,9 +109,9 @@ export function AlertFields({ value, onChange }: { value: WatchAlert; onChange: 
 }
 
 /** Résumé et modification des réglages d'alerte d'une veille existante */
-export function WatchAlertRow({ id, alert, pending, onSaved }: { id: string; alert?: WatchAlert; pending?: number; onSaved: () => void }) {
+export function WatchAlertRow({ id, alert, pending, onSaved, editable = true }: { id: string; alert?: WatchAlert; pending?: number; onSaved: () => void; editable?: boolean }) {
   const t = useText()
-  const mayEdit = canDo(useAuth()?.user, 'manage_watches')
+  const mayEdit = canDo(useAuth()?.user, 'manage_watches') && editable
   const current = alert ?? DEFAULT_ALERT
   const [draft, setDraft] = useState(current)
   const [msg, setMsg] = useState('')
@@ -136,6 +136,83 @@ export function WatchAlertRow({ id, alert, pending, onSaved }: { id: string; ale
         <details onToggle={() => (setDraft(current), setMsg(''))}>
           <summary>{t.settings}</summary>
           <AlertFields value={draft} onChange={setDraft} />
+          <button type="button" className="news-btn" onClick={save}>
+            {t.save}
+          </button>
+          {msg && <span className="news-status is-ok"> {msg}</span>}
+        </details>
+      )}
+    </div>
+  )
+}
+
+const ACCESS_TEXT = {
+  ar: {
+    title: 'صلاحيات الرصد',
+    visibility: { team: 'الفريق: يراه الجميع ويعدّله كل من يدير الرصد', restricted: 'مقيّد: يراه الجميع ويعدّله المنشئ والمحرّرون والمسؤولون فقط', private: 'خاص: يراه ويعدّله المنشئ والمحرّرون والمسؤولون فقط' } as Record<WatchVisibility, string>,
+    badge: { team: '', restricted: '🔏 مقيّد', private: '🔒 خاص' } as Record<WatchVisibility, string>,
+    editors: 'المحرّرون (عناوين بريد الحسابات، مفصولة بفواصل)',
+    save: 'حفظ الصلاحيات',
+    saved: 'تم الحفظ.',
+    readOnly: 'للاطلاع فقط: لا يمكنك تعديل هذا الرصد.',
+  },
+  en: {
+    title: 'Watch permissions',
+    visibility: { team: 'Team: everyone sees it, every watch manager edits it', restricted: 'Restricted: everyone sees it, only the creator, editors and admins edit it', private: 'Private: only the creator, editors and admins see and edit it' } as Record<WatchVisibility, string>,
+    badge: { team: '', restricted: '🔏 Restricted', private: '🔒 Private' } as Record<WatchVisibility, string>,
+    editors: 'Editors (account email addresses, comma-separated)',
+    save: 'Save permissions',
+    saved: 'Saved.',
+    readOnly: 'Read only: you cannot edit this watch.',
+  },
+}
+
+export const accessText = (lang: string) => ACCESS_TEXT[lang === 'ar' ? 'ar' : 'en']
+
+/** Choix de la visibilité (création d'une veille et réglage des droits) */
+export function VisibilitySelect({ value, onChange }: { value: WatchVisibility; onChange: (v: WatchVisibility) => void }) {
+  const t = accessText(useI18n().lang)
+  return (
+    <label className="mms-field">
+      <span>{t.title}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value as WatchVisibility)}>
+        {(['team', 'restricted', 'private'] as const).map((v) => (
+          <option key={v} value={v}>
+            {t.visibility[v]}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+/** Droits d'une veille : badge, et réglage par son créateur ou un administrateur */
+export function WatchAccessRow({ watch, onSaved }: { watch: Watch; onSaved: () => void }) {
+  const t = accessText(useI18n().lang)
+  const vis = watch.access?.visibility ?? 'team'
+  const [draft, setDraft] = useState(vis)
+  const [editors, setEditors] = useState((watch.access?.editors ?? []).join(', '))
+  const [msg, setMsg] = useState('')
+  async function save() {
+    const res = await fetch(`/api/watches/${watch.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ access: { visibility: draft, editors } }) })
+    setMsg(res.ok ? t.saved : '')
+    if (res.ok) onSaved()
+  }
+  return (
+    <div className="mms-watch__access">
+      {(t.badge[vis] || watch.mayEdit === false) && (
+        <p className="mms-watch__meta">
+          {t.badge[vis] && <span className="mms-sev">{t.badge[vis]}</span>} {watch.mayEdit === false && t.readOnly}
+        </p>
+      )}
+      {watch.mayShare && (
+        <details onToggle={() => (setDraft(vis), setEditors((watch.access?.editors ?? []).join(', ')), setMsg(''))}>
+          <summary>{t.title}</summary>
+          <VisibilitySelect value={draft} onChange={setDraft} />
+          <label className="mms-field">
+            <span>{t.editors}</span>
+            <input value={editors} onChange={(e) => setEditors(e.target.value)} dir="ltr" placeholder="name@npdc.gov.ly" />
+          </label>
           <button type="button" className="news-btn" onClick={save}>
             {t.save}
           </button>

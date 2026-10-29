@@ -32,7 +32,12 @@ export type Watch = {
   // Fusion de veilles presque identiques : la veille d'origine (désactivée) pointe vers la nouvelle
   mergedInto?: string
   mergedFrom?: { id: string; name: string }[]
+  // Droits par veille (server/watches.js) : visibilité, éditeurs, et ce que l'utilisateur courant peut faire
+  access?: { visibility: WatchVisibility; editors: string[] }
+  mayEdit?: boolean
+  mayShare?: boolean
 }
+export type WatchVisibility = 'team' | 'restricted' | 'private'
 
 /** Zones prêtes à l'emploi : MMS suit la Tunisie (Mosaïque FM) et la Libye */
 export const ZONES: Record<'libye' | 'tunisie', string[]> = {

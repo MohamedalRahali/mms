@@ -115,8 +115,15 @@ export function watchAlerts(now = Date.now()) {
 /** Une alerte critique peut-elle partir automatiquement ? (validation exigée ou non) */
 export const canSendAlert = (a) => !review.critical || flows[a.id]?.status === 'validated'
 
-export function mountAlertFlow(app) {
-  app.get('/api/watches/alerts', (_req, res) => res.json(watchAlerts()))
+export function mountAlertFlow(app, { visibleWatches = null } = {}) {
+  // Suivi des alertes : seulement celles des veilles que l'utilisateur peut voir (droits par veille)
+  app.get('/api/watches/alerts', (req, res) => {
+    const all = watchAlerts()
+    if (!visibleWatches) return res.json(all)
+    const ids = visibleWatches(req.user)
+    const keep = (r) => ids.has(r.meta.watchId)
+    res.json({ open: all.open.filter(keep), closed: all.closed.filter(keep) })
+  })
   app.post('/api/radar/alerts/:id', express.json({ limit: '4kb' }), (req, res) => {
     try {
       res.json({ flow: updateFlow(req.params.id, req.body || {}, req.user.name || req.user.email) })

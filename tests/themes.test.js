@@ -19,3 +19,16 @@ test('sous-thèmes de « دولي »', () => {
   assert.equal(c('البعثة الأممية تدعو إلى الحوار'), 'orgs')
   assert.equal(intlRegion({ category: 'politique', title: 'زيارة إلى تونس' }), '')
 })
+
+test('liste des actualités : période personnalisée et tonalités multiples', async () => {
+  const { createWatch, itemsForWatch, startWatches } = await import('../server/watches.js')
+  const fs = await import('node:fs')
+  const os = await import('node:os')
+  const path = await import('node:path')
+  startWatches(fs.mkdtempSync(path.join(os.tmpdir(), 'mms-tone-')))
+  const w = createWatch({ name: 'نبرة', filters: { tone: 'negative,neutral' } })
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tripoli' }).format(new Date())
+  const items = ['positive', 'neutral', 'negative'].map((tone, i) => ({ id: String(i), title: 't' + i, summary: '', origin: 'o', date: new Date().toISOString(), tone, flux: 'libye' }))
+  assert.deepEqual(itemsForWatch(w.id, items).map((it) => it.tone).sort(), ['negative', 'neutral'])
+  assert.match(day, /^\d{4}-\d{2}-\d{2}$/)
+})

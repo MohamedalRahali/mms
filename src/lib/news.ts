@@ -143,6 +143,9 @@ export type Filters = {
   category: string
   // Sous-thème de « دولي » (zone : maghreb, europe…)
   intl: string
+  // Période personnalisée (AAAA-MM-JJ, heure de Tripoli) à la place de « days »
+  from: string
+  to: string
   channel: string
   media: string
   sub: string
@@ -165,6 +168,8 @@ export const EMPTY_FILTERS: Filters = {
   days: '',
   category: '',
   intl: '',
+  from: '',
+  to: '',
   channel: '',
   media: '',
   sub: '',

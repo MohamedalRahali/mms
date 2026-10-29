@@ -4357,3 +4357,43 @@ img.mms-user__avatar--img {
   display: flex;
   gap: 0.5rem;
 }
+.news-active {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.2rem 0 0.8rem;
+}
+.news-range {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.news-range input[type='date'] {
+  flex: 0 0 auto;
+  width: 9.6rem;
+  min-width: 0;
+}
+.news-range select {
+  flex: 0 0 auto;
+  width: auto;
+}
+.news-tones {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.6rem;
+  margin: 0;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.news-tones.is-on {
+  border-color: var(--green);
+}
+.news-tones__opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
