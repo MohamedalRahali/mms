@@ -272,14 +272,29 @@ export function makeEngine(root, ortModule = null) {
     return v.map((x) => x / n)
   }
 
-  /** Pose vue par la personne : son nez vers sa gauche = côté droit de l'image brute (non inversée) */
-  function pose(f) {
+  /**
+   * Pose vue par la personne : position du nez entre les deux yeux dans l'image brute (non inversée), 0 = sur l'œil
+   * côté gauche de l'image, 1 = sur l'autre. Nez vers la droite de l'image = tête tournée vers SA gauche (vérifié sur
+   * l'image d'exemple F1 de minivision, tête tournée vers sa droite : rapport 0,07).
+   */
+  function poseRatio(f) {
     const [eyeA, eyeB, nose] = f.pts
     const span = eyeB[0] - eyeA[0]
-    if (Math.abs(span) < 1) return 'other'
-    const r = (nose[0] - eyeA[0]) / span
+    return Math.abs(span) < 1 ? null : (nose[0] - eyeA[0]) / span
+  }
+  function pose(f) {
+    const r = poseRatio(f)
+    if (r === null) return 'other'
     if (r >= TUNING.poseCenter[0] && r <= TUNING.poseCenter[1]) return 'center'
     return r > TUNING.poseCenter[1] ? 'left' : 'right'
+  }
+
+  /** Contrôle rapide pendant le défi (détection et pose seulement), pour guider la personne en direct */
+  async function probe(img) {
+    if (!state.ready) throw new Error('ENGINE')
+    const faces = await detect(img)
+    if (faces.length !== 1) return { faces: faces.length }
+    return { faces: 1, pose: pose(faces[0]), ratio: poseRatio(faces[0]) }
   }
 
   async function analyse(img) {
@@ -292,7 +307,17 @@ export function makeEngine(root, ortModule = null) {
     const good = f.score >= TUNING.goodScore && f.w >= TUNING.minFace && q.lum >= TUNING.lumMin && q.lum <= TUNING.lumMax && q.sharp >= TUNING.sharpMin
     const live = await liveness(img, f)
     const p = pose(f)
-    return { faces: 1, quality: good, live: live >= TUNING.liveMin, liveScore: live, pose: p, vector: p === 'center' ? await embed(img, f) : null, box: f }
+    return {
+      faces: 1,
+      quality: good,
+      live: live >= TUNING.liveMin,
+      liveScore: live,
+      pose: p,
+      ratio: poseRatio(f),
+      metrics: { score: f.score, width: f.w, lum: q.lum, sharp: q.sharp },
+      vector: p === 'center' ? await embed(img, f) : null,
+      box: f,
+    }
   }
 
   const ready = load()
@@ -301,6 +326,7 @@ export function makeEngine(root, ortModule = null) {
     ready: () => state.ready,
     info: () => ({ ...state }),
     analyse,
+    probe,
     // Pour les essais : détection seule et score de vivacité sur une image donnée
     _detect: async (img) => (await ready, detect(img)),
     _liveness: async (img, f) => (await ready, liveness(img, f)),

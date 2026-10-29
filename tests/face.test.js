@@ -30,8 +30,9 @@ const fakeEngine = (ready = true) => ({
     const [p, pose, fl] = f.rgb
     if (!p) return { faces: 0 }
     if (fl & 4) return { faces: 2 }
-    return { faces: 1, quality: !(fl & 2), live: !(fl & 1), pose: POSES[pose], vector: vec(p).map((x, k) => x + ((k * 13) % 5) * 0.001) }
+    return { faces: 1, quality: !(fl & 2), live: !(fl & 1), liveScore: fl & 1 ? 0.1 : 0.99, pose: POSES[pose], ratio: [0.5, 0.8, 0.2][pose], vector: vec(p).map((x, k) => x + ((k * 13) % 5) * 0.001) }
   },
+  probe: async (f) => (f.rgb[0] ? { faces: 1, pose: POSES[f.rgb[1]] } : { faces: 0 }),
 })
 
 const sessions = new Map()
@@ -261,4 +262,48 @@ test('plusieurs images de face doivent toutes ressembler au modèle', async () =
     return f
   })
   assert.equal((await face.verify({ email: 'alice@x.test', token: 'm2', body: { nonce: ch.nonce, frames } })).error, 'MISMATCH')
+})
+
+test('pilote : diagnostic chiffré seulement pour les comptes listés en mode تجريبي, sans vecteur, effacé à la fin', async () => {
+  setup()
+  face.setFacePolicy({ mode: 'trial', trial: ['alice@x.test'] })
+  login('alice@x.test', 'd1')
+  await doEnroll('alice@x.test', 'd1', 'alice')
+  login('alice@x.test', 'd2')
+  // Photo présentée : cause SPOOF dans le journal, message générique LIVENESS pour la personne
+  assert.equal((await doVerify('alice@x.test', 'd2', 'alice', { photo: true })).error, 'LIVENESS')
+  // Mauvaise pose : cause POSE, même message générique
+  assert.equal((await doVerify('alice@x.test', 'd2', 'alice', {}, ['center', 'center', 'center', 'center'])).error, 'LIVENESS')
+  assert.equal((await doVerify('alice@x.test', 'd2', 'alice')).status, 200)
+  assert.ok(logs.some(([t, , d]) => t === 'face_verify_fail' && d === 'SPOOF'))
+  assert.ok(logs.some(([t, , d]) => t === 'face_verify_fail' && d === 'POSE'))
+  const entries = face.faceDiagnostics()
+  assert.deepEqual(entries.map((e) => e.result), ['OK', 'POSE', 'SPOOF', 'OK'])
+  const ok = entries[0]
+  assert.equal(ok.frames.length, 4)
+  assert.ok(ok.frames.every((f) => typeof f.ratio === 'number' && typeof f.live === 'number' && f.asked && f.seen))
+  assert.ok(ok.similarity.length >= 2 && ok.similarity.every((v) => v >= 0.363))
+  // Valeurs arrondies, aucune image ni vecteur
+  const raw = fs.readFileSync(path.join(dir, 'face', 'pilot-diagnostics.json'), 'utf8')
+  assert.ok(!/rgb|vector|"data"/.test(raw))
+  assert.ok(JSON.parse(raw).entries.every((e) => e.frames.every((f) => f.ratio === Math.round(f.ratio * 100) / 100)))
+  // Compte hors pilote : rien n'est enregistré
+  face.setFacePolicy({ mode: 'trial', trial: ['alice@x.test', 'bob@x.test'] })
+  login('bob@x.test', 'd3')
+  face.setFacePolicy({ mode: 'on', trial: ['alice@x.test'] })
+  assert.equal(face.faceDiagnostics().length, 0)
+  assert.equal(fs.existsSync(path.join(dir, 'face', 'pilot-diagnostics.json')), false)
+})
+
+test('guidage en direct : pose renvoyée sans consommer le défi ni compter d’échec ; défi d’une autre session refusé', async () => {
+  setup()
+  login('alice@x.test', 'g1')
+  const ch = face.newChallenge('g1', 'alice@x.test', 'enroll')
+  const r = await face.probeFrame({ email: 'alice@x.test', token: 'g1', body: { nonce: ch.nonce, frame: frame('alice', 'left') } })
+  assert.deepEqual(r.body, { faces: 1, pose: 'left' })
+  assert.equal((await face.probeFrame({ email: 'alice@x.test', token: 'autre', body: { nonce: ch.nonce, frame: frame('alice', 'left') } })).error, 'CHALLENGE')
+  // Le défi reste utilisable pour l'inscription
+  const e = await face.enroll({ email: 'alice@x.test', token: 'g1', session: sessions.get('g1'), body: { consent: true, nonce: ch.nonce, frames: capture('alice', ch.steps) } })
+  assert.equal(e.status, 200)
+  assert.equal(face.faceStateOf('alice@x.test').lockedUntil, null)
 })

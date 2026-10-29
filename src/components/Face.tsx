@@ -19,7 +19,7 @@ const T = {
     consent: 'أوافق صراحةً على معالجة صورة وجهي لإنشاء نموذج التحقق واستعماله عند الدخول إلى هذا الحساب.',
     start: 'تشغيل الكاميرا',
     verifyIntro: 'ضع وجهك داخل الإطار واتبع التعليمات. يستغرق التحقق بضع ثوانٍ.',
-    steps: { center: 'انظر إلى الكاميرا مباشرة', left: 'أدر رأسك قليلاً إلى يسارك', right: 'أدر رأسك قليلاً إلى يمينك' } as Record<Step, string>,
+    steps: { center: 'انظر إلى الكاميرا مباشرة', left: 'أدر رأسك إلى يسارك حتى يصبح السهم أخضر', right: 'أدر رأسك إلى يمينك حتى يصبح السهم أخضر' } as Record<Step, string>,
     checking: 'جارٍ التحقق…',
     okEnroll: 'تم تسجيل وجهك وتفعيل التحقق بالوجه لحسابك.',
     okVerify: 'تم التحقق.',
@@ -71,7 +71,7 @@ const T = {
     consent: 'I explicitly consent to the processing of my face image to create the verification template and use it when signing in to this account.',
     start: 'Turn on camera',
     verifyIntro: 'Place your face inside the frame and follow the instructions. It takes a few seconds.',
-    steps: { center: 'Look straight at the camera', left: 'Turn your head slightly to your left', right: 'Turn your head slightly to your right' } as Record<Step, string>,
+    steps: { center: 'Look straight at the camera', left: 'Turn your head to your left until the arrow turns green', right: 'Turn your head to your right until the arrow turns green' } as Record<Step, string>,
     checking: 'Checking…',
     okEnroll: 'Your face is enrolled and face verification is on for your account.',
     okVerify: 'Verified.',
@@ -154,6 +154,9 @@ function Capture({ lang, purpose, password, code, onDone }: { lang: Lang; purpos
   const stream = useRef<MediaStream | null>(null)
   const [phase, setPhase] = useState<'idle' | 'live' | 'sending' | 'done'>('idle')
   const [instruction, setInstruction] = useState('')
+  // Étape en cours et pose atteinte (retour du serveur en direct) : la flèche passe au vert
+  const [step, setStep] = useState<Step | null>(null)
+  const [reached, setReached] = useState(false)
   const [error, setError] = useState('')
   const [until, setUntil] = useState('')
   const stop = () => {
@@ -183,12 +186,32 @@ function Capture({ lang, purpose, password, code, onDone }: { lang: Lang; purpos
       const c = await ch.json().catch(() => ({}))
       if (!ch.ok) throw Object.assign(new Error(c.error || 'FAILED'), { code: c.error || 'FAILED' })
       const frames: { w: number; h: number; rgb: string; step: string }[] = []
-      for (const step of c.steps as Step[]) {
-        setInstruction(t.steps[step])
-        await wait(1800)
-        if (lost || !stream.current) throw Object.assign(new Error('LOST'), { code: 'LOST' })
-        frames.push({ w: W, h: H, rgb: grab(v, canvas.current!), step })
+      for (const s of c.steps as Step[]) {
+        setStep(s)
+        setReached(false)
+        setInstruction(t.steps[s])
+        await wait(700)
+        // Jusqu'à 8 secondes : le serveur dit si la pose demandée est atteinte, l'image retenue est celle-là
+        let shot = ''
+        const until = Date.now() + 8000
+        while (Date.now() < until) {
+          if (lost || !stream.current) throw Object.assign(new Error('LOST'), { code: 'LOST' })
+          const rgb = grab(v, canvas.current!)
+          shot = rgb
+          const p = await fetch('/api/face/probe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nonce: c.nonce, frame: { w: W, h: H, rgb } }) })
+          const pj = await p.json().catch(() => ({}))
+          if (!p.ok && pj.error === 'ENGINE_ERROR') throw Object.assign(new Error('ENGINE_ERROR'), { code: 'ENGINE_ERROR' })
+          if (p.ok && pj.faces === 1 && pj.pose === s) {
+            setReached(true)
+            await wait(350)
+            shot = grab(v, canvas.current!)
+            break
+          }
+          await wait(250)
+        }
+        frames.push({ w: W, h: H, rgb: shot, step: s })
       }
+      setStep(null)
       stop()
       setPhase('sending')
       setInstruction(t.checking)
@@ -218,6 +241,12 @@ function Capture({ lang, purpose, password, code, onDone }: { lang: Lang; purpos
       <div className={`face-capture__frame ${phase === 'live' ? 'is-live' : ''}`}>
         <video ref={video} muted playsInline aria-hidden />
         <span className="face-capture__oval" aria-hidden />
+        {step && (
+          // Aperçu en miroir : « vers votre gauche » = vers la gauche de l'écran
+          <span className={`face-capture__arrow ${reached ? 'is-ok' : ''}`} aria-hidden>
+            {step === 'left' ? '←' : step === 'right' ? '→' : '●'}
+          </span>
+        )}
         {instruction && (
           <p className="face-capture__say" role="status" aria-live="assertive">
             {instruction}

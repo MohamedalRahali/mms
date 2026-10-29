@@ -10,6 +10,9 @@ type Account = { email: string; enrolled: boolean; enrolledAt: string | null; la
 type Exception = { email: string; until: string; reason: string; by: string; at: string }
 type State = { mode: 'off' | 'trial' | 'on'; trial: string[]; approveChange: boolean; keyReady: boolean; engine: { ready: boolean; missing: string[] }; exceptions: Exception[]; accounts: Account[] }
 
+type DiagFrame = { asked: string; seen: string | null; ratio: number | null; live: number | null; quality: boolean | null }
+type Diag = { at: string; email: string; kind: string; result: string; frames: DiagFrame[]; similarity: number[] }
+
 const MODE: Record<State['mode'], string> = { off: 'متوقف', trial: 'تجريبي (الحسابات المحددة فقط)', on: 'مفعّل لكل الحسابات' }
 
 export function FaceCard() {
@@ -17,6 +20,7 @@ export function FaceCard() {
   const [msg, setMsg] = useState('')
   const [trial, setTrial] = useState('')
   const [ex, setEx] = useState({ email: '', hours: 24, reason: '' })
+  const [diag, setDiag] = useState<Diag[]>([])
   const load = useCallback(() => {
     api<State>('/face')
       .then((d) => {
@@ -26,6 +30,13 @@ export function FaceCard() {
       .catch((e) => setMsg(errText(e)))
   }, [])
   useEffect(load, [load])
+  useEffect(() => {
+    if (data?.mode === 'trial')
+      api<{ entries: Diag[] }>('/face/diagnostics')
+        .then((d) => setDiag(d.entries))
+        .catch(() => setDiag([]))
+    else setDiag([])
+  }, [data?.mode, data?.accounts.length])
   async function call(p: Promise<State>, ok: string) {
     try {
       const d = await p
@@ -96,6 +107,39 @@ export function FaceCard() {
             </li>
           ))}
         </ul>
+      )}
+      {diag.length > 0 && (
+        <>
+          <h3>تشخيص التجربة (أرقام مقرّبة، دون صور ولا نماذج، تُحذف بعد 14 يوماً أو عند انتهاء التجربة)</h3>
+          <div className="sa-table-wrap">
+            <table className="sa-table">
+              <thead>
+                <tr>
+                  <th>الوقت</th>
+                  <th>النوع</th>
+                  <th>النتيجة</th>
+                  <th>الوضعيات (مطلوبة ← مرصودة، النسبة، الحيوية)</th>
+                  <th>التشابه</th>
+                </tr>
+              </thead>
+              <tbody>
+                {diag.slice(0, 20).map((d, k) => (
+                  <tr key={k}>
+                    <td>{ago(d.at)}</td>
+                    <td>{d.kind === 'enroll' ? 'تسجيل' : 'تحقق'}</td>
+                    <td>
+                      <span className={`sa-tag ${d.result === 'OK' ? '' : 'is-bad'}`}>{d.result}</span>
+                    </td>
+                    <td dir="ltr">
+                      <small>{d.frames.map((f) => `${f.asked}→${f.seen ?? '?'} ${f.ratio ?? '–'} / ${f.live ?? '–'}${f.quality === false ? ' Q✗' : ''}`).join(' · ')}</small>
+                    </td>
+                    <td dir="ltr">{d.similarity.length ? d.similarity.join(' · ') : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
       {data.accounts.length > 0 && (
         <div className="sa-table-wrap">

@@ -43,6 +43,8 @@ const MODES = ['off', 'trial', 'on']
 let dir = ''
 let confFile = ''
 let templatesFile = ''
+let diagFile = ''
+let diag = [] // diagnostic du pilote : chiffres arrondis seulement (aucune image, aucun vecteur), 14 jours au plus
 let key = null
 // approveChange : remplacer un visage déjà inscrit exige l'accord du Super Admin (« اعتماد المشرف لتغيير الوجه »)
 // Seuil de ressemblance : 0,363, valeur publiée par OpenCV pour SFace (cosinus). Chaque image de face doit le
@@ -61,6 +63,12 @@ export function initFace(dataDir, h = {}) {
   dir = path.join(dataDir, 'face')
   confFile = path.join(dataDir, 'superadmin', 'face.json')
   templatesFile = path.join(dir, 'templates.json')
+  diagFile = path.join(dir, 'pilot-diagnostics.json')
+  try {
+    diag = JSON.parse(fs.readFileSync(diagFile, 'utf8')).entries || []
+  } catch {
+    diag = []
+  }
   hooks = { ...hooks, ...h }
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
   key = loadKey()
@@ -101,6 +109,29 @@ function writeAtomic(file, text, mode = 0o600) {
 }
 const saveTemplates = () => writeAtomic(templatesFile, JSON.stringify({ templates, status }))
 const saveConf = () => writeAtomic(confFile, JSON.stringify(conf, null, 1), 0o644)
+
+/* ---------------------------------------------------------------- diagnostic du pilote */
+
+const DIAG_DAYS = 14
+const r2 = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v * 100) / 100 : null)
+const inPilot = (email) => conf.mode === 'trial' && conf.trial.includes(low(email))
+function purgeDiag(now = Date.now()) {
+  const keep = diag.filter((d) => now - Date.parse(d.at) < DIAG_DAYS * 86_400_000 && inPilot(d.email))
+  if (keep.length !== diag.length || (!keep.length && fs.existsSync(diagFile))) {
+    diag = keep
+    if (diag.length) writeAtomic(diagFile, JSON.stringify({ entries: diag }))
+    else fs.rmSync(diagFile, { force: true })
+  }
+}
+/** Enregistré seulement pour un compte de la liste du pilote et seulement en mode « تجريبي » */
+function recordDiag(email, kind, result, frames, sims, now = Date.now()) {
+  if (!inPilot(email)) return
+  diag.push({ at: new Date(now).toISOString(), email: low(email), kind, result, frames, similarity: sims?.map(r2) || [] })
+  diag = diag.slice(-500)
+  purgeDiag(now)
+  writeAtomic(diagFile, JSON.stringify({ entries: diag }))
+}
+export const faceDiagnostics = () => (purgeDiag(), [...diag].reverse())
 
 /* ---------------------------------------------------------------- chiffrement du modèle de référence */
 
@@ -208,29 +239,38 @@ export function parseFrames(body) {
  * Analyse commune à l'inscription et à la vérification : un seul visage par image, qualité, vivacité (défi de pose
  * dans l'ordre demandé, et score anti-fraude passif), puis vecteur moyen du visage. Renvoie { ok, code, vector }.
  */
+// Causes détaillées (journal et diagnostic) → message montré à la personne : photo ou pose = un seul message générique
+const USER_CODE = { SPOOF: 'LIVENESS', POSE: 'LIVENESS' }
 export async function analyse(frames, steps) {
-  if (frames.length < steps.length) return { ok: false, code: 'CAPTURE' }
+  if (frames.length < steps.length) return { ok: false, code: 'CAPTURE', cause: 'CAPTURE', frames: [] }
   const vectors = []
+  const seen = []
+  let cause = ''
   for (let i = 0; i < frames.length; i++) {
     let r
     try {
       r = await engine.analyse(frames[i])
     } catch (err) {
       // Panne du moteur (modèle absent, chargement, délai) : jamais un échec de la personne
-      return { ok: false, code: 'ENGINE_ERROR', engineError: String(err?.message || err).slice(0, 120) }
+      return { ok: false, code: 'ENGINE_ERROR', engineError: String(err?.message || err).slice(0, 120), frames: seen }
     }
-    if (r.faces === 0) return { ok: false, code: 'NO_FACE' }
-    if (r.faces > 1) return { ok: false, code: 'MULTI_FACE' }
-    if (!r.quality) return { ok: false, code: 'QUALITY' }
-    if (!r.live) return { ok: false, code: 'LIVENESS' }
-    // Pose attendue pour cette image (le défi est imposé par le serveur, dans un ordre aléatoire)
     const want = steps[i] ?? 'center'
-    if (r.pose !== want) return { ok: false, code: 'LIVENESS' }
-    if (r.pose === 'center' && r.vector) vectors.push(r.vector)
+    seen.push({ asked: want, seen: r.pose || null, ratio: r2(r.ratio), live: r2(r.liveScore), faces: r.faces, quality: r.quality ?? null, width: r2(r.metrics?.width), lum: r2(r.metrics?.lum), sharp: r2(r.metrics?.sharp) })
+    // Toutes les images sont analysées (diagnostic complet) ; la première cause d'échec est retenue
+    if (!cause) {
+      if (r.faces === 0) cause = 'NO_FACE'
+      else if (r.faces > 1) cause = 'MULTI_FACE'
+      else if (!r.quality) cause = 'QUALITY'
+      else if (!r.live) cause = 'SPOOF'
+      // Pose attendue pour cette image (le défi est imposé par le serveur, dans un ordre aléatoire)
+      else if (r.pose !== want) cause = 'POSE'
+    }
+    if (!cause && r.pose === 'center' && r.vector) vectors.push(r.vector)
   }
-  if (vectors.length < MIN_CENTER) return { ok: false, code: 'QUALITY' }
+  if (!cause && vectors.length < MIN_CENTER) cause = 'QUALITY'
+  if (cause) return { ok: false, code: USER_CODE[cause] || cause, cause, frames: seen }
   const mean = norm(vectors[0].map((_, k) => vectors.reduce((s, v) => s + v[k], 0) / vectors.length))
-  return { ok: true, vector: mean, vectors }
+  return { ok: true, vector: mean, vectors, frames: seen }
 }
 
 // Panne du moteur : journal, alerte au Super Admin (une fois par heure au plus), message clair, aucune pénalité
@@ -294,9 +334,10 @@ export async function enroll({ email, session, token, body, now = Date.now() }) 
   if (!ch) return { status: 400, error: 'CHALLENGE' }
   const r = await analyse(parseFrames(body), ch.steps)
   if (r.engineError) return engineFailed(email, r.engineError, now)
+  recordDiag(email, 'enroll', r.ok ? 'OK' : r.cause, r.frames, null, now)
   if (!r.ok) {
     failed(email, now)
-    hooks.log('face_enroll_fail', email, r.code)
+    hooks.log('face_enroll_fail', email, r.cause)
     return { status: 422, error: r.code }
   }
   const replaced = replacing
@@ -323,8 +364,9 @@ export async function verify({ email, token, body, now = Date.now() }) {
   const r = await analyse(parseFrames(body), ch.steps)
   if (r.engineError) return engineFailed(email, r.engineError, now)
   if (!r.ok) {
+    recordDiag(email, 'verify', r.cause, r.frames, null, now)
     const st = failed(email, now)
-    hooks.log('face_verify_fail', email, r.code)
+    hooks.log('face_verify_fail', email, r.cause)
     return { status: 422, error: st.lockUntil > now ? 'LOCKED' : r.code, ...(st.lockUntil > now ? { until: new Date(st.lockUntil).toISOString() } : {}) }
   }
   // Comparaison avec le modèle du compte connecté uniquement ; chaque image de face doit ressembler
@@ -334,7 +376,9 @@ export async function verify({ email, token, body, now = Date.now() }) {
   } catch {
     return engineFailed(email, 'TEMPLATE_UNREADABLE', now)
   }
-  const same = r.vectors.every((v) => cosine(v, ref) >= THRESHOLD)
+  const sims = r.vectors.map((v) => cosine(v, ref))
+  const same = sims.every((s) => s >= THRESHOLD)
+  recordDiag(email, 'verify', same ? 'OK' : 'MISMATCH', r.frames, sims, now)
   if (!same) {
     const st = failed(email, now)
     hooks.log('face_mismatch', email, '')
@@ -390,6 +434,8 @@ export function setFacePolicy(body) {
   const approveChange = typeof body?.approveChange === 'boolean' ? body.approveChange : conf.approveChange
   conf = { ...conf, mode, trial, approveChange }
   saveConf()
+  // Fin du pilote (mode changé ou compte retiré de la liste) : son diagnostic est effacé
+  purgeDiag()
   return faceAdmin()
 }
 
@@ -424,6 +470,28 @@ export function resetFace(email) {
   return had
 }
 
+/* ---------------------------------------------------------------- guidage en direct pendant le défi */
+
+const probes = new Map() // nonce → nombre de sondages (120 au plus par défi)
+export async function probeFrame({ email, token, body, now = Date.now() }) {
+  if (!engine.ready() || !key) return { status: 503, error: 'ENGINE' }
+  const nonce = String(body?.nonce || '')
+  const c = challenges.get(nonce)
+  // Le défi doit être celui de cette session et de ce compte ; il n'est pas consommé
+  if (!c || now - c.at > CHALLENGE_MS || c.token !== token || c.email !== low(email)) return { status: 400, error: 'CHALLENGE' }
+  const n = (probes.get(nonce) || 0) + 1
+  probes.set(nonce, n)
+  if (n > 120) return { status: 429, error: 'TOO_MANY' }
+  const [frame] = parseFrames({ frames: [body?.frame] })
+  if (!frame) return { status: 400, error: 'CAPTURE' }
+  try {
+    const r = await engine.probe(frame)
+    return { status: 200, body: { faces: r.faces, pose: r.pose || null } }
+  } catch (err) {
+    return engineFailed(email, String(err?.message || err).slice(0, 120), now)
+  }
+}
+
 /* ---------------------------------------------------------------- routes de l'utilisateur connecté */
 
 export function mountFace(app) {
@@ -442,5 +510,9 @@ export function mountFace(app) {
   const send = (res, r) => res.status(r.status).json(r.status === 200 ? { ok: true } : { error: r.error, ...(r.until ? { until: r.until } : {}) })
   app.post('/api/face/enroll', big, async (req, res) => send(res, await enroll({ ...ctx(req), body: req.body })))
   app.post('/api/face/verify', big, async (req, res) => send(res, await verify({ ...ctx(req), body: req.body })))
+  app.post('/api/face/probe', express.json({ limit: '400kb' }), async (req, res) => {
+    const r = await probeFrame({ ...ctx(req), body: req.body })
+    res.status(r.status).json(r.body || { error: r.error })
+  })
   app.post('/api/face/withdraw', express.json({ limit: '2kb' }), (req, res) => send(res, withdraw({ email: req.user.email, body: req.body })))
 }

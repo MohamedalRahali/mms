@@ -10,7 +10,7 @@ import { aiUsage } from './ai.js'
 import { mountPermissionsAdmin, permsOf, profileExists } from './permissions.js'
 import { initBrand, mountClientAdmin } from './clientAdmin.js'
 import { sourceHealth } from './sourceHealth.js'
-import { addException, approveChange, faceAdmin, resetFace, setFacePolicy } from './face.js'
+import { addException, approveChange, faceAdmin, faceDiagnostics, resetFace, setFacePolicy } from './face.js'
 import { exportHealth, runCheck } from './exportHealth.js'
 import { countryOf as sourceCountry, initSourceMeta, reachIsSet, reachOf, reliabilityIsSet, reliabilityOf } from './sourceMeta.js'
 import {
@@ -357,6 +357,8 @@ export function mountSuperAdmin(app, root) {
   sa.get('/source-health', (_req, res) => res.json(sourceHealth(path.join(root, 'data'))))
   /* ---- التحقق بالوجه : mise en service, comptes, exceptions limitées ; aucune donnée biométrique n'est exposée */
   sa.get('/face', (_req, res) => res.json(faceAdmin()))
+  // Diagnostic du pilote (chiffres arrondis, sans image ni vecteur ; effacé après 14 jours ou à la fin du pilote)
+  sa.get('/face/diagnostics', (_req, res) => res.json({ entries: faceDiagnostics() }))
   sa.put('/face/policy', (req, res) => {
     const r = setFacePolicy(req.body)
     audit(req, 'face_policy', r.mode, r.trial.join(', '))

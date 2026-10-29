@@ -1121,3 +1121,18 @@
   gap: 8px;
   margin: 8px 0;
 }
+
+.face-capture__arrow {
+  position: absolute;
+  top: 8px;
+  inset-inline: 0;
+  text-align: center;
+  font-size: 2.4rem;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+  direction: ltr;
+}
+.face-capture__arrow.is-ok {
+  color: var(--green, #1f9d57);
+}
