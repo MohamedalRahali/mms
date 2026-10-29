@@ -152,6 +152,7 @@ const MODULE_RULES = [
   [/^\/sources(\/|$)/, ['news']],
   [/^\/pinboards(\/|$)/, ['news', 'media', 'dashboard']],
   [/^\/recordings(\/|$)/, ['media']],
+  [/^\/rasd(\/|$)/, ['media']],
   [/^\/report$/, ['report']],
 ]
 
@@ -173,6 +174,8 @@ function actionFor(method, p) {
   // Enregistrements à la demande : analystes et administrateurs (mêmes profils que les tableaux d'épingles)
   if (write && p === '/recordings/budget') return 'diffusion'
   if (write && p.startsWith('/recordings')) return 'tags'
+  // الرصد المبرمج : estimation ouverte aux mêmes profils que la création (analystes et administrateurs)
+  if (write && p.startsWith('/rasd')) return 'tags'
   if (write && /^\/reports\/[^/]+\/email$/.test(p)) return 'send_email'
   if ((write && p.startsWith('/briefing/schedule')) || p === '/briefing/send') return 'schedule'
   if (write && p.startsWith('/diffusion')) return 'diffusion'

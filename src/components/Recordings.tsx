@@ -4,6 +4,7 @@ import { useI18n } from '../lib/i18n'
 import { canDo, useAuth } from '../lib/auth'
 import { Highlight } from './BroadcastStudio'
 import { MediaIcon } from './MediaParts'
+import { RasdPanel, SmartSearch } from './Rasd'
 
 /**
  * Enregistrements à la demande (mur du direct) : choisir une chaîne et une période précise ; la veille enregistre le
@@ -30,6 +31,8 @@ type Rec = {
   partiel?: string
   cout?: number
   texte?: boolean
+  rasd?: string[]
+  hits?: number | null
 }
 type Channel = { id: string; nom: string; canal: 'tv' | 'radio'; slots: string[]; recordable: boolean }
 type Data = {
@@ -55,6 +58,9 @@ type Transcript = { nom: string; debut: string; fin: string; passages: { at: str
 const TEXT = {
   ar: {
     title: 'تسجيل حسب الطلب',
+    tabs: { record: 'برمجة التسجيل', rasd: 'الرصد المبرمج', search: 'البحث الذكي' } as Record<string, string>,
+    rasdTag: 'رصد مبرمج',
+    hitsN: (n: number) => `${n} مقطع عن الموضوع`,
     sub: 'اختر قناة وفترة محددة: يُسجَّل البث المباشر خلال هذه الفترة فقط، ثم يُفرَّغ نصه تلقائياً ويُحذف الصوت.',
     channel: 'القناة',
     start: 'البداية',
@@ -126,6 +132,9 @@ const TEXT = {
   },
   en: {
     title: 'Record on demand',
+    tabs: { record: 'Schedule recording', rasd: 'Scheduled watch', search: 'Smart search' } as Record<string, string>,
+    rasdTag: 'scheduled watch',
+    hitsN: (n: number) => `${n} passages on the subject`,
     sub: 'Pick a channel and a precise period: the live stream is recorded during that period only, then transcribed automatically and the audio deleted.',
     channel: 'Channel',
     start: 'Start',
@@ -276,11 +285,15 @@ function Bar({ value, label }: { value: number; label: string }) {
   )
 }
 
-function TranscriptModal({ rec, onClose }: { rec: Rec; onClose: () => void }) {
+function TranscriptModal({ rec, onClose, focus, terms = [] }: { rec: Rec; onClose: () => void; focus?: number; terms?: string[] }) {
   const i = useI18n()
   const t = useText()
   const { data, error } = useFetch<Transcript>(`/api/recordings/${rec.id}/transcript`, 0)
   const [q, setQ] = useState('')
+  // Passage ouvert depuis la recherche intelligente : mis en vue une fois le texte chargé
+  useEffect(() => {
+    if (data && focus != null) document.querySelector(`.rec-passages li[data-n="${focus}"]`)?.scrollIntoView({ block: 'center' })
+  }, [data, focus])
   useEffect(() => {
     const key = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     document.addEventListener('keydown', key)
@@ -307,14 +320,17 @@ function TranscriptModal({ rec, onClose }: { rec: Rec; onClose: () => void }) {
         {!data && !error && <p className="news-status">{i.t.loading}</p>}
         {data && (
           <ol className="bc-passages rec-passages">
-            {shown.map((p, k) => (
-              <li key={k} className={q.trim() ? 'is-hit' : ''}>
-                <span className="bc-passages__time">≈ {i.time(p.at)}</span>
-                <p dir="auto">
-                  <Highlight text={p.text} terms={q.trim() ? [q.trim()] : []} />
-                </p>
-              </li>
-            ))}
+            {shown.map((p) => {
+              const n = data.passages.indexOf(p)
+              return (
+                <li key={n} data-n={n} className={`${q.trim() ? 'is-hit' : ''}${n === focus ? ' is-focus' : ''}`}>
+                  <span className="bc-passages__time">≈ {i.time(p.at)}</span>
+                  <p dir="auto">
+                    <Highlight text={p.text} terms={q.trim() ? [q.trim()] : terms} />
+                  </p>
+                </li>
+              )
+            })}
             {shown.length === 0 && <li className="news-status">{t.noHits}</li>}
           </ol>
         )}
@@ -349,6 +365,8 @@ function RecRow({ r, can, onChange, onView, limits }: { r: Rec; can: boolean; on
         <time>
           {i.dateTime(r.debut)} – {i.time(r.fin)} · {t.min(minutes)}
         </time>
+        {(r.rasd?.length ?? 0) > 0 && <span className="rasd-tag">🎯 {t.rasdTag}</span>}
+        {r.hits != null && <span className={r.hits ? 'rasd-hits is-on' : 'rasd-hits'}>{t.hitsN(r.hits)}</span>}
         <small className="rec-row__by" dir="ltr">
           {r.par}
         </small>
@@ -426,29 +444,6 @@ function BudgetSplit({ budget, onSaved }: { budget: Data['budget']; onSaved: () 
   )
 }
 
-/** Résultats de la recherche dans toutes les transcriptions ; un clic ouvre la transcription */
-function Hits({ q, onPick }: { q: string; onPick: (id: string) => void }) {
-  const i = useI18n()
-  const t = useText()
-  const { data } = useFetch<{ hits: { id: string; nom: string; at: string; text: string }[] }>(`/api/recordings/search?q=${encodeURIComponent(q)}`, 0)
-  if (!data) return <p className="news-status">{i.t.loading}</p>
-  return (
-    <ul className="rec-hits">
-      {data.hits.length === 0 && <li className="news-status">{t.noHits}</li>}
-      {data.hits.map((h, k) => (
-        <li key={k}>
-          <button type="button" onClick={() => onPick(h.id)}>
-            <b dir="auto">{h.nom}</b> <time>≈ {i.dateTime(h.at)}</time>
-            <span dir="auto">
-              <Highlight text={h.text} terms={[q]} />
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
-  )
-}
-
 /** Programmation et suivi. channel : formulaire limité à cette chaîne (panneau de la chaîne ouverte en grand) */
 export function Recordings({ channel }: { channel?: string }) {
   const i = useI18n()
@@ -461,8 +456,8 @@ export function Recordings({ channel }: { channel?: string }) {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [view, setView] = useState<Rec | null>(null)
-  const [draft, setDraft] = useState('')
-  const [q, setQ] = useState('')
+  const [tab, setTab] = useState<'record' | 'rasd' | 'search'>('record')
+  const [focus, setFocus] = useState<{ n: number; terms: string[] } | null>(null)
   const channels = (data?.channels ?? []).filter((c) => !channel || c.id === channel)
   useEffect(() => {
     if (!form.chaine && channels.length) setForm((f) => ({ ...f, chaine: channels.find((c) => c.recordable)?.id ?? '' }))
@@ -502,8 +497,27 @@ export function Recordings({ channel }: { channel?: string }) {
         </header>
       )}
       {channel && <p className="ld-hint">{t.sub}</p>}
+      {!channel && (
+        <div className="mms-rtabs ld-tabs" role="tablist">
+          {(['record', 'rasd', 'search'] as const).map((k) => (
+            <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'is-active' : ''} onClick={() => setTab(k)}>
+              {t.tabs[k]}
+            </button>
+          ))}
+        </div>
+      )}
       {error && <p className="news-status news-status--error">{i.t.loadError}</p>}
-      {data && can && (
+      {data && tab === 'rasd' && <RasdPanel channels={data.channels} />}
+      {data && tab === 'search' && (
+        <SmartSearch
+          channels={data.channels}
+          onOpenRecording={(id, n, terms) => {
+            setFocus({ n, terms })
+            setView(data.items.find((r) => r.id === id) ?? null)
+          }}
+        />
+      )}
+      {data && can && tab === 'record' && (
         <form className="rec-form" onSubmit={submit}>
           {!channel && (
             <label>
@@ -548,24 +562,9 @@ export function Recordings({ channel }: { channel?: string }) {
           {msg && <p className={msg.ok ? 'news-status' : 'news-status news-status--error'}>{msg.text}</p>}
         </form>
       )}
-      {data && !can && <p className="news-status">{t.readOnly}</p>}
-      {data && !channel && canDo(auth?.user, 'diffusion') && <BudgetSplit budget={data.budget} onSaved={() => setTick((n) => n + 1)} />}
-      {!channel && data && (
-        <form
-          className="ld-bar rec-search"
-          onSubmit={(e) => {
-            e.preventDefault()
-            setQ(draft.trim())
-          }}
-        >
-          <input type="search" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={t.search} aria-label={t.search} dir="auto" />
-          <button type="submit" className="news-btn">
-            {t.searchGo}
-          </button>
-        </form>
-      )}
-      {q && <Hits q={q} onPick={(id) => setView(data?.items.find((r) => r.id === id) ?? null)} />}
-      {data && (
+      {data && !can && tab === 'record' && <p className="news-status">{t.readOnly}</p>}
+      {data && !channel && tab === 'record' && canDo(auth?.user, 'diffusion') && <BudgetSplit budget={data.budget} onSaved={() => setTick((n) => n + 1)} />}
+      {data && tab === 'record' && (
         <>
           <h4 className="rec__list">{t.list}</h4>
           {items.length === 0 ? (
@@ -579,7 +578,17 @@ export function Recordings({ channel }: { channel?: string }) {
           )}
         </>
       )}
-      {view && <TranscriptModal rec={view} onClose={() => setView(null)} />}
+      {view && (
+        <TranscriptModal
+          rec={view}
+          focus={focus?.n}
+          terms={focus?.terms}
+          onClose={() => {
+            setView(null)
+            setFocus(null)
+          }}
+        />
+      )}
     </section>
   )
 }

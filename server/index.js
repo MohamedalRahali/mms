@@ -36,6 +36,7 @@ import { mountCatalog } from './catalog.js'
 import { canSendAlert, initAlertFlow, mountAlertFlow, withFlow } from './alertFlow.js'
 import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionOf, regionStats, resolveEntities } from './entities.js'
 import { initPinboards, mountPinboards } from './pinboards.js'
+import { mountRasd } from './rasd.js'
 import { dispatchHistory, initDispatchLog, logDispatch } from './dispatchLog.js'
 import { SPLITS, STEPS, timeline } from './timeline.js'
 import { setEntityResolver } from './store.js'
@@ -898,6 +899,7 @@ mountAlertFlow(app)
 // لوحات التثبيت : collections d'articles épinglés, communes à l'équipe
 initPinboards(path.join(root, 'data'))
 mountPinboards(app, { getItems })
+mountRasd(app, { getItems, telegramReady, sendTelegram, logDispatch })
 // سجل الإرسال : envois des veilles, alertes du radar, briefing et rapports
 app.get('/api/watches/history', (_req, res) => res.json({ rows: dispatchHistory() }))
 

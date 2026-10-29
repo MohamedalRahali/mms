@@ -268,3 +268,62 @@ test('enregistrements à la demande : période passée, durée, chevauchement fu
   const srt = toSrt({ debut: iso(NOW), fin: iso(NOW + 10 * M), segments: [{ debut: iso(NOW), texte: 'جملة أولى. جملة ثانية.' }] })
   assert.match(srt, /^1\n00:00:00,000 --> 00:00:\d\d,\d{3}\nجملة أولى/)
 })
+
+test('الرصد المبرمج : veille vérifiée, plages, coût, création des enregistrements, recherche arabe tolérante', async () => {
+  const { cleanWatch, costCheck, upcomingSlots, materialize, matchTerms, termKey, smartSearch, hitsOf, searchTerms } = await import('../server/rasd.js')
+  const NOW = Date.parse('2026-10-29T10:00:00Z') // jeudi, 12:00 à Tripoli
+  const channels = [
+    { id: 'wasat', nom: 'الوسط', canal: 'tv', slots: ['21:00-21:45'], recordable: true, inVeille: true, stream: { flux: '', youtube: '' } },
+    { id: 'tanasuh', nom: 'التناصح', canal: 'tv', slots: [], recordable: true, inVeille: false, stream: { flux: 'https://x.test/a.m3u8', youtube: '' } },
+    { id: 'off', nom: 'بدون', canal: 'radio', slots: [], recordable: false, inVeille: true, stream: { flux: '', youtube: '' } },
+  ]
+  const err = (fn) => {
+    try {
+      fn()
+    } catch (e) {
+      return e.code
+    }
+    return null
+  }
+  const base = { name: 'النفط', keywords: 'النفط, المؤسسة الوطنية للنفط', synonyms: ['oil', 'الحقول النفطية'], channels: ['tanasuh'], days: [0, 1, 2, 3, 4, 5, 6], windows: ['14:00-14:30'] }
+  const w = cleanWatch(base, channels, { now: NOW })
+  assert.deepEqual([w.keywords.length, w.synonyms.length, w.from], [2, 2, '2026-10-29'])
+  assert.equal(err(() => cleanWatch({ ...base, keywords: '' }, channels, { now: NOW })), 'NO_KEYWORDS')
+  assert.equal(err(() => cleanWatch({ ...base, channels: ['off'] }, channels, { now: NOW })), 'NOT_RECORDABLE')
+  assert.equal(err(() => cleanWatch({ ...base, windows: ['14:00-14:30', '14:15-15:00'] }, channels, { now: NOW })), 'OVERLAP')
+  assert.equal(err(() => cleanWatch({ ...base, windows: ['10:00-15:00'] }, channels, { now: NOW })), 'TOO_LONG')
+  assert.equal(err(() => cleanWatch({ ...base, to: '2026-10-01' }, channels, { now: NOW })), 'PAST')
+  // Coût : 30 min par jour = 0,09 $ ; avec une autre veille de 6 h par jour, la part de 1,10 $ est dépassée
+  assert.equal(costCheck(w, []).costPerDay, 0.09)
+  const big = { ...w, id: 'big', windows: ['06:00-10:00', '15:00-17:00'] }
+  assert.equal(costCheck(w, [big], 1.1).level, 'over')
+  assert.equal(costCheck(w, [{ ...big, paused: true }], 1.1).level, 'ok')
+  // Plages des prochaines 26 h : aujourd'hui 14:00 et demain 14:00 (heure de Tripoli)
+  const slots = upcomingSlots(w, NOW)
+  assert.deepEqual(slots.map((s) => new Date(s.start).toISOString()), ['2026-10-29T12:00:00.000Z', '2026-10-30T12:00:00.000Z'])
+  // Création : deux enregistrements marqués de la veille ; une seconde passe n'en recrée pas
+  const data = { watches: [w], log: [] }
+  const st = { budget: { jour: 0, plafond_jour: 1.1, mois: 0, plafond_mois: 34 }, enregistrements: {} }
+  const one = materialize({ now: NOW, channels, data, list: [], st, part: 1.1 })
+  assert.equal(one.created, 2)
+  assert.ok(one.list.every((r) => r.rasd.includes(w.id)))
+  assert.equal(materialize({ now: NOW, channels, data, list: one.list, st, part: 1.1 }).created, 0)
+  // Budget épuisé : plage notée dans le journal avec sa raison, sans enregistrement
+  const poor = materialize({ now: NOW, channels, data: { watches: [w], log: [] }, list: [], st: { ...st, budget: { ...st.budget, jour: 1.09 } }, part: 1.1 })
+  assert.equal(poor.data.log[0].error, 'BUDGET')
+  // Comparaison arabe tolérante : préfixes, ta marbuta, alif, expressions de plusieurs mots
+  const terms = [{ w: 'النفط', key: termKey('النفط') }, { w: 'المؤسسة الوطنية للنفط', key: termKey('المؤسسة الوطنية للنفط') }]
+  assert.deepEqual(matchTerms('أعلنت المؤسسه الوطنيه للنفط استئناف الإنتاج', terms).map((t) => t.w), ['النفط', 'المؤسسة الوطنية للنفط'])
+  assert.deepEqual(matchTerms('وبالنفط تتحسن الإيرادات', terms).map((t) => t.w), ['النفط'])
+  assert.equal(matchTerms('الكهرباء في طرابلس', terms).length, 0)
+  // Recherche : synonymes de la veille ajoutés, passages des créneaux fixes inclus sans veille choisie
+  assert.deepEqual(searchTerms('الحقل', w).expanded.map((t) => t.w), ['النفط', 'المؤسسة الوطنية للنفط', 'oil', 'الحقول النفطية'])
+  const items = [{ id: 'b1', media: 'broadcast', origin: 'الوسط', date: '2026-10-28T19:05:00Z', transcription: 'تحدث الوزير عن النفط والغاز. ثم انتقلنا إلى الرياضة.' }]
+  const res = smartSearch({ q: 'نفط' }, { list: [], st, now: NOW, data, broadcastItems: items, channels })
+  assert.equal(res.total, 1)
+  assert.equal(res.hits[0].kind, 'fixed')
+  assert.equal(smartSearch({ q: 'نفط', channel: 'tanasuh' }, { list: [], st, now: NOW, data, broadcastItems: items, channels }).total, 0)
+  // Passages repérés dans une transcription
+  const doc = { debut: '2026-10-29T12:00:00Z', fin: '2026-10-29T12:30:00Z', segments: [{ debut: '2026-10-29T12:00:00Z', texte: 'نشرة الأخبار. أعلنت المؤسسة الوطنية للنفط عن زيادة الإنتاج. وفي الرياضة فاز الأهلي.' }] }
+  assert.equal(hitsOf(doc, w).length, 1)
+})

@@ -35,7 +35,7 @@ export const LIMITS = {
   // Enregistrements simultanés au plus pour la veille (créneaux fixes + demandes, LIBYE_CAPTURES_MAX)
   maxCaptures: Number(process.env.MMS_CAPTURES_MAX) || 6,
 }
-const TERMINAL = new Set(['termine', 'echoue', 'annule'])
+export const TERMINAL = new Set(['termine', 'echoue', 'annule'])
 
 function readJson(file, fallback) {
   try {
@@ -45,7 +45,7 @@ function readJson(file, fallback) {
   }
 }
 
-const readAll = () => {
+export const readAll = () => {
   const list = readJson(FILE(), { enregistrements: [] }).enregistrements
   return Array.isArray(list) ? list : []
 }
@@ -54,13 +54,13 @@ export const savedPart = () => {
   const v = readJson(FILE(), {}).part_demandes_jour
   return typeof v === 'number' && Number.isFinite(v) ? v : null
 }
-function writeAll(list, part = savedPart()) {
+export function writeAll(list, part = savedPart()) {
   fs.mkdirSync(dataDir, { recursive: true })
   const tmp = `${FILE()}.${process.pid}.tmp`
   fs.writeFileSync(tmp, JSON.stringify({ maj: new Date().toISOString(), ...(part != null ? { part_demandes_jour: part } : {}), enregistrements: list }, null, 1))
   fs.renameSync(tmp, FILE())
 }
-const statusFile = () => readJson(STATUS(), null)
+export const statusFile = () => readJson(STATUS(), null)
 
 const fail = (code, status = 400, extra = {}) => Object.assign(new Error(code), { code, status, extra })
 
@@ -78,7 +78,7 @@ export function recordableChannels(list = liveSources()) {
 }
 
 /** État d'une demande d'après la veille ; sans réponse de la veille 3 minutes après le début : échec expliqué */
-function stateOf(r, st, now) {
+export function stateOf(r, st, now) {
   const s = st?.enregistrements?.[r.id]
   if (r.annule && (!s || !TERMINAL.has(s.etat))) return { etat: 'annule' }
   if (s) return s
@@ -92,7 +92,7 @@ function stateOf(r, st, now) {
 const minutesOf = (r) => (Date.parse(r.fin) - Date.parse(r.debut)) / MIN
 
 // Jour de Tripoli (UTC+2 toute l'année) d'un instant
-const tripoliDay = (t) => new Date(t + 2 * 3_600_000).toISOString().slice(0, 10)
+export const tripoliDay = (t) => new Date(t + 2 * 3_600_000).toISOString().slice(0, 10)
 
 /**
  * Budget quotidien des demandes (part du plafond de transcription réglée dans MMS) pour le jour où commence une
@@ -132,7 +132,7 @@ export function setPart(value, st = statusFile()) {
 const round = (n) => Math.round(n * 1000) / 1000
 
 /** Créneaux fixes du soir d'une chaîne qui recouvrent une période (pour proposer leur transcription existante) */
-function slotsCovering(channel, start, end) {
+export function slotsCovering(channel, start, end) {
   const out = []
   for (const w of channel.slots) {
     const [a, b] = w.split('-')
@@ -152,7 +152,8 @@ function slotsCovering(channel, start, end) {
  * Vérifie et enregistre une demande. Renvoie { item, merged } ; lève une erreur au code lisible sinon.
  * Une période qui chevauche une demande active de la même chaîne est fusionnée avec elle.
  */
-export function addRecording({ chaine, debut, fin }, by, { now = Date.now(), channels = recordableChannels(), list = readAll(), st = statusFile(), part = savedPart() } = {}) {
+// rasd : veilles programmées (الرصد المبرمج) à l'origine de la demande, gardées sur la demande fusionnée
+export function addRecording({ chaine, debut, fin, rasd = [] }, by, { now = Date.now(), channels = recordableChannels(), list = readAll(), st = statusFile(), part = savedPart() } = {}) {
   const ch = channels.find((c) => c.id === String(chaine || ''))
   if (!ch) throw fail('NO_CHANNEL', 404)
   if (!ch.recordable) throw fail('NOT_RECORDABLE')
@@ -214,6 +215,10 @@ export function addRecording({ chaine, debut, fin }, by, { now = Date.now(), cha
     par: merged?.par || String(by || '').slice(0, 120),
     cree: merged?.cree || new Date(now).toISOString(),
     annule: false,
+    ...(() => {
+      const ids = [...new Set([...same.flatMap((r) => r.rasd || []), ...(Array.isArray(rasd) ? rasd : [])].map(String))].slice(0, 20)
+      return ids.length ? { rasd: ids } : {}
+    })(),
   }
   const next = [...list.filter((r) => !same.includes(r)), item]
   return { item, merged: Boolean(merged), estimate: round(extra), list: next }
@@ -230,7 +235,7 @@ export function stopRecording(id, { now = Date.now(), list = readAll(), st = sta
   return { item: r, list }
 }
 
-function transcriptOf(id) {
+export function transcriptOf(id) {
   if (!/^[a-f0-9]{16}$/.test(id)) return null
   return readJson(path.join(TEXTS(), `${id}.json`), null)
 }
@@ -291,8 +296,23 @@ export function mountRecordings(app) {
       const now = Date.now()
       const list = readAll()
       const st = statusFile()
+      // Passages repérés par الرصد المبرمج (server/rasd.js), additionnés pour toutes les veilles de l'enregistrement
+      const hits = readJson(path.join(dataDir, 'libye-rasd-hits.json'), {})
       const items = list
-        .map((r) => ({ id: r.id, chaine: r.chaine, nom: r.nom, canal: r.canal, debut: r.debut, fin: r.fin, par: r.par, cree: r.cree, estimate: round(minutesOf(r) * LIMITS.costPerMinute), ...stateOf(r, st, now) }))
+        .map((r) => ({
+          id: r.id,
+          chaine: r.chaine,
+          nom: r.nom,
+          canal: r.canal,
+          debut: r.debut,
+          fin: r.fin,
+          par: r.par,
+          cree: r.cree,
+          rasd: r.rasd || [],
+          hits: hits[r.id] ? Object.values(hits[r.id]).reduce((n, h) => n + (h.count || 0), 0) : null,
+          estimate: round(minutesOf(r) * LIMITS.costPerMinute),
+          ...stateOf(r, st, now),
+        }))
         .sort((x, y) => y.debut.localeCompare(x.debut))
       const channels = recordableChannels().map(({ stream, ...c }) => c)
       return { items, channels, limits: LIMITS, budget: budgetOf(list, st, now), veille: { maj: st?.maj || null } }
