@@ -19,6 +19,7 @@ import {
 } from '../lib/around'
 import { type Block, parseInline, parseMd } from '../lib/aroundMd'
 import { downloadPptx, kpiRows, openReport, turnText, turnTitle } from '../lib/aroundExport'
+import { useBrand } from '../lib/brand'
 
 /**
  * Around, l'assistant IA de MMS, sur le modèle de Meltwater Mira Studio :
@@ -70,9 +71,12 @@ function Icon({ name, size = 18, flip = false }: { name: string; size?: number; 
 }
 
 function Logo({ size = 28 }: { size?: number }) {
+  // Marque blanche : logo du client, ou simple pictogramme
+  const brand = useBrand()
+  const src = brand?.whiteLabel ? brand.logo : '/around-logo.png'
   return (
     <span className="around-logo" style={{ width: size, height: size }} aria-hidden>
-      <img src="/around-logo.png" alt="" />
+      {src ? <img src={src} alt="" /> : <span className="around-logo__mark">✦</span>}
     </span>
   )
 }

@@ -8,19 +8,9 @@ import './listing.css'
 
 /** Partage d'un tableau de bord par lien (lecture seule, expiration, révocation) et page publique du lien */
 
-export type Brand = { name: string; logo: string; assistant?: string }
-
-/** Logo et nom du client, réglés dans la console Super Admin (sinon le logo de la plateforme) */
-export function useBrand() {
-  const [brand, setBrand] = useState<Brand | null>(null)
-  useEffect(() => {
-    fetch('/api/platform/brand')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((b) => setBrand(b ?? { name: '', logo: '' }))
-      .catch(() => setBrand({ name: '', logo: '' }))
-  }, [])
-  return brand
-}
+import { type Brand } from '../lib/brand'
+// Logo et nom du client, réglés dans la console Super Admin (sinon le logo de la plateforme) : src/lib/brand.ts
+export { type Brand, useBrand } from '../lib/brand'
 
 const TEXT = {
   ar: {

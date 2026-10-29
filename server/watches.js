@@ -3,6 +3,7 @@ import path from 'node:path'
 import { getItems } from './store.js'
 import { onMailPolicyChange, splitRecipients } from './mailPolicy.js'
 import { logDispatch } from './dispatchLog.js'
+import { accentOr, outputName } from './brand.js'
 
 /**
  * Veille programmée (الرصد المبرمج), sur le principe de NewsRadar :
@@ -441,7 +442,7 @@ export function buildAlertEmail(watch, found) {
   const html = `<!doctype html><html lang="ar" dir="rtl"><body style="margin:0;background:#f4f7f5;font-family:Tahoma,Arial,sans-serif">
 <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px">
 <table width="640" cellpadding="0" cellspacing="0" style="max-width:640px;background:#fff;border-radius:8px;overflow:hidden" dir="rtl">
-<tr><td style="background:#06281d;color:#fff;padding:18px 24px;font-size:18px;font-weight:700">منصة MMS · رصد مبرمج</td></tr>
+<tr><td style="background:${accentOr('#06281d')};color:#fff;padding:18px 24px;font-size:18px;font-weight:700">${esc(outputName('منصة MMS'))} · رصد مبرمج</td></tr>
 <tr><td style="padding:20px 24px 0"><div style="font-size:20px;font-weight:700;color:#111">${esc(watch.name)}</div>
 <div style="font-size:14px;color:#555;margin-top:6px">${found.length} خبر جديد يطابق هذا الرصد.</div></td></tr>
 <tr><td style="padding:8px 24px"><table width="100%" cellpadding="0" cellspacing="0">${rows}</table>

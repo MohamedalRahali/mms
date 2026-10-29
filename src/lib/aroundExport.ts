@@ -1,5 +1,13 @@
 import type { AgentStats, AroundText, Turn } from './around'
 import { type Block, parseInline, parseMd, plain } from './aroundMd'
+import { brandNow } from './brand'
+
+/** Logo des exports de l'assistant : celui du client en marque blanche (ou aucun), sinon celui d'Around */
+const exportLogo = () => {
+  const b = brandNow()
+  if (b?.whiteLabel) return b.logo || ''
+  return `${location.origin}/around-logo.png`
+}
 
 /**
  * Exports d'une réponse d'Around : texte brut (copie, e-mail), rapport web imprimable (et PDF par l'impression),
@@ -162,7 +170,7 @@ td.up{color:var(--g);font-weight:700}td.down{color:#c8492b;font-weight:700}
 .muted{color:var(--soft);font-size:.85rem}.sources li{margin-bottom:6px}.sources a{color:var(--d)}
 footer{margin-top:22px;text-align:center;color:var(--soft);font-size:.8rem}
 @media print{body{background:#fff}.bar{display:none}header{border-radius:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}main{border:0;padding:0}th,.exec,.reco,.cite,rect{-webkit-print-color-adjust:exact;print-color-adjust:exact}h2{break-after:avoid}}
-</style></head><body><header><img src="${location.origin}/around-logo.png" alt=""><div><h1>${esc(title)}</h1><p>${esc(a.scope)} : ${esc(scope)} · ${esc(a.generatedOn)} : ${esc(c.dateTime(new Date().toISOString()))}</p></div></header>
+</style></head><body><header>${exportLogo() ? `<img src="${exportLogo()}" alt="">` : ''}<div><h1>${esc(title)}</h1><p>${esc(a.scope)} : ${esc(scope)} · ${esc(a.generatedOn)} : ${esc(c.dateTime(new Date().toISOString()))}</p></div></header>
 <div class="page"><div class="bar"><button onclick="print()">${esc(a.print)}</button></div><main>${body.join('\n')}</main><footer>${esc(a.generatedBy)}</footer></div>
 ${autoPrint ? '<script>addEventListener("load",()=>setTimeout(()=>print(),600))</script>' : ''}</body></html>`
 }
@@ -184,7 +192,9 @@ export function openReport(t: Turn, c: Ctx, autoPrint = false) {
 
 async function logoData() {
   try {
-    const blob = await (await fetch('/around-logo.png')).blob()
+    const src = exportLogo()
+    if (!src) return ''
+    const blob = await (await fetch(src)).blob()
     return await new Promise<string>((resolve) => {
       const r = new FileReader()
       r.onload = () => resolve(String(r.result))

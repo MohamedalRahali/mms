@@ -1,4 +1,6 @@
+import { useMemo } from 'react'
 import { useI18n } from './i18n'
+import { assistantName, renameAround, useBrand } from './brand'
 
 /**
  * Around, l'assistant IA de MMS, sur le modèle de Meltwater Mira Studio :
@@ -309,7 +311,10 @@ const EN: typeof AR = {
 
 export function useAround() {
   const i = useI18n()
-  return i.lang === 'en' ? EN : AR
+  // Nom de l'assistant choisi par le client (ou marque blanche) : remplace « Around » dans tous les textes
+  const name = assistantName(useBrand(), i.lang)
+  const base = i.lang === 'en' ? EN : AR
+  return useMemo(() => renameAround(base, name), [base, name])
 }
 
 export type AroundText = typeof AR

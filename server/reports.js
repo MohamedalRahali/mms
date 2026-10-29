@@ -4,6 +4,7 @@ import crypto from 'node:crypto'
 import express from 'express'
 import { words } from './radar.js'
 import { reliabilityOf } from './sourceMeta.js'
+import { accentOr, brandOf } from './brand.js'
 
 /**
  * Générateur de rapports médias (التقارير) : l'utilisateur coche des publications, MMS calcule les chiffres
@@ -363,7 +364,7 @@ export function buildDoc({ lang, title, org, author, logo, banner, posts, stats,
   // Page de garde
   if (logo) content.push({ type: 'image', attrs: { src: logo, alt: org || t.org, title: null, width: 220 } })
   content.push(
-    para(org || t.org, center, [{ type: 'bold' }, { type: 'textStyle', attrs: { color: '#0d3b66', fontSize: '18px' } }]),
+    para(org || t.org, center, [{ type: 'bold' }, { type: 'textStyle', attrs: { color: accentOr('#0d3b66'), fontSize: '18px' } }]),
     heading(1, title || t.title, center),
     para(`${t.period}: ${fmtDate(stats.from, lang)} — ${fmtDate(stats.to, lang)}`, center),
     para(`${t.generated}: ${fmtDate(generatedAt, lang)}`, center),
@@ -716,14 +717,15 @@ export function mountReports(app, dataDir, { getItems, aiEnabled, aiRun, sendMai
         aiError = 'AI_FAILED'
       }
     } else aiError = 'AI_OFF'
-    const logo = logoFile(req.user.email) ? `/api/reports/logo?v=${now}` : '/logo-npdc.png'
+    // Logo : celui du compte, sinon celui de l'organisation (هوية المخرجات), sinon celui de la plateforme
+    const logo = logoFile(req.user.email) ? `/api/reports/logo?v=${now}` : brandOf().logo || '/logo-npdc.png'
     // Titre lisible et unique (audit v3) : date et heure, nombre de publications ; version ajoutée si le titre existe déjà
     const base = String(req.body?.title || '').trim().slice(0, 180) || `${t.title} — ${fmtDateTime(new Date(now).toISOString(), lang)} — ${posts.length} ${lang === 'en' ? 'posts' : 'منشور'}`
     const taken = new Set(readAll(req.user.email).map((r) => r.title))
     let title = base
     for (let v = 2; taken.has(title) && v < 100; v++) title = `${base} (v${v})`
     const meta = cleanMeta({
-      org: String(req.body?.org || '').trim() || t.org,
+      org: String(req.body?.org || '').trim() || brandOf().name || t.org,
       author: displayName ? displayName(req.user) : req.user.name || req.user.email,
       header: t.header,
       footer: t.footer,

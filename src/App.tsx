@@ -29,6 +29,7 @@ import { CommandPalette, type PaletteEntry } from './components/CommandPalette'
 import { useBrand } from './components/Share'
 import { RegionsPanel } from './components/Regions'
 import { DataSince } from './components/DataSince'
+import { assistantName, renameAround } from './lib/brand'
 
 // Générateur de rapports (éditeur, exports Word et PDF) : chargé seulement à l'ouverture de la page
 const Reports = lazy(() => import('./components/reports/Reports'))
@@ -217,7 +218,8 @@ export default function App() {
   const [mfaState, setMfaState] = useState<MfaInfo | null>(null)
   // Marque du client : nom de l'assistant IA (« Around » par défaut), réglé dans la console Super Admin
   const brand = useBrand()
-  const renameAssistant = (label: string) => (brand?.assistant ? label.replace(/Around/g, brand.assistant) : label)
+  // « أراوند · مساعدك الذكي » en marque blanche : « المساعد الذكي » seul, sans répétition
+  const renameAssistant = (label: string) => renameAround(label, assistantName(brand, lang)).replace(/^(المساعد الذكي|AI assistant) (·|—) (مساعدك الذكي|your AI assistant)$/, '$1')
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
@@ -567,8 +569,11 @@ export default function App() {
                       ))}
                     </nav>
                     <p className="mms-side__foot">
-                      <img className="mms-side__logo" src="/around-logo-footer.png" alt="Around Expressions" width={120} height={91} loading="lazy" />
-                      <span dir="ltr">© {new Date().getFullYear()} MMS — Copyright by Around Expressions</span>
+                      {/* Marque blanche (هوية المخرجات) : sans la marque Around */}
+                      {!brand?.whiteLabel && <img className="mms-side__logo" src="/around-logo-footer.png" alt="Around Expressions" width={120} height={91} loading="lazy" />}
+                      <span dir="ltr">
+                        © {new Date().getFullYear()} {brand?.whiteLabel ? brand.name || 'MMS' : 'MMS — Copyright by Around Expressions'}
+                      </span>
                     </p>
                   </aside>
 

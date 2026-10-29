@@ -91,16 +91,20 @@ export function SourceMetaCell({
 /* ---------------------------------------------------------------- شعار العميل */
 
 export function BrandCard({ onMsg }: { onMsg: (m: string) => void }) {
-  const { data, reload } = useList<{ brand: { name: string; logo: string; assistant?: string } }>('/brand')
+  const { data, reload } = useList<{ brand: { name: string; logo: string; assistant?: string; accent?: string; whiteLabel?: boolean } }>('/brand')
   const [name, setName] = useState<string | null>(null)
   const [assistant, setAssistant] = useState<string | null>(null)
+  const [accent, setAccent] = useState<string | null>(null)
   const shown = name ?? data?.brand.name ?? ''
   const shownAssistant = assistant ?? data?.brand.assistant ?? ''
-  async function save(patch: { name?: string; logo?: string; assistant?: string }) {
+  const shownAccent = accent ?? data?.brand.accent ?? ''
+  async function save(patch: { name?: string; logo?: string; assistant?: string; accent?: string; whiteLabel?: boolean }) {
     try {
       await api('/brand', 'PUT', patch)
-      onMsg('تم حفظ هوية العميل.')
+      onMsg('تم حفظ هوية المخرجات.')
       setName(null)
+      setAssistant(null)
+      setAccent(null)
       reload()
     } catch (e) {
       onMsg(errText(e))
@@ -119,17 +123,33 @@ export function BrandCard({ onMsg }: { onMsg: (m: string) => void }) {
   return (
     <div className="sa-card">
       <div className="sa-card__head">
-        <h2>هوية العميل في لوحات القيادة</h2>
+        <h2>هوية المخرجات</h2>
       </div>
-      <p className="sa-muted">يظهر الشعار والاسم في رأس كل لوحة قيادة وفي الروابط المشتركة. بدون شعار يُستعمل شعار المنصة.</p>
+      <p className="sa-muted">
+        اسم الجهة وشعارها في رأس لوحات القيادة والروابط المشتركة والتقارير ورسائل الرصد والتقرير التنفيذي. اللون يُطبَّق على المخرجات المصدَّرة فقط، وتبقى واجهة MMS بهويتها. بدون إعداد: هوية المنصة كما هي.
+      </p>
       <div className="sa-row">
         <img className="sa-brandlogo" src={data?.brand.logo || '/logo-npdc.png'} alt="" />
       </div>
       <input className="sa-input" placeholder="اسم العميل (اختياري)" value={shown} maxLength={120} onChange={(e) => setName(e.target.value)} dir="auto" />
       <input className="sa-input" placeholder="اسم المساعد الذكي (Around افتراضياً)" value={shownAssistant} maxLength={40} onChange={(e) => setAssistant(e.target.value)} dir="auto" aria-label="اسم المساعد الذكي" />
+      <label className="sa-row">
+        <span>لون المخرجات</span>
+        <input type="color" value={shownAccent || '#0d3b66'} onChange={(e) => setAccent(e.target.value)} aria-label="لون المخرجات" />
+        <code dir="ltr">{shownAccent || 'اللون الأصلي'}</code>
+        {shownAccent && (
+          <button type="button" className="sa-btn sa-btn--small" onClick={() => setAccent('')}>
+            اللون الأصلي
+          </button>
+        )}
+      </label>
+      <label className="sa-row">
+        <input type="checkbox" checked={Boolean(data?.brand.whiteLabel)} onChange={(e) => save({ whiteLabel: e.target.checked })} />
+        <span>علامة بيضاء: إخفاء علامة Around من واجهة العميل ومن المخرجات (يصبح اسم المساعد «المساعد الذكي» ما لم يُحدَّد اسم آخر)</span>
+      </label>
       <div className="sa-row">
-        <button type="button" className="sa-btn" onClick={() => save({ name: shown, assistant: shownAssistant })}>
-          حفظ الاسم
+        <button type="button" className="sa-btn" onClick={() => save({ name: shown, assistant: shownAssistant, accent: shownAccent })}>
+          حفظ
         </button>
         <label className="sa-btn sa-btn--ghost">
           تغيير الشعار

@@ -6,6 +6,7 @@ import { logDispatch } from './dispatchLog.js'
 import { aiEnabled, briefingSummary } from './ai.js'
 import { briefingFacts, buildBriefing, fairChange } from './insights.js'
 import { sendMail, sendTelegram, telegramReady } from './watches.js'
+import { accentOr, outputName } from './brand.js'
 
 /**
  * Rapport exécutif programmé : chaque semaine (jour et heure de Tunis choisis dans MMS),
@@ -56,9 +57,10 @@ export function setBriefingConf(body) {
   conf = {
     ...conf,
     enabled: Boolean(body?.enabled),
-    weekday: Math.min(Math.max(Math.round(Number(body?.weekday) || 0), 0), 6),
+    // 0-6 : un jour de la semaine ; 7 : tous les jours (rapport quotidien à heure fixe, heure de Tripoli)
+    weekday: Math.min(Math.max(Math.round(Number(body?.weekday) || 0), 0), 7),
     hour: Math.min(Math.max(Math.round(Number(body?.hour) || 0), 0), 23),
-    days: [7, 14, 30].includes(Number(body?.days)) ? Number(body.days) : 7,
+    days: [1, 7, 14, 30].includes(Number(body?.days)) ? Number(body.days) : 7,
     recipients: splitRecipients(recipients).ok,
     blockedRecipients: splitRecipients(recipients).blocked,
     telegram: body?.telegram !== false,
@@ -101,7 +103,7 @@ export function briefingEmail({ b, summary }) {
     `<td style="padding:12px;border:1px solid #e3e8e5;border-radius:8px;text-align:center"><div style="color:#5f7469;font-size:13px">${label}</div><div style="font-size:26px;font-weight:800">${v}</div><div style="font-size:12px;color:#00894f">${delta(v, prev)}</div></td>`
   const html = `<!doctype html><html lang="ar" dir="rtl"><body style="margin:0;background:#f4f7f5;font-family:Tahoma,Arial,sans-serif;color:#173028">
 <div style="max-width:720px;margin:0 auto;background:#fff;padding:28px">
-<p style="margin:0;color:#00a362;font-weight:800;letter-spacing:.08em">MMS</p>
+<p style="margin:0;color:${accentOr('#00a362')};font-weight:800;letter-spacing:.08em">${esc(outputName())}</p>
 <h1 style="margin:4px 0 2px;font-size:24px">التقرير التنفيذي</h1>
 <p style="margin:0 0 18px;color:#5f7469">${esc(period)}</p>
 <table style="width:100%;border-spacing:8px"><tr>
@@ -124,17 +126,17 @@ ${
     .slice(0, 8)
     .map((it) => `<li>${it.url ? `<a href="${esc(it.url)}" style="color:#173028">${esc(it.title)}</a>` : esc(it.title)} <span style="color:#6b7c74">— ${esc(it.origin)}</span></li>`)
     .join('')}</ol>
-<p style="margin-top:26px"><a href="${esc(link)}/?view=briefing" style="background:#00a362;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">فتح التقرير في MMS</a></p>
-<p style="color:#8a9a92;font-size:12px">أُرسل تلقائياً من منصة MMS.</p>
+<p style="margin-top:26px"><a href="${esc(link)}/?view=briefing" style="background:${accentOr('#00a362')};color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">فتح التقرير في MMS</a></p>
+<p style="color:#8a9a92;font-size:12px">أُرسل تلقائياً من منصة ${esc(outputName())}.</p>
 </div></body></html>`
-  return { subject: `MMS · التقرير التنفيذي · ${period}`, html }
+  return { subject: `${outputName()} · التقرير التنفيذي · ${period}`, html }
 }
 
 export function briefingTelegram({ b, summary }) {
   coverage = b.coverage || null
   const link = (process.env.PUBLIC_URL || 'http://localhost:5174').replace(/\/$/, '')
   const lines = [
-    `<b>MMS · التقرير التنفيذي (${b.days} أيام)</b>`,
+    `<b>${esc(outputName())} · التقرير التنفيذي (${b.days} ${b.days === 1 ? 'يوم' : 'أيام'})</b>`,
     `عدد الأخبار : <b>${b.current.total}</b> ${delta(b.current.total, b.previous.total)}`,
     summary ? `\n${esc(summary.resume)}` : '',
     summary ? `\n<b>أبرز الأحداث</b>\n${summary.faits.map((f) => `• ${esc(f)}`).join('\n')}` : '',
@@ -173,7 +175,7 @@ export function startBriefing(dataDir) {
   const tick = async () => {
     if (!conf.enabled) return
     const now = nowTunis()
-    if (now.weekday !== conf.weekday || now.hour !== conf.hour || conf.lastSent === now.day) return
+    if ((conf.weekday !== 7 && now.weekday !== conf.weekday) || now.hour !== conf.hour || conf.lastSent === now.day) return
     conf.lastSent = now.day
     try {
       await sendBriefing()

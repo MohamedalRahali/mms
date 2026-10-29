@@ -1,6 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { setSourceMeta } from './sourceMeta.js'
+import { ACCENT_RE, LOGO_RE, brandOf, saveBrand } from './brand.js'
+import { imageKind } from './reports.js'
 import { createApiKey, listApiKeys, revokeApiKey } from './apiKeys.js'
 import { listShares, revokeShare } from './shares.js'
 import { mailPolicy, setMailPolicy } from './mailPolicy.js'
@@ -18,22 +20,9 @@ import { reviewOption, setReviewOption } from './alertFlow.js'
  * et vue d'ensemble des liens de partage (révocables d'ici aussi).
  */
 
-let brandFile = ''
-let brand = { name: '', logo: '', assistant: '', updatedAt: null }
-const LOGO_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/
 const MAX_LOGO = 400_000 // caractères de l'URL data: (≈ 300 Ko d'image)
-
-export function initBrand(dir) {
-  brandFile = path.join(dir, 'brand.json')
-  try {
-    const saved = JSON.parse(fs.readFileSync(brandFile, 'utf8'))
-    brand = { name: String(saved.name || '').slice(0, 120), logo: LOGO_RE.test(saved.logo || '') ? saved.logo : '', assistant: String(saved.assistant || '').slice(0, 40), updatedAt: saved.updatedAt || null }
-  } catch {
-    /* pas encore de logo : celui de la plateforme */
-  }
-}
-
-export const brandOf = () => ({ name: brand.name, logo: brand.logo, assistant: brand.assistant || '', updatedAt: brand.updatedAt })
+// Identité des livrables : état dans server/brand.js (lu aussi par les rapports, les veilles et le rapport exécutif)
+export { brandOf, initBrand } from './brand.js'
 
 const fail = (res, status, error) => res.status(status).json({ error })
 
@@ -49,16 +38,20 @@ export function mountClientAdmin(sa, { audit }) {
 
   sa.get('/brand', (_req, res) => res.json({ brand: brandOf() }))
   sa.put('/brand', (req, res) => {
-    const name = String(req.body?.name ?? brand.name).trim().slice(0, 120)
-    const logo = req.body?.logo === undefined ? brand.logo : String(req.body.logo || '')
+    const cur = brandOf()
+    const name = String(req.body?.name ?? cur.name).trim().slice(0, 120)
+    const logo = req.body?.logo === undefined ? cur.logo : String(req.body.logo || '')
     if (logo && (logo.length > MAX_LOGO || !LOGO_RE.test(logo))) return fail(res, 400, 'BAD_LOGO')
+    // Type réel du logo vérifié sur ses premiers octets, comme la photo de profil (un SVG ou un exécutable renommé est refusé)
+    if (logo && logo !== cur.logo && !imageKind(Buffer.from(logo.split(',')[1], 'base64'))) return fail(res, 400, 'BAD_LOGO')
     // Nom affiché de l'assistant IA (« Around » par défaut), au nom du Centre si le client le souhaite
-    const assistant = String(req.body?.assistant ?? brand.assistant ?? '').trim().slice(0, 40)
-    brand = { name, logo, assistant, updatedAt: new Date().toISOString() }
-    fs.mkdirSync(path.dirname(brandFile), { recursive: true })
-    fs.writeFileSync(brandFile, JSON.stringify(brand))
-    audit(req, 'brand', name || '—', logo ? 'logo' : 'sans logo')
-    res.json({ brand: brandOf() })
+    const assistant = String(req.body?.assistant ?? cur.assistant ?? '').trim().slice(0, 40)
+    const accent = req.body?.accent === undefined ? cur.accent : String(req.body.accent || '').trim()
+    if (accent && !ACCENT_RE.test(accent)) return fail(res, 400, 'BAD_ACCENT')
+    const whiteLabel = req.body?.whiteLabel === undefined ? cur.whiteLabel : req.body.whiteLabel === true
+    const next = saveBrand({ name, logo, assistant, accent, whiteLabel })
+    audit(req, 'brand', name || '—', `${logo ? 'logo' : 'sans logo'} · ${accent || 'couleur d’origine'} · ${whiteLabel ? 'marque blanche' : 'marque Around'}`)
+    res.json({ brand: next })
   })
 
   sa.get('/apikeys', (_req, res) => res.json({ keys: listApiKeys() }))

@@ -4397,3 +4397,13 @@ img.mms-user__avatar--img {
   font-size: 0.85rem;
   cursor: pointer;
 }
+
+/* Logo de l'assistant en marque blanche, sans image */
+.around-logo__mark {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--green);
+  font-weight: 800;
+}

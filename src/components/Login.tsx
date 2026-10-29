@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { type User } from '../lib/auth'
 import { MfaCode } from './Mfa'
 import { InstallButton } from './Install'
+import { useBrand } from '../lib/brand'
 
 /** Page de connexion selon la charte MMS Radar : panneau de présentation, carte claire de connexion, logo du Centre */
 
@@ -76,6 +77,7 @@ function RadarMark() {
 }
 
 export function Login({ onLogin }: { onLogin: (user: User) => void }) {
+  const loginBrand = useBrand()
   const [lang, setLang] = useState<'ar' | 'en'>('ar')
   const t = TEXT[lang]
   const [login, setLogin] = useState('')
@@ -222,9 +224,10 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
           </p>
         </form>
         )}
+        {/* Marque blanche (هوية المخرجات) : sans la marque Around */}
         <p className="around-credit">
-          <img src="/around-logo-footer.png" alt="Around Expressions" width={120} height={91} loading="lazy" />
-          <span dir="ltr">© {new Date().getFullYear()} MMS — Copyright by Around Expressions</span>
+          {!loginBrand?.whiteLabel && <img src="/around-logo-footer.png" alt="Around Expressions" width={120} height={91} loading="lazy" />}
+          <span dir="ltr">© {new Date().getFullYear()} {loginBrand?.whiteLabel ? loginBrand.name || 'MMS' : 'MMS — Copyright by Around Expressions'}</span>
         </p>
       </main>
     </div>

@@ -549,6 +549,8 @@ function ScheduleForm() {
                 {d}
               </option>
             ))}
+            {/* Rapport quotidien à heure fixe (heure de Tripoli) */}
+            <option value={7}>{p.brDaily}</option>
           </select>
         </label>
         <label>
@@ -564,7 +566,7 @@ function ScheduleForm() {
         <label>
           <span>{p.brDays}</span>
           <select value={form.days} onChange={(e) => set({ days: Number(e.target.value) })}>
-            {[7, 14, 30].map((d) => (
+            {[1, 7, 14, 30].map((d) => (
               <option key={d} value={d}>
                 {p.brPeriod[d]}
               </option>
