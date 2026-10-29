@@ -65,14 +65,19 @@ export const statusFile = () => readJson(STATUS(), null)
 const fail = (code, status = 400, extra = {}) => Object.assign(new Error(code), { code, status, extra })
 
 const YT_BLOCKED = /not a bot|Sign in to confirm|cookies-from-browser/i
-export function availability(c) {
+/**
+ * youtubeBlocked : YouTube refuse le serveur (contrôle anti-robot vu sur au moins une chaîne). Le refus vaut pour tout
+ * le serveur : toute chaîne lue SEULEMENT par YouTube est alors indisponible, même si sa dernière erreur est autre.
+ */
+export function availability(c, youtubeBlocked = false) {
   const youtubeOnly = Boolean(c.youtube) && !c.flux && !c.radio_browser
-  if (youtubeOnly && YT_BLOCKED.test(String(c.erreur || ''))) return { available: false, why: 'YOUTUBE_BLOCKED' }
+  if (youtubeOnly && (youtubeBlocked || YT_BLOCKED.test(String(c.erreur || '')))) return { available: false, why: 'YOUTUBE_BLOCKED' }
   return { available: Boolean(c.flux || c.youtube || c.radio_browser), why: '' }
 }
 
 /** Chaînes enregistrables : une adresse de direct (flux, YouTube ou annuaire radio) ; créneaux fixes du soir */
 export function recordableChannels(list = liveSources()) {
+  const youtubeBlocked = list.some((c) => YT_BLOCKED.test(String(c.erreur || '')))
   return list.map((c) => ({
     id: c.id,
     nom: c.nom || c.id,
@@ -81,7 +86,7 @@ export function recordableChannels(list = liveSources()) {
     recordable: Boolean(c.flux || c.youtube || c.radio_browser),
     // Disponible maintenant ? Une chaîne lue seulement par YouTube est indisponible tant que YouTube refuse le serveur
     // (contrôle anti-robot : fichier de cookies à renouveler) ; les flux directs restent disponibles
-    ...availability(c),
+    ...availability(c, youtubeBlocked),
     inVeille: !c.liveOnly,
     stream: { flux: c.flux || '', youtube: c.youtube || '', radio_browser: c.radio_browser || '', referer: c.referer || '' },
   }))

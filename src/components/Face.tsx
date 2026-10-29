@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
  * gardé dans le navigateur.
  */
 
-export type FaceState = { required: boolean; enrolled: boolean; verified: boolean; lockedUntil: string | null; engine: boolean; exceptionUntil: string | null }
+export type FaceState = { required: boolean; enrolled: boolean; verified: boolean; lockedUntil: string | null; engine: boolean; exceptionUntil: string | null; soft?: boolean; softUntil?: string | null }
 type Lang = 'ar' | 'en'
 type Step = 'center' | 'left' | 'right'
 
@@ -27,6 +27,10 @@ const T = {
     logout: 'تسجيل الخروج',
     help: 'نصائح: إضاءة أمامية جيدة، وجه مكشوف (دون نظارات شمسية أو قناع)، الكاميرا على مستوى العينين، شخص واحد فقط في الصورة.',
     recovery: 'لا تستطيع إتمام التحقق؟ تواصل مع الدعم الفني أو مسؤول المنصة لمنحك وصولاً مؤقتاً بعد التأكد من هويتك.',
+    softNote: (d: string) => `فترة تجريبية حتى ${d}: يمكنك المتابعة الآن وإتمام التحقق لاحقاً. بعد هذا التاريخ يصبح التحقق بالوجه إلزامياً.`,
+    later: 'لاحقاً',
+    softFail: 'لم يتم التحقق هذه المرة. خلال الفترة التجريبية يمكنك المتابعة، وسيُطلب منك التحقق مجدداً في الدخول القادم.',
+    continue: 'متابعة',
     password: 'كلمة المرور (للتأكيد)',
     code: 'رمز التحقق بخطوتين',
     changeNote: 'تغيير الوجه المسجل يتطلب كلمة المرور ورمز التحقق بخطوتين واعتماد مسؤول المنصة.',
@@ -79,6 +83,10 @@ const T = {
     logout: 'Sign out',
     help: 'Tips: good light in front of you, uncovered face (no sunglasses or mask), camera at eye level, only one person in view.',
     recovery: 'Cannot complete verification? Contact technical support or the platform administrator for temporary access after your identity is confirmed.',
+    softNote: (d: string) => `Trial period until ${d}: you can continue now and complete verification later. After that date, face verification becomes mandatory.`,
+    later: 'Later',
+    softFail: 'Verification did not succeed this time. During the trial period you can continue; you will be asked again at your next sign-in.',
+    continue: 'Continue',
     password: 'Password (to confirm)',
     code: 'Two-step code',
     changeNote: 'Changing the enrolled face requires your password, a two-step code and approval from the platform administrator.',
@@ -147,7 +155,7 @@ const camError = (e: unknown) => {
 }
 
 /** Capture guidée : consentement (inscription), caméra, défi de poses tiré par le serveur, envoi */
-function Capture({ lang, purpose, password, code, onDone }: { lang: Lang; purpose: 'enroll' | 'verify'; password?: string; code?: string; onDone: () => void }) {
+function Capture({ lang, purpose, password, code, onDone, onSoft }: { lang: Lang; purpose: 'enroll' | 'verify'; password?: string; code?: string; onDone: () => void; onSoft?: () => void }) {
   const t = T[lang]
   const video = useRef<HTMLVideoElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -159,6 +167,8 @@ function Capture({ lang, purpose, password, code, onDone }: { lang: Lang; purpos
   const [reached, setReached] = useState(false)
   const [error, setError] = useState('')
   const [until, setUntil] = useState('')
+  // Rodage : l'échec n'a pas bloqué, la personne peut continuer
+  const [soft, setSoft] = useState(false)
   const stop = () => {
     stream.current?.getTracks().forEach((tr) => tr.stop())
     stream.current = null
@@ -221,6 +231,7 @@ function Capture({ lang, purpose, password, code, onDone }: { lang: Lang; purpos
         body: JSON.stringify({ nonce: c.nonce, frames, ...(purpose === 'enroll' ? { consent: true, password, code } : {}) }),
       })
       const j = await res.json().catch(() => ({}))
+      if (!res.ok && j.soft) setSoft(true)
       if (!res.ok) throw Object.assign(new Error(j.error || 'FAILED'), { code: j.error || 'FAILED', until: j.until })
       setPhase('done')
       setInstruction(purpose === 'enroll' ? t.okEnroll : t.okVerify)
@@ -260,6 +271,14 @@ function Capture({ lang, purpose, password, code, onDone }: { lang: Lang; purpos
           {error === 'LOCKED' && until ? ` ${fmt(until)}` : ''}
         </p>
       )}
+      {soft && onSoft && (
+        <p className="news-status">
+          {t.softFail}{' '}
+          <button type="button" className="news-btn" onClick={onSoft}>
+            {t.continue}
+          </button>
+        </p>
+      )}
       {phase === 'idle' && (
         <button type="button" className="news-btn" onClick={run}>
           {error ? t.retry : t.start}
@@ -275,9 +294,16 @@ export function FaceRequired({ lang, face, onDone, onLogout }: { lang: Lang; fac
   const t = T[lang]
   const [agreed, setAgreed] = useState(false)
   const enroll = !face.enrolled
+  // Rodage : « لاحقاً » (pas de caméra, refus) ; le serveur l'accepte seulement pendant la période
+  const later = async (reason: string) => {
+    const r = await fetch('/api/face/defer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) }).catch(() => null)
+    if (r?.ok) onDone()
+  }
+  const until = face.softUntil ? new Intl.DateTimeFormat(lang === 'ar' ? 'ar-LY' : 'en-GB', { dateStyle: 'long', timeZone: 'Africa/Tripoli' }).format(new Date(face.softUntil)) : ''
   return (
     <div className="mms-maintenance mfa-page face-page" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <h1>{enroll ? t.enrollTitle : t.verifyTitle}</h1>
+      {face.soft && until && <p className="news-status">{t.softNote(until)}</p>}
       {enroll ? (
         <>
           <p>{t.why}</p>
@@ -285,13 +311,18 @@ export function FaceRequired({ lang, face, onDone, onLogout }: { lang: Lang; fac
           <label className="face-page__consent">
             <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} /> {t.consent}
           </label>
-          {agreed && <Capture lang={lang} purpose="enroll" onDone={onDone} />}
+          {agreed && <Capture lang={lang} purpose="enroll" onDone={onDone} onSoft={face.soft ? onDone : undefined} />}
         </>
       ) : (
         <>
           <p>{t.verifyIntro}</p>
-          <Capture lang={lang} purpose="verify" onDone={onDone} />
+          <Capture lang={lang} purpose="verify" onDone={onDone} onSoft={face.soft ? onDone : undefined} />
         </>
+      )}
+      {face.soft && (
+        <button type="button" className="news-btn news-btn--ghost" onClick={() => later(enroll && !agreed ? 'consent' : 'later')}>
+          {t.later}
+        </button>
       )}
       <small>{t.recovery}</small>
       <button type="button" className="news-btn news-btn--ghost" onClick={onLogout}>

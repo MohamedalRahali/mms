@@ -1,3 +1,4 @@
+import './live.css'
 import { type FormEvent, useEffect, useState } from 'react'
 import { useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
@@ -93,6 +94,10 @@ const TEXT = {
     source: 'المصدر',
     sources: { all: 'الكل', recordings: 'التسجيلات حسب الطلب', fixed: 'الفترات الثابتة' } as Record<string, string>,
     go: 'بحث',
+    hfrom: 'من الساعة',
+    hto: 'إلى الساعة',
+    play: '▶ استماع من هذه اللحظة',
+    browseHint: 'نص الفترة كاملاً بالترتيب. اكتب كلمة للبحث داخلها.',
     results: (n: number) => `${n} مقطع`,
     expanded: 'مع المرادفات',
     open: 'فتح المقطع',
@@ -182,6 +187,10 @@ const TEXT = {
     source: 'Source',
     sources: { all: 'All', recordings: 'On-demand recordings', fixed: 'Fixed slots' } as Record<string, string>,
     go: 'Search',
+    hfrom: 'From (time)',
+    hto: 'To (time)',
+    play: '▶ Listen from this moment',
+    browseHint: 'Full text of the period, in order. Type a word to search inside it.',
     results: (n: number) => `${n} passages`,
     expanded: 'with synonyms',
     open: 'Open passage',
@@ -527,12 +536,17 @@ export function RasdPanel({ channels }: { channels: RecChannel[] }) {
   )
 }
 
-export function SmartSearch({ channels, onOpenRecording }: { channels: RecChannel[]; onOpenRecording: (id: string, n: number, terms: string[]) => void }) {
+export type SearchInit = { channel?: string; from?: string; to?: string; hfrom?: string; hto?: string; source?: string }
+
+export function SmartSearch({ channels, onOpenRecording, initial }: { channels: RecChannel[]; onOpenRecording: (id: string, n: number, terms: string[]) => void; initial?: SearchInit }) {
   const t = useText()
   const i = useI18n()
   const watches = useFetch<{ watches: Watch[] }>('/api/rasd', 0).data?.watches ?? []
-  const [f, setF] = useState({ q: '', watch: '', channel: '', from: '', to: '', status: '', source: 'all' })
-  const [query, setQuery] = useState('')
+  const blank = { q: '', watch: '', channel: '', from: '', to: '', hfrom: '', hto: '', status: '', source: 'all' }
+  const [f, setF] = useState({ ...blank, ...initial })
+  // Ouvert depuis « برمجة التسجيل » (période déjà enregistrée) : la consultation part tout de suite
+  const [query, setQuery] = useState(() => (initial ? new URLSearchParams(Object.entries({ ...blank, ...initial }).filter(([, v]) => v)).toString() : ''))
+  const browsing = Boolean(query) && !new URLSearchParams(query).get('q')
   const { data, error } = useFetch<{ terms: string[]; expanded: string[]; total: number; hits: Hit[] }>(query ? `/api/rasd/search?${query}` : '/api/rasd/search?q=', 0)
   function submit(e: FormEvent) {
     e.preventDefault()
@@ -578,6 +592,14 @@ export function SmartSearch({ channels, onOpenRecording }: { channels: RecChanne
           <input type="date" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} />
         </label>
         <label>
+          <span>{t.hfrom}</span>
+          <input type="time" value={f.hfrom} onChange={(e) => setF({ ...f, hfrom: e.target.value })} />
+        </label>
+        <label>
+          <span>{t.hto}</span>
+          <input type="time" value={f.hto} onChange={(e) => setF({ ...f, hto: e.target.value })} />
+        </label>
+        <label>
           <span>{t.status}</span>
           <select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
             <option value="">{t.anyStatus}</option>
@@ -605,6 +627,7 @@ export function SmartSearch({ channels, onOpenRecording }: { channels: RecChanne
       {error && <p className="news-status news-status--error">{i.t.loadError}</p>}
       {query && data && (
         <>
+          {browsing && <p className="rec-banner rec-banner--info">{t.browseHint}</p>}
           <p className="ld-hint">
             {t.results(data.total)} · ≈ {t.approx}
             {data.expanded.length > 0 && (
@@ -638,7 +661,7 @@ export function SmartSearch({ channels, onOpenRecording }: { channels: RecChanne
                     </button>
                   ) : (
                     <a className="ld-toggle rasd-results__link" href={`/?clip=${encodeURIComponent(h.id)}&t=${h.offset ?? 0}&q=${encodeURIComponent(h.terms[0] ?? '')}`}>
-                      {t.open}
+                      {t.play}
                     </a>
                   )}
                 </li>

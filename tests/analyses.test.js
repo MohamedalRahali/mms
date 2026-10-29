@@ -27,4 +27,7 @@ test('enregistrements : chaîne YouTube refusée par YouTube indisponible, flux 
   // Un flux direct (HLS) reste disponible même si sa copie YouTube est refusée
   assert.deepEqual(availability({ flux: 'https://x/live.m3u8', youtube: 'https://y', erreur: bot }), { available: true, why: '' })
   assert.deepEqual(availability({ youtube: 'https://y', erreur: 'The channel is not currently live' }), { available: true, why: '' })
+  // YouTube refuse le serveur pour une chaîne : toutes les chaînes lues seulement par YouTube sont indisponibles
+  assert.deepEqual(availability({ youtube: 'https://y', erreur: 'The channel is not currently live' }, true), { available: false, why: 'YOUTUBE_BLOCKED' })
+  assert.deepEqual(availability({ flux: 'https://x/live.m3u8', youtube: 'https://y' }, true), { available: true, why: '' })
 })

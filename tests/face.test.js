@@ -307,3 +307,42 @@ test('guidage en direct : pose renvoyée sans consommer le défi ni compter d’
   assert.equal(e.status, 200)
   assert.equal(face.faceStateOf('alice@x.test').lockedUntil, null)
 })
+
+test('rodage : tous les comptes concernés, échec jamais bloquant, « لاحقاً », alerte, passage automatique au blocage', async () => {
+  setup()
+  face.setFacePolicy({ mode: 'rodage', trial: [] })
+  admins.length = 0
+  const s1 = login('alice@x.test', 'r1')
+  assert.equal(face.faceRequired('bob@x.test'), true)
+  assert.equal(face.faceStateOf('alice@x.test', s1).soft, true)
+  assert.equal(face.faceGate('alice@x.test', s1, '/news'), 'FACE_REQUIRED')
+  // « لاحقاً » : accès pour cette session seulement
+  assert.equal(face.deferFace({ email: 'alice@x.test', token: 'r1', body: { reason: 'nocamera' } }).status, 200)
+  assert.equal(face.faceGate('alice@x.test', s1, '/news'), '')
+  assert.ok(logs.some(([t, , d]) => t === 'face_deferred' && d === 'nocamera'))
+  const s2 = login('alice@x.test', 'r2')
+  assert.equal(face.faceGate('alice@x.test', s2, '/news'), 'FACE_REQUIRED')
+  // Inscription puis échecs répétés (autre personne) : jamais de pause, accès quand même, alerte « partage probable »
+  await doEnroll('alice@x.test', 'r2', 'alice')
+  const s3 = login('alice@x.test', 'r3')
+  for (let i = 0; i < 7; i++) {
+    const r = await doVerify('alice@x.test', 'r3', 'bob')
+    assert.equal(r.error, 'MISMATCH')
+    assert.equal(r.soft, true)
+  }
+  assert.equal(face.faceStateOf('alice@x.test').lockedUntil, null)
+  assert.equal(face.faceGate('alice@x.test', s3, '/news'), '')
+  assert.ok(admins.some((t) => t.includes('احتمال استعمال الحساب')))
+  // Diagnostic pour tous pendant le rodage
+  assert.ok(face.faceDiagnostics().some((d) => d.result === 'MISMATCH'))
+  // Compte à rebours de 7 jours, puis blocage automatique
+  const ends = Date.parse(face.faceAdmin().rodageEnds)
+  assert.ok(Math.abs(ends - Date.now() - 7 * 86_400_000) < 5000)
+  assert.equal(face.effectiveMode(ends + 1000), 'on')
+  assert.equal(face.deferFace({ email: 'alice@x.test', token: 'r3', body: {}, now: ends + 1000 }).error, 'NOT_RODAGE')
+  const after = await (async () => {
+    const ch = face.newChallenge('r3', 'alice@x.test', 'verify', ends + 1000)
+    return face.verify({ email: 'alice@x.test', token: 'r3', now: ends + 1000, body: { nonce: ch.nonce, frames: capture('bob', ch.steps) } })
+  })()
+  assert.equal(after.soft, undefined)
+})

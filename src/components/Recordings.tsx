@@ -1,10 +1,11 @@
-import { type FormEvent, useEffect, useState } from 'react'
-import { useFetch } from '../lib/news'
-import { useI18n } from '../lib/i18n'
-import { canDo, useAuth } from '../lib/auth'
-import { Highlight } from './BroadcastStudio'
-import { MediaIcon } from './MediaParts'
-import { RasdPanel, SmartSearch } from './Rasd'
+import "./live.css";
+import { type FormEvent, useEffect, useState } from "react";
+import { useFetch } from "../lib/news";
+import { useI18n } from "../lib/i18n";
+import { canDo, useAuth } from "../lib/auth";
+import { Highlight } from "./BroadcastStudio";
+import { MediaIcon } from "./MediaParts";
+import { RasdPanel, type SearchInit, SmartSearch } from "./Rasd";
 
 /**
  * Enregistrements à la demande (mur du direct) : choisir une chaîne et une période précise ; la veille enregistre le
@@ -12,232 +13,361 @@ import { RasdPanel, SmartSearch } from './Rasd'
  * téléchargement de la transcription (TXT, SRT). Données : server/recordings.js.
  */
 
-type State = 'en_attente' | 'en_cours' | 'transcription' | 'termine' | 'echoue' | 'annule'
+type State =
+  "en_attente" | "en_cours" | "transcription" | "termine" | "echoue" | "annule";
 type Rec = {
-  id: string
-  chaine: string
-  nom: string
-  canal: 'tv' | 'radio'
-  debut: string
-  fin: string
-  par: string
-  estimate: number
-  etat: State
-  enregistrement?: number
-  transcription?: number
-  secondes?: number
-  erreur?: string
-  avertissement?: string
-  partiel?: string
-  cout?: number
-  texte?: boolean
-  rasd?: string[]
-  hits?: number | null
-}
-type Channel = { id: string; nom: string; canal: 'tv' | 'radio'; slots: string[]; recordable: boolean; available?: boolean; why?: string }
+  id: string;
+  chaine: string;
+  nom: string;
+  canal: "tv" | "radio";
+  debut: string;
+  fin: string;
+  par: string;
+  estimate: number;
+  etat: State;
+  enregistrement?: number;
+  transcription?: number;
+  secondes?: number;
+  erreur?: string;
+  avertissement?: string;
+  partiel?: string;
+  cout?: number;
+  texte?: boolean;
+  rasd?: string[];
+  hits?: number | null;
+};
+type Channel = {
+  id: string;
+  nom: string;
+  canal: "tv" | "radio";
+  slots: string[];
+  recordable: boolean;
+  available?: boolean;
+  why?: string;
+};
 type Data = {
-  items: Rec[]
-  channels: Channel[]
-  limits: { maxMinutes: number; minMinutes: number; maxParallel: number; maxCaptures: number; maxDaysAhead: number; costPerMinute: number }
+  items: Rec[];
+  channels: Channel[];
+  limits: {
+    maxMinutes: number;
+    minMinutes: number;
+    maxParallel: number;
+    maxCaptures: number;
+    maxDaysAhead: number;
+    costPerMinute: number;
+  };
   budget: {
-    day: string
-    cap: number
-    spent: number
-    reserved: number
-    remaining: number
-    hours: number
-    total: number | null
-    fixed: { spent: number; cap: number } | null
-    month: { spent: number; cap: number } | null
-    known: boolean
-  }
-  veille: { maj: string | null }
-}
-type Transcript = { nom: string; debut: string; fin: string; passages: { at: string; text: string }[] }
+    day: string;
+    cap: number;
+    spent: number;
+    reserved: number;
+    remaining: number;
+    hours: number;
+    total: number | null;
+    fixed: { spent: number; cap: number } | null;
+    month: { spent: number; cap: number } | null;
+    known: boolean;
+  };
+  veille: { maj: string | null };
+};
+type Transcript = {
+  nom: string;
+  debut: string;
+  fin: string;
+  passages: { at: string; text: string }[];
+};
 
 const TEXT = {
   ar: {
-    title: 'تسجيل حسب الطلب',
-    tabs: { record: 'برمجة التسجيل', rasd: 'الرصد المبرمج', search: 'البحث الذكي' } as Record<string, string>,
-    rasdTag: 'رصد مبرمج',
+    title: "تسجيل حسب الطلب",
+    tabs: {
+      record: "برمجة التسجيل",
+      rasd: "الرصد المبرمج",
+      search: "البحث الذكي",
+    } as Record<string, string>,
+    rasdTag: "رصد مبرمج",
     hitsN: (n: number) => `${n} مقطع عن الموضوع`,
-    sub: 'اختر قناة وفترة محددة: يُسجَّل البث المباشر خلال هذه الفترة فقط، ثم يُفرَّغ نصه تلقائياً ويُحذف الصوت.',
-    channel: 'القناة',
-    start: 'البداية',
-    end: 'النهاية',
-    local: 'بتوقيت طرابلس',
+    sub: "اختر قناة وفترة محددة: يُسجَّل البث المباشر خلال هذه الفترة فقط، ثم يُفرَّغ نصه تلقائياً ويُحذف الصوت.",
+    channel: "القناة",
+    start: "البداية",
+    end: "النهاية",
+    local: "بتوقيت طرابلس",
     tripoliNow: (h: string) => `الساعة الآن في طرابلس ${h}`,
-    now: 'الآن',
+    now: "الآن",
     plus: (m: number) => `+${m} د`,
-    duration: 'المدة',
-    estimate: 'تكلفة التفريغ التقديرية',
-    remaining: (r: string, c: string, h: string) => `ميزانية التسجيلات اليوم: المتبقي ${r} $ من ${c} $ (≈ ${h} س من الصوت)`,
-    unknownBudget: 'الرصد لم يرسل ميزانيته بعد: التقدير على أساس الحصة الافتراضية.',
-    split: 'توزيع ميزانية التفريغ اليومية',
-    splitHint: (t: string) => `السقف الإجمالي ≈ ${t} $ يومياً (65 $ شهرياً)، يتقاسمه التسجيل الثابت المسائي والتسجيلات حسب الطلب.`,
-    part: 'حصة التسجيلات حسب الطلب ($ يومياً)',
-    fixedShare: (f: string, s: string) => `الحصة المتبقية للفترات الثابتة: ${f} $ يومياً (استُهلك اليوم ${s} $)`,
-    save: 'حفظ التوزيع',
-    savedSplit: 'تم حفظ التوزيع. يطبّقه الرصد خلال دقيقة.',
-    submit: 'برمجة التسجيل',
-    scheduled: 'تمت برمجة التسجيل.',
-    merged: 'تداخلت الفترة مع تسجيل قائم لهذه القناة، فدُمجت الفترتان في تسجيل واحد.',
-    list: 'التسجيلات',
-    empty: 'لا توجد تسجيلات مبرمجة.',
-    states: { en_attente: 'في الانتظار', en_cours: 'جارٍ التسجيل', transcription: 'جارٍ التفريغ', termine: 'منتهٍ', echoue: 'فشل', annule: 'أُلغي' } as Record<State, string>,
-    recProgress: 'التسجيل',
-    trProgress: 'التفريغ',
-    stop: 'إيقاف الآن',
-    cancel: 'إلغاء',
-    view: 'عرض النص',
-    txt: 'تنزيل TXT',
-    srt: 'تنزيل SRT',
-    by: 'بواسطة',
+    whenNow: "سجّل الآن",
+    clocks: (a: string, b: string) => `طرابلس ${a} · جهازك ${b}`,
+    offsetFix: (a: string, b: string) => `هل تقصد ${a}–${b} بتوقيت طرابلس؟`,
+    offsetHint: "الأوقات تُكتب بتوقيت طرابلس، وساعة جهازك مختلفة.",
+    applyFix: "نعم، صحّح",
+    pastCovered: (s: string) =>
+      `هذه الفترة مضت، لكن القناة سُجّلت تلقائياً في ${s} ونصها متاح.`,
+    openSlot: (s: string) => `افتح نص الفترة ${s} وابحث فيه`,
+    whenCustom: "فترة محددة",
+    length: "المدة",
+    mins: (m: number) => `${m} دقيقة`,
+    customMin: "مدة أخرى (دقائق)",
+    fromTo: (a: string, b: string) => `من ${a} إلى ${b} (بتوقيت طرابلس)`,
+    endBefore: "النهاية يجب أن تكون بعد البداية.",
+    startPast:
+      "البداية في الماضي: البث المباشر لا يُسجَّل بأثر رجعي. اختر « ابدأ الآن » أو وقتاً قادماً.",
+    findTitle: "البحث في نصوص التسجيلات",
+    findPh: "اكتب كلمة أو اسماً أو عبارة…",
+    findGo: "بحث",
+    findNone: "لا توجد مقاطع مطابقة في التسجيلات المفرغة.",
+    findN: (n: number) => `${n} مقطع مطابق`,
+    open: "فتح النص",
+    more: "للبحث المتقدم (الرصد المبرمج، التاريخ، الحالة، التسجيل الثابت): تبويب « البحث الذكي ».",
+    duration: "المدة",
+    estimate: "تكلفة التفريغ التقديرية",
+    remaining: (r: string, c: string, h: string) =>
+      `ميزانية التسجيلات اليوم: المتبقي ${r} $ من ${c} $ (≈ ${h} س من الصوت)`,
+    unknownBudget:
+      "الرصد لم يرسل ميزانيته بعد: التقدير على أساس الحصة الافتراضية.",
+    split: "توزيع ميزانية التفريغ اليومية",
+    splitHint: (t: string) =>
+      `السقف الإجمالي ≈ ${t} $ يومياً (65 $ شهرياً)، يتقاسمه التسجيل الثابت المسائي والتسجيلات حسب الطلب.`,
+    part: "حصة التسجيلات حسب الطلب ($ يومياً)",
+    fixedShare: (f: string, s: string) =>
+      `الحصة المتبقية للفترات الثابتة: ${f} $ يومياً (استُهلك اليوم ${s} $)`,
+    save: "حفظ التوزيع",
+    savedSplit: "تم حفظ التوزيع. يطبّقه الرصد خلال دقيقة.",
+    submit: "برمجة التسجيل",
+    scheduled: "تمت برمجة التسجيل.",
+    merged:
+      "تداخلت الفترة مع تسجيل قائم لهذه القناة، فدُمجت الفترتان في تسجيل واحد.",
+    list: "التسجيلات",
+    empty: "لا توجد تسجيلات مبرمجة.",
+    states: {
+      en_attente: "في الانتظار",
+      en_cours: "جارٍ التسجيل",
+      transcription: "جارٍ التفريغ",
+      termine: "منتهٍ",
+      echoue: "فشل",
+      annule: "أُلغي",
+    } as Record<State, string>,
+    recProgress: "التسجيل",
+    trProgress: "التفريغ",
+    stop: "إيقاف الآن",
+    cancel: "إلغاء",
+    view: "عرض النص",
+    txt: "تنزيل TXT",
+    srt: "تنزيل SRT",
+    by: "بواسطة",
     min: (n: number) => `${n} د`,
-    partial: 'تسجيل جزئي',
+    partial: "تسجيل جزئي",
     retries: (n: number) => `${n} محاولة إعادة اتصال`,
-    readOnly: 'برمجة التسجيلات متاحة لملفات المحللين والمشرفين.',
-    search: 'ابحث في كل النصوص المفرّغة',
-    searchGo: 'بحث',
-    noHits: 'لا نتائج.',
-    filter: 'ابحث في هذا النص',
-    close: 'إغلاق',
-    approx: 'التوقيت تقريبي',
-    notRecordable: 'لا يوجد رابط بث يمكن تسجيله',
-    availableNow: 'متاح الآن',
-    ytBlocked: 'غير متاح: يوتيوب يرفض الخادم حالياً (يجب تجديد ملف الكوكيز)',
+    readOnly: "برمجة التسجيلات متاحة لملفات المحللين والمشرفين.",
+    search: "ابحث في كل النصوص المفرّغة",
+    searchGo: "بحث",
+    noHits: "لا نتائج.",
+    filter: "ابحث في هذا النص",
+    close: "إغلاق",
+    approx: "التوقيت تقريبي",
+    notRecordable: "لا يوجد رابط بث يمكن تسجيله",
+    availableNow: "متاح الآن",
+    ytBlocked: "غير متاح: يوتيوب يرفض الخادم حالياً (يجب تجديد ملف الكوكيز)",
     errors: {
-      PAST: 'هذه الفترة بدأت قبل أكثر من دقيقتين. البث المباشر لا يتيح الرجوع إلى الماضي (دقيقة إلى أربع دقائق فقط حسب الفحص)، لذا لا يمكن تسجيل فترة مضت.',
-      pastSlots: (s: string) => `هذه القناة تُسجَّل تلقائياً في الفترة ${s}: راجع نصوصها في تبويب «النص» للقناة.`,
+      PAST: "هذه الفترة بدأت قبل أكثر من دقيقتين. البث المباشر لا يتيح الرجوع إلى الماضي (دقيقة إلى أربع دقائق فقط حسب الفحص)، لذا لا يمكن تسجيل فترة مضت.",
+      pastSlots: (s: string) =>
+        `هذه القناة تُسجَّل تلقائياً في الفترة ${s}: راجع نصوصها في تبويب «النص» للقناة.`,
       TOO_SHORT: (n: number) => `المدة الدنيا ${n} دقائق.`,
       TOO_LONG: (n: number) => `المدة القصوى ${n} دقيقة للتسجيل الواحد.`,
       TOO_FAR: (n: number) => `لا يمكن البرمجة لأكثر من ${n} يوماً مقدماً.`,
-      PARALLEL: (n: number) => `لا يمكن تسجيل أكثر من ${n} قنوات في الوقت نفسه. اختر فترة أخرى.`,
-      CAPTURES: (n: number, f: number) => `في هذه الفترة تُسجَّل ${f} قنوات ضمن الفترات الثابتة المسائية، والحد الأقصى للرصد ${n} تسجيلات في الوقت نفسه. اختر فترة أخرى.`,
+      PARALLEL: (n: number) =>
+        `لا يمكن تسجيل أكثر من ${n} قنوات في الوقت نفسه. اختر فترة أخرى.`,
+      CAPTURES: (n: number, f: number) =>
+        `في هذه الفترة تُسجَّل ${f} قنوات ضمن الفترات الثابتة المسائية، والحد الأقصى للرصد ${n} تسجيلات في الوقت نفسه. اختر فترة أخرى.`,
       BAD_PART: (m: string) => `أدخل مبلغاً بين 0 و${m} $.`,
-      BUDGET: (e: string, r: string) => `التكلفة التقديرية ${e} $ تتجاوز المتبقي من سقف هذا الشهر (${r} $).`,
-      NOT_RECORDABLE: 'هذه القناة لا تملك رابط بث يمكن تسجيله.',
-      YOUTUBE_BLOCKED: 'هذه القناة تُسجَّل عبر يوتيوب، ويوتيوب يرفض الخادم حالياً (التحقق من أنك لست روبوتاً). اختر قناة متاحة الآن، أو جدّد ملف الكوكيز على الخادم.',
-      UNAVAILABLE: 'هذه القناة غير متاحة الآن.',
-      NO_CHANNEL: 'القناة غير موجودة.',
-      BAD_RANGE: 'يجب أن تكون النهاية بعد البداية.',
-      FINISHED: 'هذا التسجيل انتهى بالفعل.',
-      NO_VEILLE: 'خدمة التسجيل في الرصد لم تستجب في الموعد (لم تُحدَّث بعد على الخادم أو متوقفة).',
-      generic: 'تعذّرت العملية.',
+      BUDGET: (e: string, r: string) =>
+        `التكلفة التقديرية ${e} $ تتجاوز المتبقي من سقف هذا الشهر (${r} $).`,
+      NOT_RECORDABLE: "هذه القناة لا تملك رابط بث يمكن تسجيله.",
+      YOUTUBE_BLOCKED:
+        "هذه القناة تُسجَّل عبر يوتيوب، ويوتيوب يرفض الخادم حالياً (التحقق من أنك لست روبوتاً). اختر قناة متاحة الآن، أو جدّد ملف الكوكيز على الخادم.",
+      UNAVAILABLE: "هذه القناة غير متاحة الآن.",
+      NO_CHANNEL: "القناة غير موجودة.",
+      BAD_RANGE: "يجب أن تكون النهاية بعد البداية.",
+      FINISHED: "هذا التسجيل انتهى بالفعل.",
+      NO_VEILLE:
+        "خدمة التسجيل في الرصد لم تستجب في الموعد (لم تُحدَّث بعد على الخادم أو متوقفة).",
+      generic: "تعذّرت العملية.",
     },
     veille: {
-      STREAM_DOWN: (n: string) => (n ? `رابط البث لم يعمل بعد ${n} محاولات.` : 'رابط البث لم يعمل خلال الفترة.'),
-      NO_AUDIO: 'لم يُستقبل أي صوت خلال الفترة (خدمة التسجيل لم تكن تعمل أو البث متوقف).',
-      BUDGET: 'ميزانية التسجيلات لهذا اليوم استُنفدت: لم يُفرَّغ النص. أعد المحاولة غداً أو ارفع الحصة.',
-      TRANSCRIBE: 'فشل التفريغ الآلي للنص.',
-      WAIT_SLOT: 'في انتظار مكان: عدد التسجيلات الجارية بلغ الحد الأقصى.',
-      RETRY: 'انقطع البث، جارٍ إعادة الاتصال…',
-      STREAM_CUT: 'انقطع البث أثناء التسجيل: النص يغطي الجزء المسجَّل فقط.',
+      STREAM_DOWN: (n: string) =>
+        n
+          ? `رابط البث لم يعمل بعد ${n} محاولات.`
+          : "رابط البث لم يعمل خلال الفترة.",
+      NO_AUDIO:
+        "لم يُستقبل أي صوت خلال الفترة (خدمة التسجيل لم تكن تعمل أو البث متوقف).",
+      BUDGET:
+        "ميزانية التسجيلات لهذا اليوم استُنفدت: لم يُفرَّغ النص. أعد المحاولة غداً أو ارفع الحصة.",
+      TRANSCRIBE: "فشل التفريغ الآلي للنص.",
+      WAIT_SLOT: "في انتظار مكان: عدد التسجيلات الجارية بلغ الحد الأقصى.",
+      RETRY: "انقطع البث، جارٍ إعادة الاتصال…",
+      STREAM_CUT: "انقطع البث أثناء التسجيل: النص يغطي الجزء المسجَّل فقط.",
     },
   },
   en: {
-    title: 'Record on demand',
-    tabs: { record: 'Schedule recording', rasd: 'Scheduled watch', search: 'Smart search' } as Record<string, string>,
-    rasdTag: 'scheduled watch',
+    title: "Record on demand",
+    tabs: {
+      record: "Schedule recording",
+      rasd: "Scheduled watch",
+      search: "Smart search",
+    } as Record<string, string>,
+    rasdTag: "scheduled watch",
     hitsN: (n: number) => `${n} passages on the subject`,
-    sub: 'Pick a channel and a precise period: the live stream is recorded during that period only, then transcribed automatically and the audio deleted.',
-    channel: 'Channel',
-    start: 'Start',
-    end: 'End',
-    local: 'Tripoli time',
+    sub: "Pick a channel and a precise period: the live stream is recorded during that period only, then transcribed automatically and the audio deleted.",
+    channel: "Channel",
+    start: "Start",
+    end: "End",
+    local: "Tripoli time",
     tripoliNow: (h: string) => `Time in Tripoli now: ${h}`,
-    now: 'Now',
+    now: "Now",
     plus: (m: number) => `+${m} min`,
-    duration: 'Duration',
-    estimate: 'Estimated transcription cost',
-    remaining: (r: string, c: string, h: string) => `On-demand budget today: $${r} left out of $${c} (≈ ${h} h of audio)`,
-    unknownBudget: 'The monitoring has not sent its budget yet: estimate based on the default share.',
-    split: 'Daily transcription budget split',
-    splitHint: (t: string) => `Total cap ≈ $${t} per day ($65 per month), shared between the fixed evening slots and on-demand recordings.`,
-    part: 'On-demand share ($ per day)',
-    fixedShare: (f: string, s: string) => `Left for the fixed slots: $${f} per day ($${s} used today)`,
-    save: 'Save split',
-    savedSplit: 'Split saved. The monitoring applies it within a minute.',
-    submit: 'Schedule recording',
-    scheduled: 'Recording scheduled.',
-    merged: 'The period overlapped an existing recording of this channel, so both were merged into one.',
-    list: 'Recordings',
-    empty: 'No recording scheduled.',
-    states: { en_attente: 'Pending', en_cours: 'Recording', transcription: 'Transcribing', termine: 'Done', echoue: 'Failed', annule: 'Cancelled' } as Record<State, string>,
-    recProgress: 'Recording',
-    trProgress: 'Transcription',
-    stop: 'Stop now',
-    cancel: 'Cancel',
-    view: 'View text',
-    txt: 'Download TXT',
-    srt: 'Download SRT',
-    by: 'by',
+    whenNow: "Record now",
+    clocks: (a: string, b: string) => `Tripoli ${a} · your device ${b}`,
+    offsetFix: (a: string, b: string) => `Did you mean ${a}–${b} Tripoli time?`,
+    offsetHint:
+      "Times are entered in Tripoli time, and your device clock differs.",
+    applyFix: "Yes, fix it",
+    pastCovered: (s: string) =>
+      `This period is over, but the channel was recorded automatically during ${s} and its text is available.`,
+    openSlot: (s: string) => `Open the ${s} text and search it`,
+    whenCustom: "Set period",
+    length: "Duration",
+    mins: (m: number) => `${m} min`,
+    customMin: "Other duration (minutes)",
+    fromTo: (a: string, b: string) => `From ${a} to ${b} (Tripoli time)`,
+    endBefore: "The end must be after the start.",
+    startPast:
+      "The start is in the past: live streams cannot be recorded retroactively. Choose “Start now” or a future time.",
+    findTitle: "Search the recording transcripts",
+    findPh: "Type a word, name or phrase…",
+    findGo: "Search",
+    findNone: "No matching passage in the transcribed recordings.",
+    findN: (n: number) => `${n} matching passages`,
+    open: "Open transcript",
+    more: "For advanced search (scheduled watch, date, status, fixed recording): the “Smart search” tab.",
+    duration: "Duration",
+    estimate: "Estimated transcription cost",
+    remaining: (r: string, c: string, h: string) =>
+      `On-demand budget today: $${r} left out of $${c} (≈ ${h} h of audio)`,
+    unknownBudget:
+      "The monitoring has not sent its budget yet: estimate based on the default share.",
+    split: "Daily transcription budget split",
+    splitHint: (t: string) =>
+      `Total cap ≈ $${t} per day ($65 per month), shared between the fixed evening slots and on-demand recordings.`,
+    part: "On-demand share ($ per day)",
+    fixedShare: (f: string, s: string) =>
+      `Left for the fixed slots: $${f} per day ($${s} used today)`,
+    save: "Save split",
+    savedSplit: "Split saved. The monitoring applies it within a minute.",
+    submit: "Schedule recording",
+    scheduled: "Recording scheduled.",
+    merged:
+      "The period overlapped an existing recording of this channel, so both were merged into one.",
+    list: "Recordings",
+    empty: "No recording scheduled.",
+    states: {
+      en_attente: "Pending",
+      en_cours: "Recording",
+      transcription: "Transcribing",
+      termine: "Done",
+      echoue: "Failed",
+      annule: "Cancelled",
+    } as Record<State, string>,
+    recProgress: "Recording",
+    trProgress: "Transcription",
+    stop: "Stop now",
+    cancel: "Cancel",
+    view: "View text",
+    txt: "Download TXT",
+    srt: "Download SRT",
+    by: "by",
     min: (n: number) => `${n} min`,
-    partial: 'Partial recording',
+    partial: "Partial recording",
     retries: (n: number) => `${n} reconnection attempts`,
-    readOnly: 'Scheduling recordings is available to analyst and admin profiles.',
-    search: 'Search all transcripts',
-    searchGo: 'Search',
-    noHits: 'No results.',
-    filter: 'Search this transcript',
-    close: 'Close',
-    approx: 'Times are approximate',
-    notRecordable: 'No recordable stream',
-    availableNow: 'available now',
-    ytBlocked: 'unavailable: YouTube is currently refusing the server (cookies file must be renewed)',
+    readOnly:
+      "Scheduling recordings is available to analyst and admin profiles.",
+    search: "Search all transcripts",
+    searchGo: "Search",
+    noHits: "No results.",
+    filter: "Search this transcript",
+    close: "Close",
+    approx: "Times are approximate",
+    notRecordable: "No recordable stream",
+    availableNow: "available now",
+    ytBlocked:
+      "unavailable: YouTube is currently refusing the server (cookies file must be renewed)",
     errors: {
-      PAST: 'This period started more than 2 minutes ago. Live streams cannot be rewound (1 to 4 minutes at most, as tested), so a past period cannot be recorded.',
-      pastSlots: (s: string) => `This channel is recorded automatically during ${s}: see its transcripts in the channel's “Transcript” tab.`,
+      PAST: "This period started more than 2 minutes ago. Live streams cannot be rewound (1 to 4 minutes at most, as tested), so a past period cannot be recorded.",
+      pastSlots: (s: string) =>
+        `This channel is recorded automatically during ${s}: see its transcripts in the channel's “Transcript” tab.`,
       TOO_SHORT: (n: number) => `Minimum duration is ${n} minutes.`,
-      TOO_LONG: (n: number) => `Maximum duration is ${n} minutes per recording.`,
-      TOO_FAR: (n: number) => `Recordings cannot be scheduled more than ${n} days ahead.`,
-      PARALLEL: (n: number) => `At most ${n} channels can be recorded at the same time. Choose another period.`,
-      CAPTURES: (n: number, f: number) => `${f} channels are already recorded in the fixed evening slots at that time, and the monitoring records at most ${n} at once. Choose another period.`,
+      TOO_LONG: (n: number) =>
+        `Maximum duration is ${n} minutes per recording.`,
+      TOO_FAR: (n: number) =>
+        `Recordings cannot be scheduled more than ${n} days ahead.`,
+      PARALLEL: (n: number) =>
+        `At most ${n} channels can be recorded at the same time. Choose another period.`,
+      CAPTURES: (n: number, f: number) =>
+        `${f} channels are already recorded in the fixed evening slots at that time, and the monitoring records at most ${n} at once. Choose another period.`,
       BAD_PART: (m: string) => `Enter an amount between 0 and $${m}.`,
-      BUDGET: (e: string, r: string) => `The estimated cost ($${e}) exceeds what is left of this month's cap ($${r}).`,
-      NOT_RECORDABLE: 'This channel has no recordable stream.',
-      YOUTUBE_BLOCKED: 'This channel is recorded through YouTube, and YouTube is currently refusing the server (bot check). Pick a channel available now, or renew the cookies file on the server.',
-      UNAVAILABLE: 'This channel is not available right now.',
-      NO_CHANNEL: 'Unknown channel.',
-      BAD_RANGE: 'The end must be after the start.',
-      FINISHED: 'This recording has already finished.',
-      NO_VEILLE: 'The monitoring recorder did not respond in time (not updated on the server yet, or stopped).',
-      generic: 'The operation failed.',
+      BUDGET: (e: string, r: string) =>
+        `The estimated cost ($${e}) exceeds what is left of this month's cap ($${r}).`,
+      NOT_RECORDABLE: "This channel has no recordable stream.",
+      YOUTUBE_BLOCKED:
+        "This channel is recorded through YouTube, and YouTube is currently refusing the server (bot check). Pick a channel available now, or renew the cookies file on the server.",
+      UNAVAILABLE: "This channel is not available right now.",
+      NO_CHANNEL: "Unknown channel.",
+      BAD_RANGE: "The end must be after the start.",
+      FINISHED: "This recording has already finished.",
+      NO_VEILLE:
+        "The monitoring recorder did not respond in time (not updated on the server yet, or stopped).",
+      generic: "The operation failed.",
     },
     veille: {
-      STREAM_DOWN: (n: string) => (n ? `The stream did not work after ${n} attempts.` : 'The stream did not work during the period.'),
-      NO_AUDIO: 'No audio was received during the period (recorder not running, or stream off air).',
-      BUDGET: "Today's recording budget is used up: the text was not transcribed. Try again tomorrow or raise the share.",
-      TRANSCRIBE: 'Automatic transcription failed.',
-      WAIT_SLOT: 'Waiting for a free slot: the maximum number of recordings is running.',
-      RETRY: 'Stream interrupted, reconnecting…',
-      STREAM_CUT: 'The stream was cut during the recording: the text covers the recorded part only.',
+      STREAM_DOWN: (n: string) =>
+        n
+          ? `The stream did not work after ${n} attempts.`
+          : "The stream did not work during the period.",
+      NO_AUDIO:
+        "No audio was received during the period (recorder not running, or stream off air).",
+      BUDGET:
+        "Today's recording budget is used up: the text was not transcribed. Try again tomorrow or raise the share.",
+      TRANSCRIBE: "Automatic transcription failed.",
+      WAIT_SLOT:
+        "Waiting for a free slot: the maximum number of recordings is running.",
+      RETRY: "Stream interrupted, reconnecting…",
+      STREAM_CUT:
+        "The stream was cut during the recording: the text covers the recorded part only.",
     },
   },
-}
-const useText = () => TEXT[useI18n().lang === 'ar' ? 'ar' : 'en']
+};
+const useText = () => TEXT[useI18n().lang === "ar" ? "ar" : "en"];
 
 /** Message de la veille « CODE|détail » : texte traduit + détail technique (anglais ou français, laissé tel quel) */
-function veilleMessage(t: (typeof TEXT)['ar'], raw?: string) {
-  if (!raw) return null
-  if (raw === 'NO_VEILLE') return { text: t.errors.NO_VEILLE, detail: '' }
-  const [code, ...rest] = raw.split('|')
-  const v = t.veille as Record<string, unknown>
-  const known = v[code]
-  if (code === 'STREAM_DOWN') {
-    const n = /^\d+$/.test(rest[0] ?? '') ? (rest.shift() as string) : ''
+function veilleMessage(t: (typeof TEXT)["ar"], raw?: string) {
+  if (!raw) return null;
+  if (raw === "NO_VEILLE") return { text: t.errors.NO_VEILLE, detail: "" };
+  const [code, ...rest] = raw.split("|");
+  const v = t.veille as Record<string, unknown>;
+  const known = v[code];
+  if (code === "STREAM_DOWN") {
+    const n = /^\d+$/.test(rest[0] ?? "") ? (rest.shift() as string) : "";
     // Cause la plus fréquente, dite clairement : YouTube refuse le serveur (contrôle anti-robot)
-    if (/not a bot|Sign in to confirm/i.test(rest.join('|'))) return { text: t.errors.YOUTUBE_BLOCKED, detail: rest.join('|') }
-    return { text: t.veille.STREAM_DOWN(n), detail: rest.join('|') }
+    if (/not a bot|Sign in to confirm/i.test(rest.join("|")))
+      return { text: t.errors.YOUTUBE_BLOCKED, detail: rest.join("|") };
+    return { text: t.veille.STREAM_DOWN(n), detail: rest.join("|") };
   }
-  if (typeof known === 'string') return { text: known, detail: rest.join('|') }
-  return { text: raw, detail: '' }
+  if (typeof known === "string") return { text: known, detail: rest.join("|") };
+  return { text: raw, detail: "" };
 }
 
 function VeilleNote({ raw, className }: { raw?: string; className: string }) {
-  const t = useText()
-  const m = veilleMessage(t, raw)
-  if (!m) return null
+  const t = useText();
+  const m = veilleMessage(t, raw);
+  if (!m) return null;
   return (
     <p className={className}>
       {m.text}
@@ -247,44 +377,60 @@ function VeilleNote({ raw, className }: { raw?: string; className: string }) {
         </small>
       )}
     </p>
-  )
+  );
 }
-type Err = { error: string; slots?: string[]; max?: number; days?: number; estimate?: number; remaining?: number; fixed?: number }
+type Err = {
+  error: string;
+  slots?: string[];
+  max?: number;
+  days?: number;
+  estimate?: number;
+  remaining?: number;
+  fixed?: number;
+};
 
-function errorText(t: (typeof TEXT)['ar'], e: Err, limits?: Data['limits']) {
-  const E = t.errors
+function errorText(t: (typeof TEXT)["ar"], e: Err, limits?: Data["limits"]) {
+  const E = t.errors;
   switch (e.error) {
-    case 'PAST':
-      return `${E.PAST}${e.slots?.length ? ` ${E.pastSlots(e.slots.join('، '))}` : ''}`
-    case 'TOO_SHORT':
-      return E.TOO_SHORT(limits?.minMinutes ?? 2)
-    case 'TOO_LONG':
-      return E.TOO_LONG(e.max ?? limits?.maxMinutes ?? 240)
-    case 'TOO_FAR':
-      return E.TOO_FAR(e.days ?? 30)
-    case 'PARALLEL':
-      return E.PARALLEL(e.max ?? limits?.maxParallel ?? 3)
-    case 'BUDGET':
-      return E.BUDGET(String(e.estimate ?? '?'), String(e.remaining ?? '?'))
-    case 'CAPTURES':
-      return E.CAPTURES(e.max ?? limits?.maxCaptures ?? 6, e.fixed ?? 0)
-    case 'BAD_PART':
-      return E.BAD_PART(String(e.max ?? '?'))
+    case "PAST":
+      return `${E.PAST}${e.slots?.length ? ` ${E.pastSlots(e.slots.join("، "))}` : ""}`;
+    case "TOO_SHORT":
+      return E.TOO_SHORT(limits?.minMinutes ?? 2);
+    case "TOO_LONG":
+      return E.TOO_LONG(e.max ?? limits?.maxMinutes ?? 240);
+    case "TOO_FAR":
+      return E.TOO_FAR(e.days ?? 30);
+    case "PARALLEL":
+      return E.PARALLEL(e.max ?? limits?.maxParallel ?? 3);
+    case "BUDGET":
+      return E.BUDGET(String(e.estimate ?? "?"), String(e.remaining ?? "?"));
+    case "CAPTURES":
+      return E.CAPTURES(e.max ?? limits?.maxCaptures ?? 6, e.fixed ?? 0);
+    case "BAD_PART":
+      return E.BAD_PART(String(e.max ?? "?"));
     default: {
-      const known = (E as Record<string, unknown>)[e.error]
-      return typeof known === 'string' ? known : E.generic
+      const known = (E as Record<string, unknown>)[e.error];
+      return typeof known === "string" ? known : E.generic;
     }
   }
 }
 
 // Champs de date et d'heure en heure de Tripoli (UTC+2 toute l'année), quel que soit le fuseau du poste
-const localValue = (t: number) => new Date(t + 2 * 3_600_000).toISOString().slice(0, 16)
-const fromLocal = (v: string) => Date.parse(`${v}:00+02:00`)
+const localValue = (t: number) =>
+  new Date(t + 2 * 3_600_000).toISOString().slice(0, 16);
+const fromLocal = (v: string) => Date.parse(`${v}:00+02:00`);
 
 function Bar({ value, label }: { value: number; label: string }) {
-  const pct = Math.round(Math.max(0, Math.min(1, value)) * 100)
+  const pct = Math.round(Math.max(0, Math.min(1, value)) * 100);
   return (
-    <span className="rec-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
+    <span
+      className="rec-bar"
+      role="progressbar"
+      aria-valuenow={pct}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={label}
+    >
       <small>
         {label} {pct}%
       </small>
@@ -292,121 +438,218 @@ function Bar({ value, label }: { value: number; label: string }) {
         <b style={{ width: `${pct}%` }} />
       </i>
     </span>
-  )
+  );
 }
 
-function TranscriptModal({ rec, onClose, focus, terms = [] }: { rec: Rec; onClose: () => void; focus?: number; terms?: string[] }) {
-  const i = useI18n()
-  const t = useText()
-  const { data, error } = useFetch<Transcript>(`/api/recordings/${rec.id}/transcript`, 0)
-  const [q, setQ] = useState('')
+function TranscriptModal({
+  rec,
+  onClose,
+  focus,
+  terms = [],
+}: {
+  rec: Rec;
+  onClose: () => void;
+  focus?: number;
+  terms?: string[];
+}) {
+  const i = useI18n();
+  const t = useText();
+  const { data, error } = useFetch<Transcript>(
+    `/api/recordings/${rec.id}/transcript`,
+    0,
+  );
+  const [q, setQ] = useState("");
   // Passage ouvert depuis la recherche intelligente : mis en vue une fois le texte chargé
   useEffect(() => {
-    if (data && focus != null) document.querySelector(`.rec-passages li[data-n="${focus}"]`)?.scrollIntoView({ block: 'center' })
-  }, [data, focus])
+    if (data && focus != null)
+      document
+        .querySelector(`.rec-passages li[data-n="${focus}"]`)
+        ?.scrollIntoView({ block: "center" });
+  }, [data, focus]);
   useEffect(() => {
-    const key = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    document.addEventListener('keydown', key)
-    return () => document.removeEventListener('keydown', key)
-  }, [onClose])
-  const shown = (data?.passages ?? []).filter((p) => !q.trim() || p.text.toLowerCase().includes(q.trim().toLowerCase()))
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", key);
+    return () => document.removeEventListener("keydown", key);
+  }, [onClose]);
+  const shown = (data?.passages ?? []).filter(
+    (p) => !q.trim() || p.text.toLowerCase().includes(q.trim().toLowerCase()),
+  );
   return (
-    <div className="mms-modal rec-modal" role="dialog" aria-modal="true" aria-label={rec.nom} onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className="mms-modal rec-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label={rec.nom}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div className="mms-modal__box bc-modal">
         <h3 dir="auto">
           {rec.nom} · {i.dateTime(rec.debut)} – {i.time(rec.fin)}
         </h3>
         <div className="rec-modal__bar">
-          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.filter} aria-label={t.filter} dir="auto" />
-          <a className="news-btn news-btn--ghost" href={`/api/recordings/${rec.id}/transcript?format=txt&lang=${i.lang}`} download>
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={t.filter}
+            aria-label={t.filter}
+            dir="auto"
+          />
+          <a
+            className="news-btn news-btn--ghost"
+            href={`/api/recordings/${rec.id}/transcript?format=txt&lang=${i.lang}`}
+            download
+          >
             {t.txt}
           </a>
-          <a className="news-btn news-btn--ghost" href={`/api/recordings/${rec.id}/transcript?format=srt`} download>
+          <a
+            className="news-btn news-btn--ghost"
+            href={`/api/recordings/${rec.id}/transcript?format=srt`}
+            download
+          >
             {t.srt}
           </a>
         </div>
         <p className="ld-hint">≈ {t.approx}</p>
-        {error && <p className="news-status news-status--error">{i.t.loadError}</p>}
+        {error && (
+          <p className="news-status news-status--error">{i.t.loadError}</p>
+        )}
         {!data && !error && <p className="news-status">{i.t.loading}</p>}
         {data && (
           <ol className="bc-passages rec-passages">
             {shown.map((p) => {
-              const n = data.passages.indexOf(p)
+              const n = data.passages.indexOf(p);
               return (
-                <li key={n} data-n={n} className={`${q.trim() ? 'is-hit' : ''}${n === focus ? ' is-focus' : ''}`}>
+                <li
+                  key={n}
+                  data-n={n}
+                  className={`${q.trim() ? "is-hit" : ""}${n === focus ? " is-focus" : ""}`}
+                >
                   <span className="bc-passages__time">≈ {i.time(p.at)}</span>
                   <p dir="auto">
-                    <Highlight text={p.text} terms={q.trim() ? [q.trim()] : terms} />
+                    <Highlight
+                      text={p.text}
+                      terms={q.trim() ? [q.trim()] : terms}
+                    />
                   </p>
                 </li>
-              )
+              );
             })}
             {shown.length === 0 && <li className="news-status">{t.noHits}</li>}
           </ol>
         )}
         <div className="mms-modal__actions">
-          <button type="button" className="news-btn news-btn--ghost" onClick={onClose}>
+          <button
+            type="button"
+            className="news-btn news-btn--ghost"
+            onClick={onClose}
+          >
             {t.close}
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-function RecRow({ r, can, onChange, onView, limits }: { r: Rec; can: boolean; onChange: () => void; onView: () => void; limits: Data['limits'] }) {
-  const i = useI18n()
-  const t = useText()
-  const [msg, setMsg] = useState('')
-  const minutes = Math.round((Date.parse(r.fin) - Date.parse(r.debut)) / 60_000)
+function RecRow({
+  r,
+  can,
+  onChange,
+  onView,
+  limits,
+}: {
+  r: Rec;
+  can: boolean;
+  onChange: () => void;
+  onView: () => void;
+  limits: Data["limits"];
+}) {
+  const i = useI18n();
+  const t = useText();
+  const [msg, setMsg] = useState("");
+  const minutes = Math.round(
+    (Date.parse(r.fin) - Date.parse(r.debut)) / 60_000,
+  );
   async function stop() {
-    setMsg('')
-    const res = await fetch(`/api/recordings/${r.id}/stop`, { method: 'POST' })
-    if (!res.ok) setMsg(errorText(t, await res.json().catch(() => ({ error: 'generic' })), limits))
-    onChange()
+    setMsg("");
+    const res = await fetch(`/api/recordings/${r.id}/stop`, { method: "POST" });
+    if (!res.ok)
+      setMsg(
+        errorText(
+          t,
+          await res.json().catch(() => ({ error: "generic" })),
+          limits,
+        ),
+      );
+    onChange();
   }
-  const active = r.etat === 'en_attente' || r.etat === 'en_cours'
+  const active = r.etat === "en_attente" || r.etat === "en_cours";
   return (
     <li className={`rec-row is-${r.etat}`}>
       <div className="rec-row__head">
-        <MediaIcon name={r.canal === 'radio' ? 'radio' : 'tv'} size={18} />
+        <MediaIcon name={r.canal === "radio" ? "radio" : "tv"} size={18} />
         <b dir="auto">{r.nom}</b>
         <span className={`rec-state is-${r.etat}`}>{t.states[r.etat]}</span>
         <time>
           {i.dateTime(r.debut)} – {i.time(r.fin)} · {t.min(minutes)}
         </time>
-        {(r.rasd?.length ?? 0) > 0 && <span className="rasd-tag">🎯 {t.rasdTag}</span>}
-        {r.hits != null && <span className={r.hits ? 'rasd-hits is-on' : 'rasd-hits'}>{t.hitsN(r.hits)}</span>}
+        {(r.rasd?.length ?? 0) > 0 && (
+          <span className="rasd-tag">🎯 {t.rasdTag}</span>
+        )}
+        {r.hits != null && (
+          <span className={r.hits ? "rasd-hits is-on" : "rasd-hits"}>
+            {t.hitsN(r.hits)}
+          </span>
+        )}
         <small className="rec-row__by" dir="ltr">
           {r.par}
         </small>
       </div>
-      {(r.etat === 'en_cours' || r.etat === 'transcription') && (
+      {(r.etat === "en_cours" || r.etat === "transcription") && (
         <div className="rec-row__bars">
           <Bar value={r.enregistrement ?? 0} label={t.recProgress} />
           <Bar value={r.transcription ?? 0} label={t.trProgress} />
         </div>
       )}
-      {r.etat === 'echoue' && <VeilleNote raw={r.erreur} className="rec-row__err" />}
-      {r.etat === 'en_cours' && <VeilleNote raw={r.avertissement} className="rec-row__warn" />}
+      {r.etat === "echoue" && (
+        <VeilleNote raw={r.erreur} className="rec-row__err" />
+      )}
+      {r.etat === "en_cours" && (
+        <VeilleNote raw={r.avertissement} className="rec-row__warn" />
+      )}
       {r.partiel && <VeilleNote raw={r.partiel} className="rec-row__warn" />}
       <div className="rec-row__actions">
-        {r.etat === 'termine' && r.texte && (
+        {r.etat === "termine" && r.texte && (
           <>
             <button type="button" className="news-btn" onClick={onView}>
               {t.view}
             </button>
-            <a className="news-btn news-btn--ghost" href={`/api/recordings/${r.id}/transcript?format=txt&lang=${i.lang}`} download>
+            <a
+              className="news-btn news-btn--ghost"
+              href={`/api/recordings/${r.id}/transcript?format=txt&lang=${i.lang}`}
+              download
+            >
               {t.txt}
             </a>
-            <a className="news-btn news-btn--ghost" href={`/api/recordings/${r.id}/transcript?format=srt`} download>
+            <a
+              className="news-btn news-btn--ghost"
+              href={`/api/recordings/${r.id}/transcript?format=srt`}
+              download
+            >
               {t.srt}
             </a>
           </>
         )}
         {can && active && (
-          <button type="button" className="news-btn news-btn--ghost" onClick={stop}>
-            {r.etat === 'en_cours' || Date.parse(r.debut) <= Date.now() ? t.stop : t.cancel}
+          <button
+            type="button"
+            className="news-btn news-btn--ghost"
+            onClick={stop}
+          >
+            {r.etat === "en_cours" || Date.parse(r.debut) <= Date.now()
+              ? t.stop
+              : t.cancel}
           </button>
         )}
         <small className="rec-row__cost">
@@ -415,89 +658,328 @@ function RecRow({ r, can, onChange, onView, limits }: { r: Rec; can: boolean; on
       </div>
       {msg && <p className="news-status news-status--error">{msg}</p>}
     </li>
-  )
+  );
 }
 
 /** Réglage (administrateurs) : part quotidienne du plafond de transcription réservée aux demandes */
-function BudgetSplit({ budget, onSaved }: { budget: Data['budget']; onSaved: () => void }) {
-  const t = useText()
-  const [part, setPart] = useState(String(budget.cap))
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const total = budget.total ?? 65 / 31
-  const fixed = Math.max(0, total - (Number(part) || 0))
+function BudgetSplit({
+  budget,
+  onSaved,
+}: {
+  budget: Data["budget"];
+  onSaved: () => void;
+}) {
+  const t = useText();
+  const [part, setPart] = useState(String(budget.cap));
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const total = budget.total ?? 65 / 31;
+  const fixed = Math.max(0, total - (Number(part) || 0));
   async function save(e: FormEvent) {
-    e.preventDefault()
-    const res = await fetch('/api/recordings/budget', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ part: Number(part) }) })
-    const json = await res.json().catch(() => ({ error: 'generic' }))
-    setMsg(res.ok ? { ok: true, text: t.savedSplit } : { ok: false, text: errorText(t, json) })
-    if (res.ok) onSaved()
+    e.preventDefault();
+    const res = await fetch("/api/recordings/budget", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ part: Number(part) }),
+    });
+    const json = await res.json().catch(() => ({ error: "generic" }));
+    setMsg(
+      res.ok
+        ? { ok: true, text: t.savedSplit }
+        : { ok: false, text: errorText(t, json) },
+    );
+    if (res.ok) onSaved();
   }
   return (
-    <form className="rec-split" onSubmit={save}>
-      <b>{t.split}</b>
-      <p className="ld-hint">{t.splitHint(total.toFixed(2))}</p>
-      <div className="rec-split__row">
-        <label>
-          <span>{t.part}</span>
-          <input type="number" min={0} max={Number(total.toFixed(2))} step={0.05} value={part} onChange={(e) => setPart(e.target.value)} dir="ltr" />
-        </label>
-        <span className="rec-split__bar" aria-hidden>
-          <i style={{ width: `${Math.min(100, ((Number(part) || 0) / total) * 100)}%` }} />
-        </span>
-        <button type="submit" className="news-btn news-btn--ghost">
-          {t.save}
-        </button>
-      </div>
-      <p className="ld-hint">{t.fixedShare(fixed.toFixed(2), (budget.fixed?.spent ?? 0).toFixed(2))}</p>
-      {msg && <p className={msg.ok ? 'news-status' : 'news-status news-status--error'}>{msg.text}</p>}
-    </form>
-  )
+    <details className="rec-card rec-split-box">
+      <summary>{t.split}</summary>
+      <form className="rec-split" onSubmit={save}>
+        <p className="ld-hint">{t.splitHint(total.toFixed(2))}</p>
+        <div className="rec-split__row">
+          <label>
+            <span>{t.part}</span>
+            <input
+              type="number"
+              min={0}
+              max={Number(total.toFixed(2))}
+              step={0.05}
+              value={part}
+              onChange={(e) => setPart(e.target.value)}
+              dir="ltr"
+            />
+          </label>
+          <span className="rec-split__bar" aria-hidden>
+            <i
+              style={{
+                width: `${Math.min(100, ((Number(part) || 0) / total) * 100)}%`,
+              }}
+            />
+          </span>
+          <button type="submit" className="news-btn news-btn--ghost">
+            {t.save}
+          </button>
+        </div>
+        <p className="ld-hint">
+          {t.fixedShare(
+            fixed.toFixed(2),
+            (budget.fixed?.spent ?? 0).toFixed(2),
+          )}
+        </p>
+        {msg && (
+          <p
+            className={
+              msg.ok ? "news-status" : "news-status news-status--error"
+            }
+          >
+            {msg.text}
+          </p>
+        )}
+      </form>
+    </details>
+  );
 }
 
 /** Programmation et suivi. channel : formulaire limité à cette chaîne (panneau de la chaîne ouverte en grand) */
+type FindHit = {
+  kind: "recording" | "fixed";
+  id: string;
+  n?: number;
+  nom: string;
+  at: string;
+  text: string;
+  terms: string[];
+};
+
+/** Recherche directe dans le texte des enregistrements faits à la demande (au-dessus de la liste) */
+function FindInRecordings({
+  onOpen,
+}: {
+  onOpen: (id: string, n: number, terms: string[]) => void;
+}) {
+  const t = useText();
+  const i = useI18n();
+  const [q, setQ] = useState("");
+  const [query, setQuery] = useState("");
+  const { data, error } = useFetch<{ total: number; hits: FindHit[] }>(
+    query
+      ? `/api/rasd/search?source=recordings&q=${encodeURIComponent(query)}`
+      : "/api/rasd/search?q=",
+    0,
+  );
+  const hits = query
+    ? (data?.hits ?? []).filter((h) => h.kind === "recording")
+    : [];
+  return (
+    <div className="rec-find">
+      <form
+        className="rec-find__form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setQuery(q.trim());
+        }}
+      >
+        <label>
+          <span>{t.findTitle}</span>
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={t.findPh}
+            dir="auto"
+          />
+        </label>
+        <button
+          type="submit"
+          className="news-btn"
+          disabled={q.trim().length < 2}
+        >
+          {t.findGo}
+        </button>
+      </form>
+      {error && (
+        <p className="news-status news-status--error">{i.t.loadError}</p>
+      )}
+      {query && data && (
+        <>
+          <p className="ld-hint">
+            {hits.length ? t.findN(hits.length) : t.findNone}
+          </p>
+          {hits.length > 0 && (
+            <ol className="bc-passages rasd-results">
+              {hits.slice(0, 30).map((h, k) => (
+                <li key={k} className="is-hit">
+                  <span className="bc-passages__time">≈ {i.time(h.at)}</span>
+                  <p dir="auto">
+                    <small className="rasd-results__src">
+                      <b dir="auto">{h.nom}</b> · {i.dateTime(h.at)}
+                    </small>
+                    <Highlight text={h.text} terms={h.terms} />
+                  </p>
+                  <button
+                    type="button"
+                    className="ld-toggle"
+                    onClick={() => onOpen(h.id, h.n ?? 0, h.terms)}
+                  >
+                    {t.open}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
+        </>
+      )}
+      <small className="ld-hint">{t.more}</small>
+    </div>
+  );
+}
+
 export function Recordings({ channel }: { channel?: string }) {
-  const i = useI18n()
-  const t = useText()
-  const auth = useAuth()
-  const can = canDo(auth?.user, 'tags')
-  const [tick, setTick] = useState(0)
-  const { data, error } = useFetch<Data>(`/api/recordings?t=${tick}`, 15_000)
-  const [form, setForm] = useState(() => ({ chaine: channel ?? '', debut: localValue(Date.now()), fin: localValue(Date.now() + 30 * 60_000) }))
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [view, setView] = useState<Rec | null>(null)
-  const [tab, setTab] = useState<'record' | 'rasd' | 'search'>('record')
-  const [focus, setFocus] = useState<{ n: number; terms: string[] } | null>(null)
-  const channels = (data?.channels ?? []).filter((c) => !channel || c.id === channel)
+  const i = useI18n();
+  const t = useText();
+  const auth = useAuth();
+  const can = canDo(auth?.user, "tags");
+  const [tick, setTick] = useState(0);
+  const { data, error } = useFetch<Data>(`/api/recordings?t=${tick}`, 15_000);
+  const [form, setForm] = useState(() => ({
+    chaine: channel ?? "",
+    debut: localValue(Date.now()),
+    fin: localValue(Date.now() + 30 * 60_000),
+  }));
+  // « ابدأ الآن » (par défaut) : l'heure de début est prise au moment du clic, jamais une heure restée affichée
+  const [when, setWhen] = useState<"now" | "custom">("now");
+  const [length, setLength] = useState(15);
+  const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
-    if (!form.chaine && channels.length) setForm((f) => ({ ...f, chaine: (channels.find((c) => c.recordable && c.available !== false) ?? channels.find((c) => c.recordable))?.id ?? '' }))
-  }, [channels, form.chaine])
-  const start = fromLocal(form.debut)
-  const end = fromLocal(form.fin)
-  const minutes = Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, Math.round((end - Math.max(start, Date.now())) / 60_000)) : 0
-  const cost = minutes * (data?.limits.costPerMinute ?? 0.003)
-  const preset = (m: number) => {
-    const now = Date.now()
-    setForm((f) => ({ ...f, debut: localValue(now), fin: localValue(now + m * 60_000) }))
-  }
+    const id = setInterval(() => setClock(Date.now()), 20_000);
+    return () => clearInterval(id);
+  }, []);
+  const [msg, setMsg] = useState<{
+    ok: boolean;
+    text: string;
+    slots?: string[];
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<Rec | null>(null);
+  // Période passée déjà enregistrée par le créneau fixe : la recherche s'ouvre sur ce texte
+  const [searchInit, setSearchInit] = useState<SearchInit | undefined>(
+    undefined,
+  );
+  const openSlot = (slot: string) => {
+    const [a, b] = slot.split(/[-–]/).map((x) => x.trim());
+    const day = (when === "now" ? localValue(Date.now()) : form.debut).slice(
+      0,
+      10,
+    );
+    setSearchInit({
+      channel: form.chaine,
+      from: day,
+      to: day,
+      hfrom: a,
+      hto: b,
+      source: "fixed",
+    });
+    setTab("search");
+  };
+  const [tab, setTab] = useState<"record" | "rasd" | "search">("record");
+  const [focus, setFocus] = useState<{ n: number; terms: string[] } | null>(
+    null,
+  );
+  const channels = (data?.channels ?? []).filter(
+    (c) => !channel || c.id === channel,
+  );
+  useEffect(() => {
+    if (!form.chaine && channels.length)
+      setForm((f) => ({
+        ...f,
+        chaine:
+          (
+            channels.find((c) => c.recordable && c.available !== false) ??
+            channels.find((c) => c.recordable)
+          )?.id ?? "",
+      }));
+  }, [channels, form.chaine]);
+  const start = when === "now" ? clock : fromLocal(form.debut);
+  const end = when === "now" ? clock + length * 60_000 : fromLocal(form.fin);
+  // Durée réelle de la période choisie (affichée telle quelle) ; le coût ne compte que la partie à venir
+  const minutes =
+    Number.isFinite(start) && Number.isFinite(end)
+      ? Math.max(0, Math.round((end - start) / 60_000))
+      : 0;
+  const future =
+    Number.isFinite(start) && Number.isFinite(end)
+      ? Math.max(0, Math.round((end - Math.max(start, clock)) / 60_000))
+      : 0;
+  const cost = future * (data?.limits.costPerMinute ?? 0.003);
+  // Écart entre l'horloge du poste et Tripoli (en minutes) : heure du poste tapée par erreur → proposition de correction
+  const offset =
+    Math.round((-new Date(clock).getTimezoneOffset() - 120) / 15) * 15;
+  const shift = (v: string) => localValue(fromLocal(v) - offset * 60_000);
+  const offsetSuspect =
+    when === "custom" &&
+    offset !== 0 &&
+    Number.isFinite(start) &&
+    start < clock - 2 * 60_000 &&
+    Math.abs(start - offset * 60_000 - clock) <= 20 * 60_000;
+  // Contrôle avant l'envoi (période choisie à la main)
+  const problem =
+    when === "custom"
+      ? !(end > start)
+        ? t.endBefore
+        : start < clock - 2 * 60_000
+          ? t.startPast
+          : ""
+      : "";
+  const hhmm = (v: number) => localValue(v).slice(11, 16);
+  const chooseCustom = () => {
+    const now = Date.now();
+    setForm((f) => ({
+      ...f,
+      debut: localValue(now + 60_000),
+      fin: localValue(now + 60_000 + length * 60_000),
+    }));
+    setWhen("custom");
+  };
   async function submit(e: FormEvent) {
-    e.preventDefault()
-    setMsg(null)
-    setBusy(true)
+    e.preventDefault();
+    setMsg(null);
+    setBusy(true);
     try {
-      const res = await fetch('/api/recordings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chaine: form.chaine, debut: new Date(fromLocal(form.debut)).toISOString(), fin: new Date(fromLocal(form.fin)).toISOString() }),
-      })
-      const json = await res.json().catch(() => ({ error: 'generic' }))
-      setMsg(res.ok ? { ok: true, text: json.merged ? t.merged : t.scheduled } : { ok: false, text: errorText(t, json, data?.limits) })
-      setTick((n) => n + 1)
+      const res = await fetch("/api/recordings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          when === "now"
+            ? {
+                chaine: form.chaine,
+                debut: new Date().toISOString(),
+                fin: new Date(Date.now() + length * 60_000).toISOString(),
+              }
+            : {
+                chaine: form.chaine,
+                debut: new Date(fromLocal(form.debut)).toISOString(),
+                fin: new Date(fromLocal(form.fin)).toISOString(),
+              },
+        ),
+      });
+      const json = await res.json().catch(() => ({ error: "generic" }));
+      setMsg(
+        res.ok
+          ? { ok: true, text: json.merged ? t.merged : t.scheduled }
+          : json.error === "PAST" && json.slots?.length
+            ? {
+                ok: false,
+                text: t.pastCovered(json.slots.join("، ")),
+                slots: json.slots,
+              }
+            : { ok: false, text: errorText(t, json, data?.limits) },
+      );
+      setTick((n) => n + 1);
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
   }
-  const items = (data?.items ?? []).filter((r) => !channel || r.chaine === channel)
+  const items = (data?.items ?? []).filter(
+    (r) => !channel || r.chaine === channel,
+  );
   return (
     <section className="rec">
       {!channel && (
@@ -509,81 +991,257 @@ export function Recordings({ channel }: { channel?: string }) {
       {channel && <p className="ld-hint">{t.sub}</p>}
       {!channel && (
         <div className="mms-rtabs ld-tabs" role="tablist">
-          {(['record', 'rasd', 'search'] as const).map((k) => (
-            <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'is-active' : ''} onClick={() => setTab(k)}>
+          {(["record", "rasd", "search"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={tab === k}
+              className={tab === k ? "is-active" : ""}
+              onClick={() => {
+                setTab(k);
+                if (k === "search") setSearchInit(undefined);
+              }}
+            >
               {t.tabs[k]}
             </button>
           ))}
         </div>
       )}
-      {error && <p className="news-status news-status--error">{i.t.loadError}</p>}
-      {data && tab === 'rasd' && <RasdPanel channels={data.channels} />}
-      {data && tab === 'search' && (
+      {error && (
+        <p className="news-status news-status--error">{i.t.loadError}</p>
+      )}
+      {data && tab === "rasd" && <RasdPanel channels={data.channels} />}
+      {data && tab === "search" && (
         <SmartSearch
+          key={JSON.stringify(searchInit ?? {})}
+          initial={searchInit}
           channels={data.channels}
           onOpenRecording={(id, n, terms) => {
-            setFocus({ n, terms })
-            setView(data.items.find((r) => r.id === id) ?? null)
+            setFocus({ n, terms });
+            setView(data.items.find((r) => r.id === id) ?? null);
           }}
         />
       )}
-      {data && can && tab === 'record' && (
+      {data && can && tab === "record" && (
         <form className="rec-form" onSubmit={submit}>
           {!channel && (
             <label>
               <span>{t.channel}</span>
-              <select value={form.chaine} onChange={(e) => setForm({ ...form, chaine: e.target.value })} required>
+              <select
+                value={form.chaine}
+                onChange={(e) => setForm({ ...form, chaine: e.target.value })}
+                required
+              >
                 {channels.map((c) => (
-                  <option key={c.id} value={c.id} disabled={!c.recordable || c.available === false}>
-                    {c.canal === 'radio' ? '📻' : '📺'} {c.nom}
-                    {!c.recordable ? ` — ${t.notRecordable}` : c.available === false ? ` — ${c.why === 'YOUTUBE_BLOCKED' ? t.ytBlocked : t.notRecordable}` : ` — ✓ ${t.availableNow}`}
+                  <option
+                    key={c.id}
+                    value={c.id}
+                    disabled={!c.recordable || c.available === false}
+                  >
+                    {c.canal === "radio" ? "📻" : "📺"} {c.nom}
+                    {!c.recordable
+                      ? ` — ${t.notRecordable}`
+                      : c.available === false
+                        ? ` — ${c.why === "YOUTUBE_BLOCKED" ? t.ytBlocked : t.notRecordable}`
+                        : ` — ✓ ${t.availableNow}`}
                   </option>
                 ))}
               </select>
             </label>
           )}
-          <label>
-            <span>
-              {t.start} <small>({t.local})</small>
-            </span>
-            <input type="datetime-local" value={form.debut} onChange={(e) => setForm({ ...form, debut: e.target.value })} required />
-          </label>
-          <label>
-            <span>
-              {t.end} <small>({t.local})</small>
-            </span>
-            <input type="datetime-local" value={form.fin} onChange={(e) => setForm({ ...form, fin: e.target.value })} required />
-          </label>
-          <div className="rec-form__presets">
-            <small className="rasd-clock">🕒 {t.tripoliNow(localValue(Date.now()).slice(11, 16))}</small>
-            <span>{t.now}</span>
-            {[15, 30, 60, 120].map((m) => (
-              <button key={m} type="button" className="ld-toggle" onClick={() => preset(m)}>
-                {t.plus(m)}
-              </button>
-            ))}
+          <div
+            className="rec-form__when"
+            role="radiogroup"
+            aria-label={t.start}
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={when === "now"}
+              className={when === "now" ? "is-on" : ""}
+              onClick={() => setWhen("now")}
+            >
+              {t.whenNow}
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={when === "custom"}
+              className={when === "custom" ? "is-on" : ""}
+              onClick={chooseCustom}
+            >
+              {t.whenCustom}
+            </button>
+            <small className="rasd-clock">
+              🕒{" "}
+              {offset
+                ? t.clocks(
+                    hhmm(clock),
+                    `${String(new Date(clock).getHours()).padStart(2, "0")}:${String(new Date(clock).getMinutes()).padStart(2, "0")}`,
+                  )
+                : t.tripoliNow(hhmm(clock))}
+            </small>
           </div>
+          {when === "now" ? (
+            <div className="rec-form__length">
+              <span>{t.length}</span>
+              {[15, 30, 60, 120].map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  className={`ld-toggle ${length === m ? "is-on" : ""}`}
+                  aria-pressed={length === m}
+                  onClick={() => setLength(m)}
+                >
+                  {t.mins(m)}
+                </button>
+              ))}
+              <label className="rec-form__other">
+                <span>{t.customMin}</span>
+                <input
+                  type="number"
+                  min={data.limits.minMinutes || 1}
+                  max={data.limits.maxMinutes}
+                  value={length}
+                  onChange={(e) =>
+                    setLength(Math.max(1, Number(e.target.value) || 1))
+                  }
+                />
+              </label>
+            </div>
+          ) : (
+            <>
+              <label>
+                <span>
+                  {t.start} <small>({t.local})</small>
+                </span>
+                <input
+                  type="datetime-local"
+                  value={form.debut}
+                  onChange={(e) => setForm({ ...form, debut: e.target.value })}
+                  required
+                />
+              </label>
+              <label>
+                <span>
+                  {t.end} <small>({t.local})</small>
+                </span>
+                <input
+                  type="datetime-local"
+                  value={form.fin}
+                  onChange={(e) => setForm({ ...form, fin: e.target.value })}
+                  required
+                />
+              </label>
+            </>
+          )}
+          {offsetSuspect ? (
+            <div className="rec-banner rec-banner--warn rec-form__problem">
+              <span>
+                {t.offsetHint}{" "}
+                {t.offsetFix(
+                  shift(form.debut).slice(11, 16),
+                  shift(form.fin).slice(11, 16),
+                )}
+              </span>
+              <button
+                type="button"
+                className="news-btn"
+                onClick={() =>
+                  setForm((f) => ({
+                    ...f,
+                    debut: shift(f.debut),
+                    fin: shift(f.fin),
+                  }))
+                }
+              >
+                {t.applyFix}
+              </button>
+            </div>
+          ) : (
+            problem && (
+              <p className="rec-banner rec-banner--warn rec-form__problem">
+                {problem}
+              </p>
+            )
+          )}
           <p className="rec-form__est">
-            {t.duration} : <b>{t.min(minutes)}</b> · {t.estimate} : <b>≈ {cost.toFixed(3)} $</b> · {t.remaining(data.budget.remaining.toFixed(2), data.budget.cap.toFixed(2), String(data.budget.hours))}
+            <b>{t.fromTo(hhmm(start), hhmm(end))}</b> · {t.duration} :{" "}
+            <b>{t.min(minutes)}</b> · {t.estimate} :{" "}
+            <b>≈ {cost.toFixed(3)} $</b> ·{" "}
+            {t.remaining(
+              data.budget.remaining.toFixed(2),
+              data.budget.cap.toFixed(2),
+              String(data.budget.hours),
+            )}
             {!data.budget.known && <small> — {t.unknownBudget}</small>}
           </p>
-          <button type="submit" className="news-btn" disabled={busy || !form.chaine}>
+          <button
+            type="submit"
+            className="news-btn"
+            disabled={busy || !form.chaine || Boolean(problem) || minutes <= 0}
+          >
             {t.submit}
           </button>
-          {msg && <p className={msg.ok ? 'news-status' : 'news-status news-status--error'}>{msg.text}</p>}
+          {msg &&
+            (msg.slots ? (
+              <div className="rec-banner rec-banner--info rec-form__problem">
+                <span>{msg.text}</span>
+                {msg.slots.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className="news-btn"
+                    onClick={() => openSlot(s)}
+                  >
+                    {t.openSlot(s)}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p
+                className={`rec-banner rec-form__problem ${msg.ok ? "rec-banner--info" : "rec-banner--warn"}`}
+              >
+                {msg.text}
+              </p>
+            ))}
         </form>
       )}
-      {data && !can && tab === 'record' && <p className="news-status">{t.readOnly}</p>}
-      {data && !channel && tab === 'record' && canDo(auth?.user, 'diffusion') && <BudgetSplit budget={data.budget} onSaved={() => setTick((n) => n + 1)} />}
-      {data && tab === 'record' && (
+      {data && !can && tab === "record" && (
+        <p className="news-status">{t.readOnly}</p>
+      )}
+      {data &&
+        !channel &&
+        tab === "record" &&
+        canDo(auth?.user, "diffusion") && (
+          <BudgetSplit
+            budget={data.budget}
+            onSaved={() => setTick((n) => n + 1)}
+          />
+        )}
+      {data && tab === "record" && (
         <>
+          <FindInRecordings
+            onOpen={(id, n, terms) => {
+              setFocus({ n, terms });
+              setView(data.items.find((r) => r.id === id) ?? null);
+            }}
+          />
           <h4 className="rec__list">{t.list}</h4>
           {items.length === 0 ? (
             <p className="news-status">{t.empty}</p>
           ) : (
             <ul className="rec-rows">
               {items.map((r) => (
-                <RecRow key={r.id} r={r} can={can} limits={data.limits} onChange={() => setTick((n) => n + 1)} onView={() => setView(r)} />
+                <RecRow
+                  key={r.id}
+                  r={r}
+                  can={can}
+                  limits={data.limits}
+                  onChange={() => setTick((n) => n + 1)}
+                  onView={() => setView(r)}
+                />
               ))}
             </ul>
           )}
@@ -595,11 +1253,11 @@ export function Recordings({ channel }: { channel?: string }) {
           focus={focus?.n}
           terms={focus?.terms}
           onClose={() => {
-            setView(null)
-            setFocus(null)
+            setView(null);
+            setFocus(null);
           }}
         />
       )}
     </section>
-  )
+  );
 }

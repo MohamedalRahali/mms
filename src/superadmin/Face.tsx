@@ -8,12 +8,12 @@ import { ago, api, errText } from './api'
 
 type Account = { email: string; enrolled: boolean; enrolledAt: string | null; lastOkAt: string | null; lastFailAt: string | null; lockedUntil: string | null; changeRequestedAt: string | null; approvedUntil: string | null }
 type Exception = { email: string; until: string; reason: string; by: string; at: string }
-type State = { mode: 'off' | 'trial' | 'on'; trial: string[]; approveChange: boolean; keyReady: boolean; engine: { ready: boolean; missing: string[] }; exceptions: Exception[]; accounts: Account[] }
+type State = { mode: 'off' | 'trial' | 'rodage' | 'on'; effectiveMode: 'off' | 'trial' | 'rodage' | 'on'; rodageStart: string | null; rodageEnds: string | null; trial: string[]; approveChange: boolean; keyReady: boolean; engine: { ready: boolean; missing: string[] }; exceptions: Exception[]; accounts: Account[] }
 
 type DiagFrame = { asked: string; seen: string | null; ratio: number | null; live: number | null; quality: boolean | null }
 type Diag = { at: string; email: string; kind: string; result: string; frames: DiagFrame[]; similarity: number[] }
 
-const MODE: Record<State['mode'], string> = { off: 'متوقف', trial: 'تجريبي (الحسابات المحددة فقط)', on: 'مفعّل لكل الحسابات' }
+const MODE: Record<State['mode'], string> = { off: 'متوقف', trial: 'تجريبي (الحسابات المحددة فقط)', rodage: 'فترة تجربة 7 أيام لكل الحسابات', on: 'مفعّل لكل الحسابات' }
 
 export function FaceCard() {
   const [data, setData] = useState<State | null>(null)
@@ -50,6 +50,7 @@ export function FaceCard() {
   if (!data) return msg ? <p className="sa-error">{msg}</p> : null
   const setMode = (mode: State['mode']) => {
     if (mode === 'on' && !window.confirm('سيُطلب من كل الحسابات تسجيل الوجه عند الدخول القادم. هل تريد المتابعة؟')) return
+    if (mode === 'rodage' && !window.confirm('كل الحسابات تسجّل وجهها عند الدخول القادم. لمدة 7 أيام لا يُمنع أحد من الدخول عند فشل التحقق (تصلك تنبيهات)، ثم يصبح التحقق إلزامياً تلقائياً. هل تريد المتابعة؟')) return
     call(api<State>('/face/policy', 'PUT', { mode, trial: trial.split(/[\s,;]+/).filter(Boolean), approveChange: data.approveChange }), 'تم الحفظ.')
   }
   return (
@@ -89,6 +90,13 @@ export function FaceCard() {
         الحسابات في الوضع التجريبي (مفصولة بفاصلة)
         <input className="sa-input" dir="ltr" value={trial} onChange={(e) => setTrial(e.target.value)} onBlur={() => trial !== data.trial.join(', ') && setMode(data.mode)} />
       </label>
+      {data.rodageEnds && (
+        <p className="sa-note">
+          {data.effectiveMode === 'rodage'
+            ? `فترة التجربة: تنتهي ${new Date(data.rodageEnds).toLocaleString('ar-LY', { timeZone: 'Africa/Tripoli' })} (بعد ${Math.max(0, Math.floor((Date.parse(data.rodageEnds) - Date.now()) / 86_400_000))} يوم و${Math.max(0, Math.floor(((Date.parse(data.rodageEnds) - Date.now()) % 86_400_000) / 3_600_000))} ساعة)، ثم يصبح التحقق إلزامياً تلقائياً.`
+            : 'انتهت فترة التجربة: التحقق بالوجه إلزامي الآن لكل الحسابات.'}
+        </p>
+      )}
       {msg && <p className="sa-note">{msg}</p>}
       <h3>وصول مؤقت دون تحقق بالوجه (72 ساعة كحد أقصى، يُسجَّل في السجل)</h3>
       <div className="sa-row">

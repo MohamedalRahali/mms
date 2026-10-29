@@ -38,7 +38,10 @@ const MAX_FAILS = 5
 const BASE_LOCK = 15 * 60_000
 const MAX_LOCK = 4 * 3600_000
 const MAX_FRAMES = 8
-const MODES = ['off', 'trial', 'on']
+// rodage : tous les comptes s'inscrivent à leur prochaine connexion, mais pendant RODAGE_DAYS un échec ne bloque pas
+// (cause journalisée, alerte au Super Admin) ; à la fin, passage automatique au blocage (« on »)
+const MODES = ['off', 'trial', 'rodage', 'on']
+const RODAGE_DAYS = 7
 
 let dir = ''
 let confFile = ''
@@ -75,9 +78,10 @@ export function initFace(dataDir, h = {}) {
   if (!key) console.warn('التحقق بالوجه : FACE_KEY absente (fichier .env du service) ; aucune inscription possible')
   try {
     const c = JSON.parse(fs.readFileSync(confFile, 'utf8'))
-    conf = { ...conf, ...c, mode: MODES.includes(c.mode) ? c.mode : 'off', trial: (c.trial || []).map(low), exceptions: c.exceptions || [], approveChange: c.approveChange !== false }
+    conf = { ...conf, ...c, mode: MODES.includes(c.mode) ? c.mode : 'off', trial: (c.trial || []).map(low), exceptions: c.exceptions || [], approveChange: c.approveChange !== false, rodageStart: c.rodageStart || null }
   } catch {
-    /* réglages par défaut : désactivé */
+    // Réglages par défaut : désactivé
+    conf = { mode: 'off', trial: [], exceptions: [], approveChange: true, rodageStart: null }
   }
   try {
     const t = JSON.parse(fs.readFileSync(templatesFile, 'utf8'))
@@ -114,7 +118,15 @@ const saveConf = () => writeAtomic(confFile, JSON.stringify(conf, null, 1), 0o64
 
 const DIAG_DAYS = 14
 const r2 = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v * 100) / 100 : null)
-const inPilot = (email) => conf.mode === 'trial' && conf.trial.includes(low(email))
+/** Mode en vigueur : un rodage terminé devient « on » sans intervention */
+export function effectiveMode(now = Date.now()) {
+  if (conf.mode === 'rodage' && rodageEnds() && now >= Date.parse(rodageEnds())) return 'on'
+  return conf.mode
+}
+export const rodageEnds = () => (conf.mode === 'rodage' && conf.rodageStart ? new Date(Date.parse(conf.rodageStart) + RODAGE_DAYS * 86_400_000).toISOString() : null)
+const inRodage = (now = Date.now()) => effectiveMode(now) === 'rodage'
+// Diagnostic : comptes du pilote en mode تجريبي, ou tous les comptes pendant le rodage
+const inPilot = (email) => (conf.mode === 'trial' && conf.trial.includes(low(email))) || inRodage()
 function purgeDiag(now = Date.now()) {
   const keep = diag.filter((d) => now - Date.parse(d.at) < DIAG_DAYS * 86_400_000 && inPilot(d.email))
   if (keep.length !== diag.length || (!keep.length && fs.existsSync(diagFile))) {
@@ -166,8 +178,9 @@ const activeException = (email, now = Date.now()) => conf.exceptions.find((x) =>
 export function faceRequired(email) {
   if (!engine.ready() || !key) return false
   if (activeException(email)) return false
-  if (conf.mode === 'on') return true
-  return conf.mode === 'trial' && conf.trial.includes(low(email))
+  const mode = effectiveMode()
+  if (mode === 'on' || mode === 'rodage') return true
+  return mode === 'trial' && conf.trial.includes(low(email))
 }
 
 /** État pour l'interface du compte (jamais de donnée biométrique) */
@@ -181,6 +194,9 @@ export function faceStateOf(email, session) {
     engine: engine.ready() && Boolean(key),
     changeApproved: Boolean(st.approvedUntil && st.approvedUntil > Date.now()),
     exceptionUntil: activeException(email)?.until || null,
+    // Rodage : « لاحقاً » possible et un échec ne bloque pas, jusqu'à cette date
+    soft: inRodage(),
+    softUntil: inRodage() ? rodageEnds() : null,
   }
 }
 
@@ -190,7 +206,38 @@ export function faceGate(email, session, p) {
   if (OPEN.test(p)) return ''
   if (!faceRequired(email)) return ''
   if (session?.face) return ''
+  // Rodage : « لاحقاً » ou échec non bloquant pour cette session
+  if (session?.faceSoft && inRodage()) return ''
   return 'FACE_REQUIRED'
+}
+
+/* ---------------------------------------------------------------- rodage : jamais bloquant, alertes au Super Admin */
+
+const softAlerts = new Map() // compte → dernière alerte (une par 6 heures et par compte)
+function softPass(email, token, cause, sims, now = Date.now()) {
+  hooks.markSession(token, { faceSoft: now })
+  // Écart net (toutes les images très loin du modèle) : signe probable d'un compte utilisé par une autre personne
+  const sharing = cause === 'MISMATCH' && sims?.length && sims.every((s) => s < 0.2)
+  hooks.log(sharing ? 'face_rodage_sharing' : 'face_rodage_pass', email, cause)
+  const last = softAlerts.get(low(email)) || 0
+  if (sharing || now - last > 6 * 3600_000) {
+    softAlerts.set(low(email), now)
+    hooks.notifyAdmins(
+      sharing
+        ? `تنبيه: احتمال استعمال الحساب ${email} من شخص آخر (الوجه لا يطابق الوجه المسجل إطلاقاً). فترة التجربة: لم يُمنع الدخول.`
+        : `فترة تجربة التحقق بالوجه: لم ينجح التحقق للحساب ${email} (السبب: ${cause}). لم يُمنع الدخول.`,
+    )?.catch?.(() => {})
+  }
+  return { soft: true }
+}
+
+/** « لاحقاً » pendant le rodage (pas de caméra, refus du consentement) : accès pour cette session, journalisé */
+export function deferFace({ email, token, body, now = Date.now() }) {
+  if (!inRodage(now)) return { status: 403, error: 'NOT_RODAGE' }
+  const reason = ['nocamera', 'consent', 'later'].includes(body?.reason) ? body.reason : 'later'
+  hooks.markSession(token, { faceSoft: now })
+  hooks.log('face_deferred', email, reason)
+  return { status: 200 }
 }
 
 /* ---------------------------------------------------------------- défi de vivacité */
@@ -336,8 +383,9 @@ export async function enroll({ email, session, token, body, now = Date.now() }) 
   if (r.engineError) return engineFailed(email, r.engineError, now)
   recordDiag(email, 'enroll', r.ok ? 'OK' : r.cause, r.frames, null, now)
   if (!r.ok) {
-    failed(email, now)
     hooks.log('face_enroll_fail', email, r.cause)
+    if (inRodage(now)) return { status: 422, error: r.code, ...softPass(email, token, r.cause, null, now) }
+    failed(email, now)
     return { status: 422, error: r.code }
   }
   const replaced = replacing
@@ -365,8 +413,9 @@ export async function verify({ email, token, body, now = Date.now() }) {
   if (r.engineError) return engineFailed(email, r.engineError, now)
   if (!r.ok) {
     recordDiag(email, 'verify', r.cause, r.frames, null, now)
-    const st = failed(email, now)
     hooks.log('face_verify_fail', email, r.cause)
+    if (inRodage(now)) return { status: 422, error: r.code, ...softPass(email, token, r.cause, null, now) }
+    const st = failed(email, now)
     return { status: 422, error: st.lockUntil > now ? 'LOCKED' : r.code, ...(st.lockUntil > now ? { until: new Date(st.lockUntil).toISOString() } : {}) }
   }
   // Comparaison avec le modèle du compte connecté uniquement ; chaque image de face doit ressembler
@@ -380,8 +429,9 @@ export async function verify({ email, token, body, now = Date.now() }) {
   const same = sims.every((s) => s >= THRESHOLD)
   recordDiag(email, 'verify', same ? 'OK' : 'MISMATCH', r.frames, sims, now)
   if (!same) {
-    const st = failed(email, now)
     hooks.log('face_mismatch', email, '')
+    if (inRodage(now)) return { status: 422, error: 'MISMATCH', ...softPass(email, token, 'MISMATCH', sims, now) }
+    const st = failed(email, now)
     return { status: 422, error: st.lockUntil > now ? 'LOCKED' : 'MISMATCH', ...(st.lockUntil > now ? { until: new Date(st.lockUntil).toISOString() } : {}) }
   }
   status[k] = { ...(status[k] || {}), lastOkAt: new Date(now).toISOString(), fails: 0 }
@@ -410,6 +460,9 @@ export function withdraw({ email, body }) {
 export function faceAdmin() {
   return {
     mode: conf.mode,
+    effectiveMode: effectiveMode(),
+    rodageStart: conf.mode === 'rodage' ? conf.rodageStart : null,
+    rodageEnds: rodageEnds(),
     trial: conf.trial,
     approveChange: conf.approveChange,
     keyReady: Boolean(key),
@@ -432,7 +485,9 @@ export function setFacePolicy(body) {
   const mode = MODES.includes(body?.mode) ? body.mode : conf.mode
   const trial = Array.isArray(body?.trial) ? [...new Set(body.trial.map(low).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)))].slice(0, 50) : conf.trial
   const approveChange = typeof body?.approveChange === 'boolean' ? body.approveChange : conf.approveChange
-  conf = { ...conf, mode, trial, approveChange }
+  // Début du rodage : compte à rebours de 7 jours (conservé si on réenregistre le même mode)
+  const rodageStart = mode === 'rodage' ? (conf.mode === 'rodage' && conf.rodageStart ? conf.rodageStart : new Date().toISOString()) : null
+  conf = { ...conf, mode, trial, approveChange, rodageStart }
   saveConf()
   // Fin du pilote (mode changé ou compte retiré de la liste) : son diagnostic est effacé
   purgeDiag()
@@ -507,12 +562,13 @@ export function mountFace(app) {
     const purpose = req.body?.purpose === 'enroll' ? 'enroll' : 'verify'
     res.json(newChallenge(token, email, purpose))
   })
-  const send = (res, r) => res.status(r.status).json(r.status === 200 ? { ok: true } : { error: r.error, ...(r.until ? { until: r.until } : {}) })
+  const send = (res, r) => res.status(r.status).json(r.status === 200 ? { ok: true } : { error: r.error, ...(r.until ? { until: r.until } : {}), ...(r.soft ? { soft: true } : {}) })
   app.post('/api/face/enroll', big, async (req, res) => send(res, await enroll({ ...ctx(req), body: req.body })))
   app.post('/api/face/verify', big, async (req, res) => send(res, await verify({ ...ctx(req), body: req.body })))
   app.post('/api/face/probe', express.json({ limit: '400kb' }), async (req, res) => {
     const r = await probeFrame({ ...ctx(req), body: req.body })
     res.status(r.status).json(r.body || { error: r.error })
   })
+  app.post('/api/face/defer', express.json({ limit: '1kb' }), (req, res) => send(res, deferFace({ ...ctx(req), body: req.body })))
   app.post('/api/face/withdraw', express.json({ limit: '2kb' }), (req, res) => send(res, withdraw({ email: req.user.email, body: req.body })))
 }

@@ -308,11 +308,24 @@ export function searchTerms(q, watch) {
  * Passages trouvés, du plus pertinent au moins pertinent : nombre de termes saisis présents, puis termes de la veille,
  * puis le plus récent. sources : enregistrements (transcriptions complètes) et créneaux fixes (fiches de diffusion).
  */
-export function smartSearch({ q = '', watch = '', channel = '', from = '', to = '', status = '', source = 'all' } = {}, { list = readAll(), st = statusFile(), now = Date.now(), data = load(), broadcastItems = [], channels = recordableChannels() } = {}) {
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
+const tripoliHm = (t) => new Date(t + 2 * 3_600_000).toISOString().slice(11, 16)
+
+/**
+ * Recherche dans toutes les transcriptions : enregistrements à la demande (dont ceux des veilles programmées) et
+ * créneaux fixes du soir. Filtres : mots ou expression, veille, chaîne, dates, plage horaire (heure de Tripoli),
+ * état, source. Sans mot-clé mais avec une chaîne et un jour : consultation du texte de la période, dans l'ordre.
+ */
+export function smartSearch({ q = '', watch = '', channel = '', from = '', to = '', hfrom = '', hto = '', status = '', source = 'all' } = {}, { list = readAll(), st = statusFile(), now = Date.now(), data = load(), broadcastItems = [], channels = recordableChannels() } = {}) {
   const w = watch ? data.watches.find((x) => x.id === watch) : null
   const terms = searchTerms(q, w)
-  if (!terms.all.length) return { terms: [], expanded: [], hits: [], total: 0 }
+  const browse = !terms.all.length && Boolean(channel) && Boolean(from || to)
+  if (!terms.all.length && !browse) return { terms: [], expanded: [], hits: [], total: 0 }
+  const h1 = HHMM.test(hfrom) ? hfrom : ''
+  const h2 = HHMM.test(hto) ? hto : ''
+  const inHours = (t) => (!h1 || tripoliHm(t) >= h1) && (!h2 || tripoliHm(t) <= h2)
   const inRange = (t) => (!from || tripoliDay(t) >= from) && (!to || tripoliDay(t) <= to)
+  const match = (text) => (browse ? [] : matchTerms(text, terms.all))
   const hits = []
   const score = (found) => found.filter((t) => terms.typed.includes(t)).length * 10 + found.length
   if (source !== 'fixed') {
@@ -325,8 +338,9 @@ export function smartSearch({ q = '', watch = '', channel = '', from = '', to = 
       const doc = etat === 'termine' ? transcriptOf(r.id) : null
       if (!doc) continue
       passagesOfTranscript(doc).forEach((p, n) => {
-        const found = matchTerms(p.text, terms.all)
-        if (found.length) hits.push({ kind: 'recording', id: r.id, n, nom: r.nom, chaine: r.chaine, at: p.at, text: p.text, terms: found.map((t) => t.w), score: score(found) })
+        if (!inHours(Date.parse(p.at))) return
+        const found = match(p.text)
+        if (found.length || browse) hits.push({ kind: 'recording', id: r.id, n, nom: r.nom, chaine: r.chaine, at: p.at, text: p.text, terms: found.map((t) => t.w), score: score(found) })
       })
     }
   }
@@ -340,12 +354,15 @@ export function smartSearch({ q = '', watch = '', channel = '', from = '', to = 
       if (seen.has(k)) continue
       seen.add(k)
       passagesOf(it.transcription, it.date).forEach((p) => {
-        const found = matchTerms(p.text, terms.all)
-        if (found.length) hits.push({ kind: 'fixed', id: it.id, offset: p.offset, nom: it.origin, at: p.at, text: p.text, terms: found.map((t) => t.w), score: score(found) })
+        if (!inHours(Date.parse(p.at))) return
+        const found = match(p.text)
+        if (found.length || browse) hits.push({ kind: 'fixed', id: it.id, offset: p.offset, nom: it.origin, at: p.at, text: p.text, terms: found.map((t) => t.w), score: score(found) })
       })
     }
   }
-  hits.sort((x, y) => y.score - x.score || y.at.localeCompare(x.at))
+  // Consultation : dans l'ordre du temps ; recherche : les plus pertinents d'abord
+  if (browse) hits.sort((x, y) => x.at.localeCompare(y.at))
+  else hits.sort((x, y) => y.score - x.score || y.at.localeCompare(x.at))
   return { terms: terms.all.map((t) => t.w), expanded: terms.expanded.map((t) => t.w), total: hits.length, hits: hits.slice(0, 200) }
 }
 

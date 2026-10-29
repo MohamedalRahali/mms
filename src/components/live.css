@@ -1092,3 +1092,169 @@
 .rasd-next.is-none {
   color: var(--coral);
 }
+
+/* Formulaire « برمجة التسجيل » : choix « ابدأ الآن / فترة محددة », durées, résumé ; recherche dans les textes */
+.rec-form {
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.rec-form__when,
+.rec-form__length {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+.rec-form__when button {
+  padding: 0.45rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rec-form__when button.is-on,
+.rec-form__length .ld-toggle.is-on {
+  border-color: var(--green, #1f9d57);
+  background: var(--green-soft, rgba(31, 157, 87, 0.15));
+  color: var(--ink);
+}
+.rec-form__when .rasd-clock {
+  margin-inline-start: auto;
+}
+.rec-form__length > span {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+.rec-form__other {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.4rem !important;
+}
+.rec-form__other input {
+  width: 6em;
+}
+.rec-form__problem {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.rec-find {
+  margin: 0.9rem 0 0.4rem;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.rec-find__form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.6rem;
+}
+.rec-find__form label {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.rec-find__form input {
+  height: 40px;
+  padding: 0 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+}
+@media (max-width: 720px) {
+  .rec-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rec-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-inline-start-width: 4px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+.rec-banner--warn {
+  border-inline-start-color: #d9a23a;
+}
+.rec-banner--info {
+  border-inline-start-color: var(--green, #1f9d57);
+}
+
+/* Style des trois onglets (برمجة التسجيل / الرصد المبرمج / البحث الذكي) : cartes alignées, mêmes boutons */
+.rec .mms-rtabs.ld-tabs {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+.rec .mms-rtabs.ld-tabs button {
+  padding: 0.55rem 1rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rec .mms-rtabs.ld-tabs button.is-active {
+  border-bottom-color: var(--green, #1f9d57);
+  color: var(--ink);
+}
+.rec-card,
+.rasd-search__form,
+.rasd-editor {
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.rec-split-box {
+  margin: 0.8rem 0;
+}
+.rec-split-box > summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.rec-split-box[open] > summary {
+  margin-bottom: 0.6rem;
+}
+.rec-split-box .rec-split {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.rasd-search__form label > span,
+.rasd-editor label > span {
+  font-weight: 600;
+}
+@media (max-width: 720px) {
+  .rasd-search__form {
+    grid-template-columns: 1fr 1fr;
+  }
+  .rasd-search__q {
+    grid-column: 1 / -1;
+  }
+}
