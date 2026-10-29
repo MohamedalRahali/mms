@@ -110,9 +110,35 @@ const listeners = new Set()
 
 export const norm = (s) => normalize(s).replace(/[«»"'“”().,:]/g, '').replace(/\s+/g, ' ').trim()
 
+// Décisions de l'IA (server/entityAI.js) : couche sous le référentiel saisi à la main, qui reste prioritaire
+let aiDecisions = []
+export function setAiEntities(list) {
+  aiDecisions = Array.isArray(list) ? list : []
+  rebuild()
+}
+
 function rebuild() {
   index = new Map()
   for (const e of entities) for (const n of [e.name, ...(e.aliases || [])]) if (norm(n)) index.set(norm(n), e)
+  // Variantes fusionnées par l'IA : rattachées à l'entité du référentiel si le nom canonique y figure, sinon à une
+  // entité « IA » ; noms rejetés (prénom seul, titre générique, erreur d'extraction) marqués pour être écartés
+  const aiByName = new Map()
+  for (const d of aiDecisions) {
+    const k = norm(d.raw)
+    if (!k || index.has(k)) continue
+    if (d.reject) {
+      index.set(k, { name: d.raw, type: 'reject' })
+      continue
+    }
+    const ck = norm(d.canonical || d.raw)
+    let target = index.get(ck) || aiByName.get(ck)
+    if (!target) {
+      target = { name: d.canonical || d.raw, type: d.type === 'org' ? 'org' : d.type === 'place' ? 'place' : 'person', aliases: [], libyan: d.libyan === true, role: d.role || '', ai: true }
+      aiByName.set(ck, target)
+      index.set(ck, target)
+    }
+    index.set(k, target)
+  }
   const libyanNames = entities.filter((e) => e.libyan && e.type !== 'media').flatMap((e) => [e.name, ...(e.aliases || [])].filter((n) => norm(n).length >= 4))
   libyaNorm = [...new Set([...LIBYA_WORDS, ...libyanNames].map(norm).filter(Boolean))]
   version++
@@ -180,6 +206,8 @@ export function resolveEntities(it, mediaNames = new Set()) {
     const name = String(raw || '').trim()
     if (!name) return
     const e = lookup(name)
+    // Rejeté par la correction IA (ou le Super Admin) : pas un acteur
+    if (e?.type === 'reject') return
     if (!e && list === 'people' && FIRST_NAMES.has(name)) return
     if (e?.type === 'media' || (!e && mediaNames.has(norm(name)))) return
     const canon = e ? e.name : name

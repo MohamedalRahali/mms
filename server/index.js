@@ -4,7 +4,8 @@ import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import express from 'express'
 import { getItems, reactionsOf } from './store.js'
-import { aiEnabled, aiProvider, aiUsage, analyse, aroundRun, cached, explainSpike, initUsage, loadKey, writeQuery } from './ai.js'
+import { aiEnabled, aiProvider, aiUsage, analyse, aroundRun, cached, explainSpike, initUsage, loadKey, runEconomy, writeQuery } from './ai.js'
+import { initEntityAI, startEntityAI } from './entityAI.js'
 import { allTags, countList, entitiesOf, findSpikes, initTags, itemKey, setTags, spikeItems, tagsOf, toCsv } from './intel.js'
 import { keyStatus } from './keys.js'
 import { currentUser, initAuth, loginRoute, logoutRoute, mfaDisableRoute, mfaEnableRoute, mfaLoginRoute, mfaSetupRoute, mfaStateOf, readUsers, requireAuth } from './auth.js'
@@ -217,6 +218,9 @@ const applyEntities = () =>
   })
 applyEntities()
 onEntitiesChange(applyEntities)
+// Correction automatique des acteurs par l'IA (une fois par jour, Gemini gratuit en priorité) : couche sous le référentiel
+initEntityAI(path.join(root, 'data', 'superadmin'))
+startEntityAI(getItems, runEconomy, aiEnabled)
 
 /* -------- accès sans session : lien de partage d'un tableau de bord, API des clients, logo du client */
 initProcessed(path.join(root, 'data'))

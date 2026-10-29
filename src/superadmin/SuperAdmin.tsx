@@ -5,6 +5,7 @@ import { GeoGlobe } from './GeoGlobe'
 import { ApiKeysCard, BrandCard, SharesCard, SourceMetaCell } from './ClientSettings'
 import { AlertReviewCard, EntitiesEditor, MailPolicyCard, MfaPolicyCard, SourcePolicyCard } from './Governance'
 import { SourceHealthCard } from './SourceHealth'
+import { EntityAICard } from './EntityAI'
 import { ACTIVITY_LABEL, AUDIT_LABEL, ROLE_LABEL, SECURITY_LABEL, ago, api, errText, flag, fmtBytes, fmtDate, fmtDay, fmtMinutes, fmtNum, qs, setAuthLost } from './api'
 
 /** Console Super Admin (وحدة التحكم العليا) : /superadmin, séparée de la plateforme */
@@ -135,7 +136,12 @@ export default function SuperAdmin() {
         {section === 'activity' && <Activity />}
         {section === 'security' && <Security />}
         {section === 'sources' && <Sources />}
-        {section === 'entities' && <EntitiesEditor />}
+        {section === 'entities' && (
+          <>
+            <EntityAICard />
+            <EntitiesEditor />
+          </>
+        )}
         {section === 'settings' && <Settings />}
       </main>
       {openUser && <UserSheet email={openUser} onClose={() => setOpenUser(null)} />}

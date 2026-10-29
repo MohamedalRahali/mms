@@ -131,6 +131,8 @@ export const AUDIT_LABEL: Record<string, string> = {
   alert_review: 'اعتماد التنبيهات الحرجة',
   mfa_policy: 'قاعدة التحقق بخطوتين',
   entities: 'المرجع الموحد للفاعلين',
+  entity_ai_run: 'تصحيح الفاعلين بالذكاء الاصطناعي',
+  entity_ai_edit: 'تعديل قرار تصحيح فاعل',
   mailing_list_create: 'إنشاء قائمة مراسلة',
   mailing_list_update: 'تعديل قائمة مراسلة',
   mailing_list_delete: 'حذف قائمة مراسلة',

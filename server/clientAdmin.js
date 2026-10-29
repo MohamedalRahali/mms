@@ -11,7 +11,9 @@ import { applyMailPolicyToWatches } from './watches.js'
 import { applyMailPolicyToBriefing } from './briefing.js'
 import { listEntities, saveEntities } from './entities.js'
 import { setSourcePolicy, sourcePolicy } from './sourcePolicy.js'
-import { refreshSourcePolicy } from './store.js'
+import { getItems, refreshSourcePolicy } from './store.js'
+import { entityAIState, runEntityAI, setDecision } from './entityAI.js'
+import { aiEnabled, aiProvider, runEconomy } from './ai.js'
 import { reviewOption, setReviewOption } from './alertFlow.js'
 
 /**
@@ -114,6 +116,26 @@ export function mountClientAdmin(sa, { audit }) {
     const entities = saveEntities(req.body?.entities)
     audit(req, 'entities', `${entities.length}`)
     res.json({ entities })
+  })
+
+  /* Correction des acteurs par l'IA : décisions, passage à la demande, correction ou annulation d'une décision */
+  sa.get('/entity-ai', (_req, res) => res.json({ ...entityAIState(), ai: aiEnabled(), provider: process.env.GEMINI_API_KEY ? 'gemini' : aiProvider() }))
+  sa.post('/entity-ai/run', async (req, res) => {
+    if (!aiEnabled()) return fail(res, 400, 'NO_AI')
+    try {
+      const run = await runEntityAI(getItems().items, runEconomy, { manual: true })
+      audit(req, 'entity_ai_run', `${run.names ?? 0}`, run.skipped || `${run.applied} décisions`)
+      res.json({ run, ...entityAIState() })
+    } catch (err) {
+      res.status(502).json({ error: 'AI_FAILED', detail: String(err.message || err).slice(0, 200) })
+    }
+  })
+  sa.put('/entity-ai', (req, res) => {
+    const raw = String(req.body?.raw || '').slice(0, 120)
+    if (!raw) return fail(res, 400, 'NO_NAME')
+    const d = setDecision(raw, req.body || {})
+    audit(req, 'entity_ai_edit', raw, req.body?.remove ? 'annulée' : d?.reject ? 'rejeté' : d?.canonical || '')
+    res.json({ decision: d, ...entityAIState() })
   })
 
   sa.get('/shares', (_req, res) => res.json({ shares: listShares() }))

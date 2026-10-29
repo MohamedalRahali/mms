@@ -343,6 +343,17 @@ export async function briefingSummary({ key, facts, items }) {
   return result
 }
 
+/* ---------------------------------------------------------------- tâches de fond économiques */
+
+/**
+ * Moteur économique pour les tâches de fond (correction des acteurs) : Gemini (version gratuite) en priorité, sinon
+ * le moteur configuré. Comptée dans la consommation de l'IA comme le reste.
+ */
+export async function runEconomy(prompt, spec) {
+  if (process.env.GEMINI_API_KEY) return withGemini(prompt, spec)
+  return run(aiProvider(), prompt, spec)
+}
+
 /* ---------------------------------------------------------------- Around (réponses et agents) */
 
 /** Lance une consigne d'Around sur le moteur disponible ; même cache que le reste de l'IA */
