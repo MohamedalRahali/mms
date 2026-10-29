@@ -856,3 +856,10 @@
 .rpt-list__tools input {
   flex: 1 1 220px;
 }
+/* Bannière en tête du rapport */
+.rpt-banner img {
+  width: min(100%, 360px);
+  height: auto;
+  max-height: 80px;
+  object-fit: contain;
+}

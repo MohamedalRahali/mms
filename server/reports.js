@@ -12,6 +12,7 @@ import { reliabilityOf } from './sourceMeta.js'
  *
  *   data/reports/<compte>.json        rapports du compte (document TipTap, réglages, historique des envois)
  *   data/reports/logos/<compte>.<ext> logo de l'organisation (png, jpg ou webp, 1 Mo au plus)
+ *   data/reports/banners/<compte>.<ext> bannière (publicité, annonce) en tête de chaque nouveau rapport, mêmes règles
  */
 
 export const MAX_POSTS = 300 // publications par rapport
@@ -34,6 +35,7 @@ const L = {
     channel: { radio: 'إذاعة', tv: 'تلفزيون', site: 'أونلاين', presse: 'صحافة مطبوعة', x: 'إكس', facebook: 'فيسبوك', instagram: 'إنستغرام', linkedin: 'لينكدإن', youtube: 'يوتيوب', tiktok: 'تيك توك', telegram: 'تيليغرام', bluesky: 'بلوسكاي', reddit: 'ريديت', mastodon: 'ماستودون', podcast: 'بودكاست', forum: 'منتديات', blog: 'مدونات' },
     lang: { ar: 'العربية', fr: 'الفرنسية', en: 'الإنجليزية', mixte: 'عربي وفرنسي' },
     tone: { positive: 'إيجابي', neutral: 'محايد', negative: 'سلبي', unknown: 'غير مصنّف' },
+    banner: 'شريط إعلاني',
     rel: { high: 'مصدر موثوق', medium: 'موثوقية متوسطة', low: 'مصدر غير مؤكد' },
     title: 'تقرير التحليل الإعلامي',
     org: 'المركز الوطني لدعم القرار',
@@ -83,6 +85,7 @@ const L = {
     channel: { radio: 'Radio', tv: 'Television', site: 'Websites', presse: 'Print press', x: 'X', facebook: 'Facebook', instagram: 'Instagram', linkedin: 'LinkedIn', youtube: 'YouTube', tiktok: 'TikTok', telegram: 'Telegram', bluesky: 'Bluesky', reddit: 'Reddit', mastodon: 'Mastodon', podcast: 'Podcast', forum: 'Forums', blog: 'Blogs' },
     lang: { ar: 'Arabic', fr: 'French', en: 'English', mixte: 'Arabic and French' },
     tone: { positive: 'Positive', neutral: 'Neutral', negative: 'Negative', unknown: 'Unclassified' },
+    banner: 'Banner',
     rel: { high: 'Reliable source', medium: 'Medium reliability', low: 'Unverified source' },
     title: 'Media Analysis Report',
     org: 'National Decision Support Centre',
@@ -345,7 +348,7 @@ const fmtDateTime = (iso, lang) =>
 export const DOC_POSTS = 300 // publications détaillées dans le corps du rapport
 
 /** Document complet du rapport ; toutes les valeurs viennent de « posts », « stats » et « ai » */
-export function buildDoc({ lang, title, org, author, logo, posts, stats, ai, generatedAt }) {
+export function buildDoc({ lang, title, org, author, logo, banner, posts, stats, ai, generatedAt }) {
   const t = labels(lang)
   const center = { textAlign: 'center' }
   const name = {
@@ -355,6 +358,8 @@ export function buildDoc({ lang, title, org, author, logo, posts, stats, ai, gen
     lang: (l) => t.lang[l] || l,
   }
   const content = []
+  // Bannière (vidéo « Advertising Banner ») : en tête, pleine largeur ; modifiable ou supprimable dans l'éditeur
+  if (banner) content.push({ type: 'image', attrs: { src: banner, alt: t.banner, title: null, width: 640 } })
   // Page de garde
   if (logo) content.push({ type: 'image', attrs: { src: logo, alt: org || t.org, title: null, width: 220 } })
   content.push(
@@ -479,7 +484,7 @@ const ALIGN = new Set(['left', 'right', 'center', 'justify'])
 /** Adresse d'image permise : logo du compte, logo de MMS, ou image intégrée png/jpeg/webp/gif */
 export function safeImageSrc(src) {
   const s = String(src || '')
-  if (/^\/api\/reports\/logo(\?v=\d{1,15})?$/.test(s) || s === '/logo-npdc.png') return s
+  if (/^\/api\/reports\/(logo|banner)(\?v=\d{1,15})?$/.test(s) || s === '/logo-npdc.png') return s
   if (/^data:image\/(png|jpeg|webp|gif);base64,[a-z0-9+/=\s]+$/i.test(s) && s.length < 1_500_000) return s
   return null
 }
@@ -587,9 +592,9 @@ function writeAll(email, reports) {
 }
 const summaryOf = (r) => ({ id: r.id, title: r.title, createdAt: r.createdAt, updatedAt: r.updatedAt, posts: r.postIds.length, lang: r.meta.lang, sent: r.history.filter((h) => h.status === 'sent').length })
 
-function logoFile(email) {
+function logoFile(email, folder = 'logos') {
   for (const ext of ['png', 'jpg', 'webp']) {
-    const f = path.join(dir, 'logos', `${owner(email)}.${ext}`)
+    const f = path.join(dir, folder, `${owner(email)}.${ext}`)
     if (fs.existsSync(f)) return { file: f, ext }
   }
   return null
@@ -654,6 +659,31 @@ export function mountReports(app, dataDir, { getItems, aiEnabled, aiRun, sendMai
     res.json({ ok: true })
   })
 
+  /* Bannière du compte : mêmes contrôles que le logo (type réel vérifié, 1 Mo au plus, privée) */
+  app.get('/api/reports/banner', (req, res) => {
+    const found = logoFile(req.user.email, 'banners')
+    if (!found) return res.status(404).json({ error: 'NO_BANNER' })
+    res.setHeader('Content-Type', { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' }[found.ext])
+    res.setHeader('Cache-Control', 'private, max-age=60')
+    res.sendFile(found.file)
+  })
+  app.put('/api/reports/banner', json('1500kb'), (req, res) => {
+    const m = /^data:image\/(png|jpeg|webp);base64,([a-z0-9+/=]+)$/i.exec(String(req.body?.data || ''))
+    if (!m) return res.status(400).json({ error: 'LOGO_TYPE' })
+    const buf = Buffer.from(m[2], 'base64')
+    if (buf.length > LOGO_MAX) return res.status(413).json({ error: 'LOGO_SIZE' })
+    const kind = imageKind(buf)
+    if (!kind) return res.status(400).json({ error: 'LOGO_TYPE' })
+    fs.mkdirSync(path.join(dir, 'banners'), { recursive: true, mode: 0o700 })
+    for (const ext of ['png', 'jpg', 'webp']) fs.rmSync(path.join(dir, 'banners', `${owner(req.user.email)}.${ext}`), { force: true })
+    fs.writeFileSync(path.join(dir, 'banners', `${owner(req.user.email)}.${kind}`), buf, { mode: 0o600 })
+    res.json({ banner: `/api/reports/banner?v=${Date.now()}` })
+  })
+  app.delete('/api/reports/banner', (req, res) => {
+    for (const ext of ['png', 'jpg', 'webp']) fs.rmSync(path.join(dir, 'banners', `${owner(req.user.email)}.${ext}`), { force: true })
+    res.json({ ok: true })
+  })
+
   /* Génération : publications sélectionnées seulement */
   app.post('/api/reports/generate', json('64kb'), async (req, res) => {
     const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String).slice(0, MAX_POSTS + 1) : []
@@ -701,7 +731,8 @@ export function mountReports(app, dataDir, { getItems, aiEnabled, aiRun, sendMai
       lang,
       logo,
     })
-    const doc = buildDoc({ lang, title, org: meta.org, author: meta.author, logo, posts, stats, ai, generatedAt: new Date(now).toISOString() })
+    const banner = req.body?.banner !== false && logoFile(req.user.email, 'banners') ? `/api/reports/banner?v=${now}` : ''
+    const doc = buildDoc({ lang, title, org: meta.org, author: meta.author, logo, banner, posts, stats, ai, generatedAt: new Date(now).toISOString() })
     const report = {
       id: `r_${crypto.randomBytes(8).toString('hex')}`,
       title,

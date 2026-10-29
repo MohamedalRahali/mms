@@ -25,6 +25,10 @@ function Generator({ onDone, onNews }: { onDone: (r: Report, notes: string[]) =>
   const [org, setOrg] = useState('')
   const [lang, setLang] = useState<'ar' | 'en'>(i.lang === 'en' ? 'en' : 'ar')
   const [logo, setLogo] = useState<string | null>(null) // null : inconnu, '' : logo par défaut
+  // Bannière (annonce, publicité) en tête du rapport : '' = aucune
+  const [banner, setBanner] = useState('')
+  const [useBanner, setUseBanner] = useState(true)
+  const bannerFile = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [step, setStep] = useState(0)
   const [err, setErr] = useState('')
@@ -34,7 +38,28 @@ function Generator({ onDone, onNews }: { onDone: (r: Report, notes: string[]) =>
     fetch('/api/reports/logo', { method: 'HEAD' })
       .then((r) => setLogo(r.ok ? `/api/reports/logo?v=${Date.now()}` : ''))
       .catch(() => setLogo(''))
+    fetch('/api/reports/banner', { method: 'HEAD' })
+      .then((r) => setBanner(r.ok ? `/api/reports/banner?v=${Date.now()}` : ''))
+      .catch(() => setBanner(''))
   }, [])
+
+  function onBanner(e: ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    if (!/^image\/(png|jpeg|webp)$/.test(f.type) || f.size > 1_048_576) return setErr(t.logoErr)
+    const r = new FileReader()
+    r.onload = async () => {
+      try {
+        const body = await api<{ banner: string }>('/api/reports/banner', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: r.result }) })
+        setBanner(body.banner)
+        setErr('')
+      } catch {
+        setErr(t.logoErr)
+      }
+    }
+    r.readAsDataURL(f)
+  }
 
   function onLogo(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
@@ -64,7 +89,7 @@ function Generator({ onDone, onNews }: { onDone: (r: Report, notes: string[]) =>
       const body = await api<{ report: Report; missing: number; aiError: string }>('/api/reports/generate', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ids: picked.map((p) => p.id), title, org, lang }),
+        body: JSON.stringify({ ids: picked.map((p) => p.id), title, org, lang, banner: Boolean(banner) && useBanner }),
       })
       const notes = [body.aiError ? t.aiOff : '', body.missing ? t.missing(body.missing) : ''].filter(Boolean)
       onDone(body.report, notes)
@@ -134,6 +159,38 @@ function Generator({ onDone, onNews }: { onDone: (r: Report, notes: string[]) =>
               <small>{t.logoHint}</small>
             </div>
             <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={onLogo} />
+          </div>
+        </div>
+        <div className="rpt-field">
+          <span>{i.lang === 'ar' ? 'شريط إعلاني في رأس التقرير (اختياري)' : 'Banner at the top of the report (optional)'}</span>
+          <div className="rpt-logo rpt-banner">
+            {banner && <img src={banner} alt="" />}
+            <div>
+              <button type="button" className="news-btn news-btn--ghost" disabled={busy} onClick={() => bannerFile.current?.click()}>
+                {banner ? (i.lang === 'ar' ? 'تغيير الشريط' : 'Change banner') : i.lang === 'ar' ? 'رفع شريط' : 'Upload a banner'}
+              </button>
+              {banner && (
+                <>
+                  <label className="rpt-radio">
+                    <input type="checkbox" checked={useBanner} onChange={(e) => setUseBanner(e.target.checked)} disabled={busy} />
+                    {i.lang === 'ar' ? 'إدراجه في هذا التقرير' : 'Include it in this report'}
+                  </label>
+                  <button
+                    type="button"
+                    className="rpt-tray__link"
+                    disabled={busy}
+                    onClick={async () => {
+                      await fetch('/api/reports/banner', { method: 'DELETE' })
+                      setBanner('')
+                    }}
+                  >
+                    {t.logoRemove}
+                  </button>
+                </>
+              )}
+              <small>{i.lang === 'ar' ? 'PNG أو JPEG أو WebP، 1 ميغابايت كحد أقصى، يُفضَّل عرض عريض (مثلاً 1200×200).' : 'PNG, JPEG or WebP, 1 MB max, preferably wide (e.g. 1200×200).'}</small>
+            </div>
+            <input ref={bannerFile} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={onBanner} />
           </div>
         </div>
       </div>
