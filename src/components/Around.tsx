@@ -854,30 +854,39 @@ function TurnView({ t, last, act, compact }: { t: Turn; last: boolean; act: Acti
 /** Types d'analyse : « سريع » (tout le périmètre choisi, en un clic) ou « مخصّص » (sujet, période, veille) */
 function AnalysisCards({ onExpress, onCustom }: { onExpress: (id: AgentId) => void; onCustom: (id: AgentId) => void }) {
   const a = useAround()
+  const [mode, setMode] = useState<'custom' | 'express'>('custom')
+  const run = mode === 'express' ? onExpress : onCustom
   return (
     <section className="around-analyses">
       <h3>
-        {a.analyses} <small>{a.analysesInfo}</small>
+        <Icon name="sparkle" size={18} /> {a.analyses}
       </h3>
+      <div className="around-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={mode === 'custom'} className={mode === 'custom' ? 'is-on' : ''} onClick={() => setMode('custom')}>
+          {a.custom}
+        </button>
+        <button type="button" role="tab" aria-selected={mode === 'express'} className={mode === 'express' ? 'is-on' : ''} onClick={() => setMode('express')}>
+          {a.express}
+        </button>
+      </div>
+      <p className="around-analyses__hint">{mode === 'express' ? a.expressHint : a.customHint}</p>
       <div className="around-grid around-grid--analyses">
         {ANALYSIS_IDS.map((id) => {
           const d = a.agentDefs.find((x) => x.id === id)!
           return (
-            <div key={id} className="around-analysis">
-              <strong>{d.title}</strong>
-              <small>{d.desc}</small>
-              <span className="around-analysis__actions">
-                <button type="button" className="news-btn" onClick={() => onExpress(id)}>
-                  {a.express}
-                </button>
-                <button type="button" className="news-btn news-btn--ghost" onClick={() => onCustom(id)}>
-                  {a.custom}
-                </button>
+            <button key={id} type="button" className="around-agent" data-analysis={id} onClick={() => run(id)}>
+              <span className="around-agent__icon">
+                <Icon name={mode === 'express' ? 'send' : 'sparkle'} size={18} />
               </span>
-            </div>
+              <span>
+                <strong>{d.title}</strong>
+                <small>{d.desc}</small>
+              </span>
+            </button>
           )
         })}
       </div>
+      <small className="around-analyses__hint">{a.analysesInfo}</small>
     </section>
   )
 }
@@ -1294,8 +1303,8 @@ export function Around({ flux }: { flux: Flux | '' }) {
         </div>
         {tab === 'agents' ? (
           <>
-            <AgentCards onPick={pickAgent} />
             <AnalysisCards onExpress={expressAgent} onCustom={pickAgent} />
+            <AgentCards onPick={pickAgent} />
           </>
         ) : favs.length ? (
           <div className="around-grid around-grid--prompts">

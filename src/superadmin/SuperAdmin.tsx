@@ -7,6 +7,7 @@ import { AlertReviewCard, EntitiesEditor, MailPolicyCard, MfaPolicyCard, SourceP
 import { SourceHealthCard } from './SourceHealth'
 import { EntityAICard } from './EntityAI'
 import { SupportCard } from './Support'
+import { ExportHealthCard } from './ExportHealth'
 import { ACTIVITY_LABEL, AUDIT_LABEL, ROLE_LABEL, SECURITY_LABEL, ago, api, errText, flag, fmtBytes, fmtDate, fmtDay, fmtMinutes, fmtNum, qs, setAuthLost } from './api'
 
 /** Console Super Admin (وحدة التحكم العليا) : /superadmin, séparée de la plateforme */
@@ -1366,6 +1367,7 @@ function Sources() {
     <div className="sa-grid">
       {msg && <p className="sa-note sa-card--wide">{msg}</p>}
       <SourceHealthCard />
+      <ExportHealthCard />
       <Card title="القنوات الرقمية" wide>
         <div className="sa-channels">
           {d.channels.map((c) => (

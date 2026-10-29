@@ -10,6 +10,7 @@ import { aiUsage } from './ai.js'
 import { mountPermissionsAdmin, permsOf, profileExists } from './permissions.js'
 import { initBrand, mountClientAdmin } from './clientAdmin.js'
 import { sourceHealth } from './sourceHealth.js'
+import { exportHealth, runCheck } from './exportHealth.js'
 import { countryOf as sourceCountry, initSourceMeta, reachIsSet, reachOf, reliabilityIsSet, reliabilityOf } from './sourceMeta.js'
 import {
   all,
@@ -353,6 +354,12 @@ export function mountSuperAdmin(app, root) {
 
   /* ---- صحة المصادر : état des collecteurs et enregistreurs de la veille, budgets */
   sa.get('/source-health', (_req, res) => res.json(sourceHealth(path.join(root, 'data'))))
+  /* ---- صحة التصدير : exports réels (PDF, Word) et contrôle programmé toutes les 6 heures */
+  sa.get('/export-health', (_req, res) => res.json(exportHealth()))
+  sa.post('/export-health/run', (_req, res) => {
+    runCheck()
+    res.json(exportHealth())
+  })
 
   sa.get('/me', (req, res) => res.json({ user: req.sa.u, expires: iso(req.sa.exp), ip: ipOf(req), country: countryOf(ipOf(req)) }))
   sa.post('/logout', (req, res) => {

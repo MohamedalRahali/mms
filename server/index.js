@@ -41,7 +41,8 @@ import { SOCIAL_CHANNELS, dedupeKeyer, uniqueItems } from './dedupe.js'
 import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionOf, regionStats, resolveEntities } from './entities.js'
 import { initPinboards, mountPinboards, pinnedKeys } from './pinboards.js'
 import { initMailingLists, mountMailingLists } from './mailingLists.js'
-import { initSupport, mountSupport } from './support.js'
+import { initSupport, mountSupport, supportConf } from './support.js'
+import { initExportHealth, mountExportHealth, startExportHealth } from './exportHealth.js'
 import { mountRasd } from './rasd.js'
 import { avatarUrl, initProfile, mountProfile } from './profile.js'
 import { initItemEdits, mountItemEdits } from './itemEdits.js'
@@ -1066,6 +1067,10 @@ mountPinboards(app, { getItems })
 initMailingLists(path.join(root, 'data'))
 // الدعم الفني : chat d'aide et demandes envoyées par e-mail à l'adresse du support
 initSupport(path.join(root, 'data'))
+// صحة التصدير : résultats des exports réels et contrôle programmé ; alerte à l'adresse du support technique
+initExportHealth(path.join(root, 'data'), { getItems, distDir: path.join(root, 'dist'), brand: brandOf, alert: (mail) => sendSupportMail(supportConf().email, mail) })
+mountExportHealth(app)
+startExportHealth()
 mountSupport(app, { sendSupport: sendSupportMail })
 mountMailingLists(app, {
   // Journal d'audit de la console Super Admin : qui a créé, modifié ou supprimé une liste

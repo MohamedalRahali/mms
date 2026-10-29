@@ -10,7 +10,8 @@ import { assistantName, renameAround, useBrand } from './brand'
 export type AnalysisId = 'overview' | 'crisis' | 'media' | 'topics' | 'narratives' | 'audiences' | 'swot' | 'esg' | 'reputation' | 'benchmark' | 'touchpoints' | 'bias' | 'framing' | 'summary' | 'executive' | 'management'
 export type AgentId = 'coverage' | 'brief' | 'release' | 'roundup' | AnalysisId
 /** Types d'analyse (server/around.js ANALYSIS_TASKS) */
-export const ANALYSIS_IDS: AnalysisId[] = ['overview', 'crisis', 'media', 'topics', 'narratives', 'audiences', 'swot', 'esg', 'reputation', 'benchmark', 'touchpoints', 'bias', 'framing', 'summary', 'executive', 'management']
+// « المواضيع » couvre aussi les récits et les émotions ; « narratives » reste lisible dans l'historique
+export const ANALYSIS_IDS: AnalysisId[] = ['overview', 'crisis', 'media', 'topics', 'audiences', 'swot', 'esg', 'reputation', 'benchmark', 'touchpoints', 'bias', 'framing', 'summary', 'executive', 'management']
 
 export type Source = {
   n: number
@@ -95,7 +96,9 @@ const AR = {
   agents: 'الوكلاء',
   analyses: 'أنواع التحليل',
   express: 'سريع',
-  custom: 'مخصّص',
+  custom: 'تخصيص',
+  expressHint: 'اضغط على نوع التحليل ليبدأ فوراً على كل أخبار النطاق والفترة المختارة.',
+  customHint: 'اضغط على نوع التحليل ثم اكتب الجهة أو الموضوع واختر الفترة والرصد قبل التشغيل.',
   analysesInfo: 'سريع: تحليل فوري لكل أخبار النطاق والفترة المختارة · مخصّص: اختر الجهة أو الموضوع والفترة والرصد قبل التشغيل. يعمل بمحرك Gemini المجاني ويستند إلى أخبار MMS المرقّمة فقط.',
   tooFew: 'الأخبار قليلة جداً لتحليل جدي (أقل من 5). وسّع الفترة أو النطاق.',
   agentsInfo: 'الوكلاء ينفّذون مهام متعددة الخطوات: يجمعون الأخبار، يحسبون المؤشرات ثم يكتبون تقريراً كاملاً.',
@@ -173,7 +176,7 @@ const AR = {
   scope: 'النطاق',
   print: 'طباعة / حفظ PDF',
   steps: ['جمع الأخبار المطابقة', 'حساب المؤشرات ومقارنة الفترتين', 'كشف الذروات وتحليل المصادر', 'كتابة التقرير'],
-  agentTitle: { coverage: 'تقرير تغطية', brief: 'إحاطة إعلامية', release: 'أثر بيان صحفي', roundup: 'مراجعة قطاعية', overview: 'نظرة عامة', crisis: 'تحليل الأزمة', media: 'الوسائل الإعلامية', topics: 'المواضيع', narratives: 'السرديات والمشاعر', audiences: 'الفئات المستهدفة', swot: 'تحليل SWOT', esg: 'تحليل ESG', reputation: 'السمعة', benchmark: 'مقارنة', touchpoints: 'نقاط التواصل', bias: 'التحيّز السياسي', framing: 'التأطير', summary: 'ملخص', executive: 'ملخص تنفيذي', management: 'ملخص للإدارة' } as Record<AgentId, string>,
+  agentTitle: { coverage: 'تقرير تغطية', brief: 'إحاطة إعلامية', release: 'أثر بيان صحفي', roundup: 'مراجعة قطاعية', overview: 'نظرة عامة', crisis: 'تحليل الأزمة', media: 'الوسائل الإعلامية', topics: 'المواضيع والسرديات والمشاعر', narratives: 'السرديات والمشاعر', audiences: 'الفئات المستهدفة', swot: 'تحليل SWOT', esg: 'تحليل ESG', reputation: 'السمعة', benchmark: 'مقارنة', touchpoints: 'نقاط التواصل', bias: 'التحيّز السياسي', framing: 'التأطير', summary: 'ملخص', executive: 'ملخص تنفيذي', management: 'ملخص للإدارة' } as Record<AgentId, string>,
   mobileTitle: 'Around على هاتفك',
   mobileText: 'ثبّت MMS على الهاتف لتسأل عن التغطية والاتجاهات أينما كنت.',
   library: [
@@ -198,7 +201,7 @@ const AR = {
     { id: 'overview', title: 'نظرة عامة', desc: 'الصورة العامة للتغطية مع توصيات استراتيجية.', subject: 'الجهة أو الموضوع (اختياري)', example: 'المؤسسة الوطنية للنفط' },
     { id: 'crisis', title: 'تحليل الأزمة', desc: 'رصد مؤشرات الأزمة ودرجة خطورتها ومصادرها والإجراءات الفورية.', subject: 'الجهة أو الموضوع (اختياري)', example: 'المؤسسة الوطنية للنفط' },
     { id: 'media', title: 'الوسائل الإعلامية', desc: 'دور كل وسيلة وحضورها ونبرتها.', subject: 'الجهة أو الموضوع (اختياري)', example: 'المؤسسة الوطنية للنفط' },
-    { id: 'topics', title: 'المواضيع', desc: 'أهم المواضيع ووزنها ونبرتها والمواضيع الصاعدة.', subject: 'الجهة أو الموضوع (اختياري)', example: 'المؤسسة الوطنية للنفط' },
+    { id: 'topics', title: 'المواضيع والسرديات والمشاعر', desc: 'أهم المواضيع ووزنها، كيف يرويها الإعلام، والمشاعر الغالبة.', subject: 'الجهة أو الموضوع (اختياري)', example: 'المؤسسة الوطنية للنفط' },
     { id: 'narratives', title: 'السرديات والمشاعر', desc: 'كيف يروي الإعلام الموضوع والمشاعر الغالبة.', subject: 'الجهة أو الموضوع (اختياري)', example: 'المؤسسة الوطنية للنفط' },
     { id: 'audiences', title: 'الفئات المستهدفة', desc: 'الفئات المعنية وما يهم كل فئة.', subject: 'الجهة أو الموضوع (اختياري)', example: 'المؤسسة الوطنية للنفط' },
     { id: 'swot', title: 'تحليل SWOT', desc: 'نقاط القوة والضعف والفرص والتهديدات في الصورة الإعلامية.', subject: 'الجهة أو الموضوع (اختياري)', example: 'المؤسسة الوطنية للنفط' },
@@ -235,7 +238,9 @@ const EN: typeof AR = {
   agents: 'Agents',
   analyses: 'Analysis types',
   express: 'Express',
-  custom: 'Custom',
+  custom: 'Configure',
+  expressHint: 'Click an analysis type to run it at once on all news in the selected scope and period.',
+  customHint: 'Click an analysis type, then type the entity or topic and pick the period and watch before running.',
   analysesInfo: 'Express: instant analysis of all news in the selected scope and period · Custom: choose the entity or topic, period and watch first. Runs on the free Gemini engine and only uses numbered MMS news.',
   tooFew: 'Too few news items for a serious analysis (fewer than 5). Widen the period or scope.',
   agentsInfo: 'Agents run multi-step workflows: they gather the news, compute the metrics, then write a full report.',
@@ -313,7 +318,7 @@ const EN: typeof AR = {
   scope: 'Scope',
   print: 'Print / save as PDF',
   steps: ['Gathering matching news', 'Computing metrics and comparing periods', 'Detecting spikes and analysing sources', 'Writing the report'],
-  agentTitle: { coverage: 'Coverage report', brief: 'Media brief', release: 'Release impact', roundup: 'Industry roundup', overview: 'Overview', crisis: 'Crisis analysis', media: 'Media', topics: 'Topics', narratives: 'Narratives & emotions', audiences: 'Target groups', swot: 'SWOT', esg: 'ESG', reputation: 'Reputation', benchmark: 'Benchmark', touchpoints: 'Touchpoints', bias: 'Political bias', framing: 'Framing', summary: 'Summary', executive: 'Executive summary', management: 'Management summary' },
+  agentTitle: { coverage: 'Coverage report', brief: 'Media brief', release: 'Release impact', roundup: 'Industry roundup', overview: 'Overview', crisis: 'Crisis analysis', media: 'Media', topics: 'Topics, narratives & emotions', narratives: 'Narratives & emotions', audiences: 'Target groups', swot: 'SWOT', esg: 'ESG', reputation: 'Reputation', benchmark: 'Benchmark', touchpoints: 'Touchpoints', bias: 'Political bias', framing: 'Framing', summary: 'Summary', executive: 'Executive summary', management: 'Management summary' },
   mobileTitle: 'Around on your phone',
   mobileText: 'Install MMS on your phone to ask about coverage and trends wherever you are.',
   library: [
@@ -338,7 +343,7 @@ const EN: typeof AR = {
     { id: 'overview', title: 'Overview', desc: 'The big picture of the coverage with strategic recommendations.', subject: 'entity or topic (optional)', example: 'National Oil Corporation' },
     { id: 'crisis', title: 'Crisis analysis', desc: 'Crisis signals, severity, triggers and immediate actions.', subject: 'entity or topic (optional)', example: 'National Oil Corporation' },
     { id: 'media', title: 'Media', desc: 'Role, visibility and tone of each outlet.', subject: 'entity or topic (optional)', example: 'National Oil Corporation' },
-    { id: 'topics', title: 'Topics', desc: 'Main topics, their weight and tone, and rising topics.', subject: 'entity or topic (optional)', example: 'National Oil Corporation' },
+    { id: 'topics', title: 'Topics, narratives & emotions', desc: 'Main topics and their weight, how the media tell them, and the dominant emotions.', subject: 'entity or topic (optional)', example: 'National Oil Corporation' },
     { id: 'narratives', title: 'Narratives & emotions', desc: 'How the media tell the story and the dominant emotions.', subject: 'entity or topic (optional)', example: 'National Oil Corporation' },
     { id: 'audiences', title: 'Target groups', desc: 'Groups concerned and what matters to each.', subject: 'entity or topic (optional)', example: 'National Oil Corporation' },
     { id: 'swot', title: 'SWOT', desc: 'Strengths, weaknesses, opportunities and threats of the media image.', subject: 'entity or topic (optional)', example: 'National Oil Corporation' },

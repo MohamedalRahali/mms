@@ -31,6 +31,19 @@ export function reportFilename(ext: 'docx' | 'pdf') {
 export const MARGINS = { narrow: 12.7, normal: 20, wide: 30 }
 const MM_TWIP = 56.7
 
+/**
+ * صحة التصدير : chaque export remonte son résultat au serveur (format, pages, pages blanches, taille, erreur), jamais
+ * son contenu. Le type d'export est la page d'où il part. Sans effet si l'envoi échoue.
+ */
+export function reportExport(format: 'pdf' | 'docx', info: { pages?: number; blank?: number; bytes?: number; error?: string }) {
+  try {
+    const kind = new URLSearchParams(location.search).get('view') || 'reports'
+    void fetch('/api/exports/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, format, ...info }), keepalive: true }).catch(() => undefined)
+  } catch {
+    /* rien */
+  }
+}
+
 export function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -268,7 +281,9 @@ export async function toDocx(doc: PmNode, meta: ReportMeta, title: string): Prom
       },
     ],
   })
-  return d.Packer.toBlob(file)
+  const out = await d.Packer.toBlob(file)
+  reportExport('docx', { bytes: out.size })
+  return out
 }
 
 /* ---------------------------------------------------------------- PDF */
@@ -382,7 +397,10 @@ export async function toPdf(html: string, meta: ReportMeta, title: string): Prom
     }
     // Contrôle avant enregistrement : une page sans encre (blanche) est retirée ; si tout est blanc, aucun fichier vide
     const kept = pages.filter((p) => inkRatio(p.canvas) > 0.002)
-    if (!kept.length) throw Object.assign(new Error('EMPTY_PDF'), { code: 'EMPTY_PDF' })
+    if (!kept.length) {
+      reportExport('pdf', { pages: pages.length, blank: pages.length, bytes: 0, error: 'EMPTY_PDF' })
+      throw Object.assign(new Error('EMPTY_PDF'), { code: 'EMPTY_PDF' })
+    }
     kept.forEach(({ canvas: page, h }, idx) => {
       if (idx) pdf.addPage()
       pdf.addImage(page.toDataURL('image/jpeg', 0.85), 'JPEG', m, m + band, contentW, h / PX, undefined, 'FAST')
@@ -396,7 +414,9 @@ export async function toPdf(html: string, meta: ReportMeta, title: string): Prom
         pdf.text(`${idx + 1} / ${kept.length}`, pageW / 2, pageH - m + 1, { align: 'center' })
       }
     })
-    return pdf.output('blob')
+    const out = pdf.output('blob')
+    reportExport('pdf', { pages: pages.length, blank: pages.length - kept.length, bytes: out.size })
+    return out
   } finally {
     host.remove()
   }
