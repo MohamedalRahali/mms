@@ -228,3 +228,37 @@ test('clé FACE_KEY absente : aucune inscription, rien n’est exigé, aucun fic
   assert.equal(face.faceAdmin().keyReady, false)
   process.env.FACE_KEY = TEST_KEY
 })
+
+test('panne du moteur : jamais comptée comme un échec, jamais de pause, Super Admin alerté', async () => {
+  setup()
+  login('alice@x.test', 'p1')
+  await doEnroll('alice@x.test', 'p1', 'alice')
+  login('alice@x.test', 'p2')
+  const broken = { ready: () => true, info: () => ({ ready: true, missing: [] }), analyse: async () => { throw new Error('ENGINE_TIMEOUT') } }
+  face.setFaceEngine(broken)
+  admins.length = 0
+  for (let i = 0; i < 8; i++) assert.equal((await doVerify('alice@x.test', 'p2', 'alice')).error, 'ENGINE_ERROR')
+  assert.equal(face.faceStateOf('alice@x.test').lockedUntil, null)
+  assert.equal(admins.length, 1)
+  assert.ok(logs.some(([t, , d]) => t === 'face_engine_error' && d === 'ENGINE_TIMEOUT'))
+  // Moteur réparé : la personne passe tout de suite
+  face.setFaceEngine(fakeEngine(true))
+  assert.equal((await doVerify('alice@x.test', 'p2', 'alice')).status, 200)
+})
+
+test('plusieurs images de face doivent toutes ressembler au modèle', async () => {
+  setup()
+  login('alice@x.test', 'm1')
+  await doEnroll('alice@x.test', 'm1', 'alice')
+  login('alice@x.test', 'm2')
+  const ch = face.newChallenge('m2', 'alice@x.test', 'verify')
+  // Une image de face d'Alice, l'autre de Bob : refusé
+  let first = true
+  const frames = ch.steps.map((s) => {
+    if (s !== 'center') return frame('alice', s)
+    const f = frame(first ? 'alice' : 'bob', s)
+    first = false
+    return f
+  })
+  assert.equal((await face.verify({ email: 'alice@x.test', token: 'm2', body: { nonce: ch.nonce, frames } })).error, 'MISMATCH')
+})

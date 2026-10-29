@@ -45,7 +45,10 @@ let confFile = ''
 let templatesFile = ''
 let key = null
 // approveChange : remplacer un visage déjà inscrit exige l'accord du Super Admin (« اعتماد المشرف لتغيير الوجه »)
-let conf = { mode: 'off', trial: [], exceptions: [], threshold: 0.42, approveChange: true }
+// Seuil de ressemblance : 0,363, valeur publiée par OpenCV pour SFace (cosinus). Chaque image de face doit le
+// dépasser (au moins 2 images par vérification) : une seule image ressemblante par hasard ne suffit pas.
+const THRESHOLD = 0.363
+let conf = { mode: 'off', trial: [], exceptions: [], approveChange: true }
 let templates = {}
 let status = {} // compte → { enrolledAt, lastOkAt, lastFailAt, fails, lockUntil, locks } (sans donnée biométrique)
 let engine = { ready: () => false, info: () => ({ ready: false, missing: ['models'] }) }
@@ -161,12 +164,14 @@ export function faceGate(email, session, p) {
 
 /* ---------------------------------------------------------------- défi de vivacité */
 
+// Deux images de face au moins (comparées chacune au modèle), et les deux côtés dans un ordre tiré au hasard
 const STEP_SETS = [
-  ['center', 'left', 'right'],
-  ['center', 'right', 'left'],
   ['center', 'left', 'center', 'right'],
   ['center', 'right', 'center', 'left'],
+  ['center', 'left', 'right', 'center'],
+  ['center', 'right', 'left', 'center'],
 ]
+const MIN_CENTER = 2
 
 export function newChallenge(token, email, purpose, now = Date.now()) {
   for (const [n, c] of challenges) if (now - c.at > CHALLENGE_MS) challenges.delete(n)
@@ -207,7 +212,13 @@ export async function analyse(frames, steps) {
   if (frames.length < steps.length) return { ok: false, code: 'CAPTURE' }
   const vectors = []
   for (let i = 0; i < frames.length; i++) {
-    const r = await engine.analyse(frames[i])
+    let r
+    try {
+      r = await engine.analyse(frames[i])
+    } catch (err) {
+      // Panne du moteur (modèle absent, chargement, délai) : jamais un échec de la personne
+      return { ok: false, code: 'ENGINE_ERROR', engineError: String(err?.message || err).slice(0, 120) }
+    }
     if (r.faces === 0) return { ok: false, code: 'NO_FACE' }
     if (r.faces > 1) return { ok: false, code: 'MULTI_FACE' }
     if (!r.quality) return { ok: false, code: 'QUALITY' }
@@ -215,11 +226,22 @@ export async function analyse(frames, steps) {
     // Pose attendue pour cette image (le défi est imposé par le serveur, dans un ordre aléatoire)
     const want = steps[i] ?? 'center'
     if (r.pose !== want) return { ok: false, code: 'LIVENESS' }
-    if (r.pose === 'center') vectors.push(r.vector)
+    if (r.pose === 'center' && r.vector) vectors.push(r.vector)
   }
-  if (!vectors.length) return { ok: false, code: 'QUALITY' }
+  if (vectors.length < MIN_CENTER) return { ok: false, code: 'QUALITY' }
   const mean = norm(vectors[0].map((_, k) => vectors.reduce((s, v) => s + v[k], 0) / vectors.length))
-  return { ok: true, vector: mean }
+  return { ok: true, vector: mean, vectors }
+}
+
+// Panne du moteur : journal, alerte au Super Admin (une fois par heure au plus), message clair, aucune pénalité
+let engineAlertAt = 0
+function engineFailed(email, detail, now = Date.now()) {
+  hooks.log('face_engine_error', email, detail)
+  if (now - engineAlertAt > 3600_000) {
+    engineAlertAt = now
+    hooks.notifyAdmins(`عطل في محرك التحقق بالوجه: ${detail}. لم تُحتسب أي محاولة فاشلة على المستخدمين.`)?.catch?.(() => {})
+  }
+  return { status: 503, error: 'ENGINE_ERROR' }
 }
 
 /* ---------------------------------------------------------------- essais et blocages */
@@ -271,6 +293,7 @@ export async function enroll({ email, session, token, body, now = Date.now() }) 
   const ch = takeChallenge(body?.nonce, token, email, 'enroll', now)
   if (!ch) return { status: 400, error: 'CHALLENGE' }
   const r = await analyse(parseFrames(body), ch.steps)
+  if (r.engineError) return engineFailed(email, r.engineError, now)
   if (!r.ok) {
     failed(email, now)
     hooks.log('face_enroll_fail', email, r.code)
@@ -298,13 +321,20 @@ export async function verify({ email, token, body, now = Date.now() }) {
   const ch = takeChallenge(body?.nonce, token, email, 'verify', now)
   if (!ch) return { status: 400, error: 'CHALLENGE' }
   const r = await analyse(parseFrames(body), ch.steps)
+  if (r.engineError) return engineFailed(email, r.engineError, now)
   if (!r.ok) {
     const st = failed(email, now)
     hooks.log('face_verify_fail', email, r.code)
     return { status: 422, error: st.lockUntil > now ? 'LOCKED' : r.code, ...(st.lockUntil > now ? { until: new Date(st.lockUntil).toISOString() } : {}) }
   }
-  // Comparaison avec le modèle du compte connecté uniquement
-  const same = cosine(r.vector, unseal(box, email)) >= conf.threshold
+  // Comparaison avec le modèle du compte connecté uniquement ; chaque image de face doit ressembler
+  let ref
+  try {
+    ref = unseal(box, email)
+  } catch {
+    return engineFailed(email, 'TEMPLATE_UNREADABLE', now)
+  }
+  const same = r.vectors.every((v) => cosine(v, ref) >= THRESHOLD)
   if (!same) {
     const st = failed(email, now)
     hooks.log('face_mismatch', email, '')
