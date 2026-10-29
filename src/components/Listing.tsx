@@ -271,6 +271,12 @@ export function ChartsTab({ query, days }: { query: string; days: string }) {
         <ChartCard title={l.byCategory}>
           <Donut rows={data.categories} dim="categories" onPick={(category) => drill({ category })} />
         </ChartCard>
+        {data.reach && data.reach.total > 0 && (
+          <ChartCard title={`${i.lang === 'ar' ? 'الانتشار المحتمل' : 'Potential reach'}: ${fmtReach(data.reach.total, i.lang)}${data.reach.estimated ? (i.lang === 'ar' ? ' (تقديري)' : ' (estimated)') : ''}`}>
+            <Line perDay={data.reach.perDay} label={i.lang === 'ar' ? 'الانتشار المحتمل في اليوم' : 'Potential reach per day'} />
+            <BuzzBars rows={data.reach.sources} label={(n) => n} color={(name, k) => colorFor('sources', name, k)} onPick={(source) => drill({ source })} />
+          </ChartCard>
+        )}
         {countries.length > 0 && (
           <ChartCard title={l.byCountry}>
             <BuzzBars rows={countries} label={label} color={(_n, k) => colorFor('places', _n, k)} onPick={(country) => drill({ country } as Partial<Filters>)} />

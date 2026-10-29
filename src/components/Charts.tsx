@@ -206,7 +206,7 @@ export function Donut({ rows, dim, onPick }: { rows: Count[]; dim: Dim; onPick?:
   )
 }
 
-export function Line({ perDay }: { perDay: { date: string; count: number }[] }) {
+export function Line({ perDay, label }: { perDay: { date: string; count: number }[]; label?: string }) {
   const i = useI18n()
   const [hover, setHover] = useState<number | null>(null)
   const W = 600
@@ -225,7 +225,7 @@ export function Line({ perDay }: { perDay: { date: string; count: number }[] }) 
   return (
     <div className="mms-line" dir="ltr">
       <p className="mms-chart__readout" dir={i.dir}>
-        {active ? `${i.day(active.date)} : ${i.num(active.count)}` : `${BUILDER_TEXT[i.lang].perDay} · max ${i.num(max)}`}
+        {active ? `${i.day(active.date)} : ${i.num(active.count)}` : `${label ?? BUILDER_TEXT[i.lang].perDay} · max ${i.num(max)}`}
       </p>
       <svg
         viewBox={`0 0 ${W} ${H}`}
@@ -233,7 +233,7 @@ export function Line({ perDay }: { perDay: { date: string; count: number }[] }) 
         onPointerMove={onMove}
         onPointerLeave={() => setHover(null)}
         role="img"
-        aria-label={BUILDER_TEXT[i.lang].perDay}
+        aria-label={label ?? BUILDER_TEXT[i.lang].perDay}
       >
         <line x1="0" x2={W} y1={H - 0.5} y2={H - 0.5} className="mms-line__base" />
         <polygon points={area} className="mms-line__area" />

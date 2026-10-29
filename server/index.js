@@ -24,7 +24,7 @@ import { AGENTS, ASK_SPEC, agentFacts, agentItems, agentStats, askPrompt, itemLi
 import { emergingTopics, historyOf, sentimentBarometer, smartAlerts, startRadarAlerts, storyClusters, storyIndex } from './radar.js'
 import { startRadarWorker } from './radarWorker.js'
 import { createWatch, deleteWatch, enabledWatches, guardWatch, itemsForWatch, mergeWatches, sendMail, setWatchAccess, similarWatches, watchesFor, watchIdsFor, sendTelegram, setEnabled, setMailBlockedListener, setWatchAlert, setWatchAlertListener, setWatchTools, startWatches, telegramReady } from './watches.js'
-import { countryOf } from './sourceMeta.js'
+import { countryOf, reachIsSet, reachOf } from './sourceMeta.js'
 import { initProcessed, isProcessed, processedOf, setProcessed } from './processed.js'
 import { GROUPS, decorate, foldStories, groupNews, overview, sortNews } from './newsView.js'
 import { countView, createShare, initShares, listShares, publicShareQuery, revokeShare, shareFor } from './shares.js'
@@ -592,13 +592,30 @@ function statsData(q) {
   const perDay = []
   for (let i = days - 1; i >= 0; i--) perDay.push({ date: toDay(new Date(Date.now() - i * 86_400_000).toISOString()), count: 0 })
   const index = new Map(perDay.map((d, i) => [d.date, i]))
+  // Portée potentielle (vidéo « Charts ») : somme des portées des publications, par jour et par source ; estimée tant
+  // que le Super Admin n'a pas saisi la portée des sources concernées
+  const reachPerDay = perDay.map((d) => ({ date: d.date, count: 0 }))
+  const reachBySource = new Map()
+  let reachTotal = 0
+  let reachEstimated = false
   for (const it of found) {
     const i = index.get(toDay(it.date))
     if (i != null) perDay[i].count++
+    const r = reachOf(it)
+    reachTotal += r
+    if (i != null) reachPerDay[i].count += r
+    reachBySource.set(it.origin, (reachBySource.get(it.origin) || 0) + r)
+    if (!reachEstimated && !reachIsSet(it.origin)) reachEstimated = true
   }
   return {
     days,
     total: found.length,
+    reach: {
+      total: reachTotal,
+      estimated: reachEstimated,
+      perDay: reachPerDay,
+      sources: [...reachBySource.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 10),
+    },
     sourcesCount: new Set(found.map((it) => it.origin)).size,
     broadcasts: found.reduce((n, it) => n + it.broadcasts, 0),
     perDay,
@@ -1082,7 +1099,12 @@ mountCatalog(app)
 const dist = path.join(root, 'dist')
 if (fs.existsSync(dist)) {
   app.use(express.static(dist))
-  app.get(/^(?!\/api\/).*/, (_req, res) => res.sendFile(path.join(dist, 'index.html')))
+  // Pages de l'application : index.html ; fichier introuvable (extension, ou chemin caché comme /.env) : vrai 404,
+  // pour ne pas laisser croire qu'un fichier du serveur existe à cette adresse
+  app.get(/^(?!\/api\/).*/, (req, res) => {
+    if (/(^|\/)\.|\.[a-z0-9]{1,8}$/i.test(req.path)) return res.status(404).type('text/plain').send('Not found')
+    res.sendFile(path.join(dist, 'index.html'))
+  })
 }
 
 // Route d'API inconnue : réponse JSON (pas de page d'erreur HTML d'Express)

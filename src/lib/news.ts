@@ -104,6 +104,8 @@ export type Facets = {
 export type Stats = {
   days: number
   total: number
+  // Portée potentielle : somme des portées des publications (estimée si des sources n'ont pas de chiffre saisi)
+  reach?: { total: number; estimated: boolean; perDay: { date: string; count: number }[]; sources: Count[] }
   sourcesCount: number
   broadcasts: number
   perDay: { date: string; count: number }[]
