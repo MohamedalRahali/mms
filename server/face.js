@@ -376,7 +376,7 @@ export async function enroll({ email, session, token, body, now = Date.now() }) 
       return { status: 403, error: 'APPROVAL' }
     }
   } else if (!session || now - session.at > FRESH_MS) return { status: 401, error: 'REAUTH' }
-  if (lockedUntil(email, now)) return { status: 429, error: 'LOCKED', until: new Date(lockedUntil(email, now)).toISOString() }
+  if (!inRodage(now) && lockedUntil(email, now)) return { status: 429, error: 'LOCKED', until: new Date(lockedUntil(email, now)).toISOString() }
   const ch = takeChallenge(body?.nonce, token, email, 'enroll', now)
   if (!ch) return { status: 400, error: 'CHALLENGE' }
   const r = await analyse(parseFrames(body), ch.steps)
@@ -406,7 +406,7 @@ export async function verify({ email, token, body, now = Date.now() }) {
   const k = low(email)
   const box = templates[k]
   if (!box) return { status: 409, error: 'NOT_ENROLLED' }
-  if (lockedUntil(email, now)) return { status: 429, error: 'LOCKED', until: new Date(lockedUntil(email, now)).toISOString() }
+  if (!inRodage(now) && lockedUntil(email, now)) return { status: 429, error: 'LOCKED', until: new Date(lockedUntil(email, now)).toISOString() }
   const ch = takeChallenge(body?.nonce, token, email, 'verify', now)
   if (!ch) return { status: 400, error: 'CHALLENGE' }
   const r = await analyse(parseFrames(body), ch.steps)
@@ -487,6 +487,11 @@ export function setFacePolicy(body) {
   const approveChange = typeof body?.approveChange === 'boolean' ? body.approveChange : conf.approveChange
   // Début du rodage : compte à rebours de 7 jours (conservé si on réenregistre le même mode)
   const rodageStart = mode === 'rodage' ? (conf.mode === 'rodage' && conf.rodageStart ? conf.rodageStart : new Date().toISOString()) : null
+  // Entrée en rodage : pauses et compteurs d'échecs effacés (personne ne reste bloqué par l'ancien mode)
+  if (mode === 'rodage' && conf.mode !== 'rodage') {
+    for (const st of Object.values(status)) Object.assign(st, { fails: 0, lockUntil: 0, locks: 0 })
+    saveTemplates()
+  }
   conf = { ...conf, mode, trial, approveChange, rodageStart }
   saveConf()
   // Fin du pilote (mode changé ou compte retiré de la liste) : son diagnostic est effacé

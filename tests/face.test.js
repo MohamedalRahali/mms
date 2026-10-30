@@ -346,3 +346,17 @@ test('rodage : tous les comptes concernés, échec jamais bloquant, « لاحق�
   })()
   assert.equal(after.soft, undefined)
 })
+
+test('rodage : entrer en rodage efface la pause et le compteur ; une pause ancienne ne bloque plus', async () => {
+  setup()
+  login('alice@x.test', 'z1')
+  await doEnroll('alice@x.test', 'z1', 'alice')
+  login('alice@x.test', 'z2')
+  let r
+  for (let i = 0; i < 5; i++) r = await doVerify('alice@x.test', 'z2', 'bob')
+  assert.equal(r.error, 'LOCKED')
+  assert.ok(face.faceStateOf('alice@x.test').lockedUntil)
+  face.setFacePolicy({ mode: 'rodage' })
+  assert.equal(face.faceStateOf('alice@x.test').lockedUntil, null)
+  assert.equal((await doVerify('alice@x.test', 'z2', 'alice')).status, 200)
+})

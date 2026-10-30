@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
 import { fileURLToPath } from 'node:url'
-import { makeEngine } from '../server/faceEngine.js'
+import { countFaces, makeEngine } from '../server/faceEngine.js'
 import * as face from '../server/face.js'
 
 /**
@@ -74,4 +74,16 @@ test('modèle modifié : refusé (empreinte SHA-256), moteur non prêt', async (
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }
+})
+
+test('plusieurs visages : un second visage ne compte que s’il est net (≥ 0,85) et d’au moins 40 % de la taille', () => {
+  const main = { score: 0.93, w: 120 }
+  assert.equal(countFaces([]), 0)
+  assert.equal(countFaces([main]), 1)
+  // Affiche ou reflet flou en arrière-plan : ignoré
+  assert.equal(countFaces([main, { score: 0.7, w: 110 }]), 1)
+  // Petit visage net au loin (moins de 40 %) : ignoré
+  assert.equal(countFaces([main, { score: 0.95, w: 40 }]), 1)
+  // Deuxième personne nette et proche : comptée
+  assert.equal(countFaces([main, { score: 0.9, w: 100 }]), 2)
 })

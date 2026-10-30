@@ -36,6 +36,16 @@ export const TUNING = {
 }
 
 const DET = 640
+
+/**
+ * Visages qui comptent : le principal (le plus sûr), plus tout autre visage net (score ≥ 0,85) et d'au moins 40 % de
+ * la largeur du principal. Une photo, une affiche ou un reflet flou en arrière-plan n'empêche donc plus la vérification.
+ */
+export function countFaces(faces) {
+  if (!faces.length) return 0
+  const main = faces[0]
+  return 1 + faces.slice(1).filter((f) => f.score >= TUNING.goodScore && f.w >= 0.4 * main.w).length
+}
 const STRIDES = [8, 16, 32]
 // Points de référence d'un visage aligné 112×112 (ArcFace, utilisés par OpenCV FaceRecognizerSF::alignCrop)
 const REF = [
@@ -293,15 +303,17 @@ export function makeEngine(root, ortModule = null) {
   async function probe(img) {
     if (!state.ready) throw new Error('ENGINE')
     const faces = await detect(img)
-    if (faces.length !== 1) return { faces: faces.length }
+    const n = countFaces(faces)
+    if (n !== 1) return { faces: n }
     return { faces: 1, pose: pose(faces[0]), ratio: poseRatio(faces[0]) }
   }
 
   async function analyse(img) {
     if (!state.ready) throw new Error('ENGINE')
     const faces = await detect(img)
-    if (!faces.length) return { faces: 0 }
-    if (faces.length > 1) return { faces: faces.length }
+    const n = countFaces(faces)
+    if (!n) return { faces: 0 }
+    if (n > 1) return { faces: n }
     const f = faces[0]
     const q = quality(img, f)
     const good = f.score >= TUNING.goodScore && f.w >= TUNING.minFace && q.lum >= TUNING.lumMin && q.lum <= TUNING.lumMax && q.sharp >= TUNING.sharpMin
