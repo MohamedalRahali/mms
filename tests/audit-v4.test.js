@@ -312,3 +312,17 @@ test('YouTube : chaînes d’information gardées, vlogs et chaînes religieuses
   for (const ok of ['Libya Al-Ahrar', 'قناة ليبيا الحدث - Libya Alhadath TV', 'فرانس 24 / FRANCE 24 Arabic', 'AlArabiya العربية', 'أثر الإخبارية - Athar News']) assert.equal(x(ok), false, ok)
   for (const ko of ['Naya Quran TV', 'Jason Veiga', 'Guns For Hire Podcast', 'Béton & Capital', 'History From Orbit']) assert.equal(x(ko), true, ko)
 })
+
+test('sujets émergents : variantes d’un même fait fusionnées (« وزراء اليونان » / « الوزراء اليوناني »)', async () => {
+  const { emergingTopics } = await import('../server/radar.js')
+  let n = 0
+  const mk = (hoursAgo, title, extra = {}) => ({ id: `g${++n}`, title, summary: '', origin: `s${n % 6}`, channel: 'site', date: new Date(NOW - hoursAgo * H).toISOString(), ...extra })
+  const items = []
+  for (let k = 0; k < 4; k++) items.push(mk(2 + k, `رئيس الوزراء اليوناني يرفض الاتفاق البحري مع تركيا ${k}`))
+  for (let k = 0; k < 4; k++) items.push(mk(3 + k, `وزراء اليونان يناقشون الاتفاق البحري الليبي ${k}`))
+  for (let k = 0; k < 4; k++) items.push(mk(2 + k, `محفظة ليبيا أفريقيا للاستثمار تعلن نتائجها في طرابلس ${k}`))
+  for (let k = 0; k < 3; k++) items.push(mk(3 + k, `الاستثمار في طرابلس : المحفظة والاستثماري الجديد ${k}`))
+  const labels = emergingTopics(items, { now: NOW }).map((t) => t.label)
+  assert.ok(labels.filter((l) => /يونان/.test(l)).length <= 1, labels.join(' | '))
+  assert.ok(labels.filter((l) => /استثمار/.test(l)).length <= 1, labels.join(' | '))
+})

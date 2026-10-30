@@ -245,6 +245,17 @@ export function emergingTopics(items, { hours = 24, now = Date.now(), limit = 15
       .split(/\s+/)
       .map((w) => (w.startsWith('ال') && w.length > 4 ? w.slice(2) : w))
       .join('')
+  // Racines des mots d'un libellé (« وزراء اليونان » et « الوزراء اليوناني » partagent وزراء et يونان)
+  const roots = (s) =>
+    normalize(String(s || ''))
+      .split(/\s+/)
+      .map((w) => stem(w.replace(/^(و|ب|ل|لل)(?=ال)/, '')).replace(/ي$/, ''))
+      .filter((w) => w.length >= 3 && !STOP.has(w))
+  const shareRoot = (a, b) => {
+    const ra = roots(a)
+    const rb = roots(b)
+    return ra.some((x) => rb.some((y) => x === y || (x.length >= 5 && y.length >= 5 && (x.startsWith(y) || y.startsWith(x)))))
+  }
   const kept = []
   for (const f of found) {
     const lk = labelKey(f.label)
@@ -257,6 +268,9 @@ export function emergingTopics(items, { hours = 24, now = Date.now(), limit = 15
       for (const d of f.docs) if (k.docs.has(d)) inter++
       // Un mot seul (« باطل », « والاستثماري ») tiré d'un sujet déjà retenu est plus vite écarté qu'une expression
       // (« الوزراء اليوناني » sous « كيرياكوس ميتسوتاكيس », production du 30/10)
+      // Même racine dans les deux libellés (« وزراء اليونان » / « الوزراء اليوناني », « للاستثمار طرابلس » /
+      // « محفظة ليبيا أفريقيا للاستثمار ») : 40 % d'articles en commun suffisent (production du 30/10, 18:50)
+      if (shareRoot(f.label, k.label) && inter >= f.docs.size * 0.4) return true
       return inter >= f.docs.size * (f.kind === 'word' ? 0.5 : 0.6)
     })
     if (!dup) kept.push(f)
