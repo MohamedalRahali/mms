@@ -377,10 +377,7 @@ select {
   display: flex;
   min-height: 0;
 }
-/* Menu à gauche, comme NewsBoard, y compris en arabe */
-.mms-app[dir='rtl'] .mms-body {
-  flex-direction: row-reverse;
-}
+/* Menu du côté où commence la lecture : à droite en arabe (RTL), à gauche en anglais (demande du client, 30/10) */
 .mms-side {
   flex: none;
   width: 290px;
@@ -4106,8 +4103,10 @@ img.mms-user__avatar--img {
    petite pastille en bas, qui ne masque plus le contenu */
 .mms-survey__tab {
   top: auto;
-  bottom: 18px;
-  right: 18px;
+  /* Coin opposé au menu, au-dessus du bouton « الدعم الفني » (ne recouvre plus le bas du menu) */
+  bottom: 72px;
+  right: auto;
+  inset-inline-end: 18px;
   padding: 0.45rem 0.9rem;
   border-radius: 999px;
   writing-mode: horizontal-tb;
@@ -4121,8 +4120,9 @@ img.mms-user__avatar--img {
 }
 .mms-survey {
   top: auto;
-  bottom: 64px;
-  right: 18px;
+  bottom: 118px;
+  right: auto;
+  inset-inline-end: 18px;
 }
 @media print {
   .mms-survey__tab {
