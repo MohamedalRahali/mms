@@ -6,7 +6,7 @@ import express from 'express'
 import { closeSessions, currentUser, hashPassword, readUsers, ROLES, setAuthListener, userSessions, writeUsers } from './auth.js'
 import { getItems, setHidden } from './store.js'
 import { keyStatus } from './keys.js'
-import { aiStatus, aiUsage } from './ai.js'
+import { aiStatus, aiUsage, setGeminiPaid } from './ai.js'
 import { auditSummary } from './auditTrail.js'
 import { mountPermissionsAdmin, permsOf, profileExists } from './permissions.js'
 import { initBrand, mountClientAdmin } from './clientAdmin.js'
@@ -851,6 +851,13 @@ export function mountSuperAdmin(app, root) {
     applyMuted()
     audit(req, on ? 'source_on' : 'source_off', `${kind === 'channels' ? 'canal' : 'source'} ${name}`)
     res.json({ ok: true })
+  })
+
+  /* ---- الذكاء الاصطناعي : facturation de la clé Gemini confirmée par le Super Admin (audit v4) */
+  sa.put('/ai', (req, res) => {
+    const s = setGeminiPaid(req.body?.geminiPaid === true, req.sa.u)
+    audit(req, 'ai_gemini_paid', '', s.geminiPaid ? 'on' : 'off')
+    res.json({ settings: s, status: aiStatus() })
   })
 
   /* ---- الإعدادات */

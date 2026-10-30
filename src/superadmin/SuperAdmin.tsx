@@ -346,10 +346,25 @@ type AiStatus = {
   warnings: string[]
   freeSeen: string
   engines: { id: string; label: string; configured: boolean; noReuse: boolean; tier: string; model: string }[]
+  settings?: { geminiPaid?: boolean; by?: string; at?: string }
+  geminiConfigured?: boolean
 }
 
 /** Moteurs d'IA : lequel sert, réutilisation des données par le fournisseur, clé Gemini gratuite (audit v4) */
-function AiEngines({ s }: { s: AiStatus }) {
+function AiEngines({ s: initial }: { s: AiStatus }) {
+  const [s, setS] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  async function togglePaid() {
+    const on = !s.settings?.geminiPaid
+    if (on && !window.confirm('تأكيد: تم تفعيل الفوترة (Billing) على مشروع Google الخاص بمفتاح Gemini، فلا تُعاد استخدام البيانات؟')) return
+    setBusy(true)
+    try {
+      const r = await api<{ status: AiStatus }>('/ai', 'PUT', { geminiPaid: on })
+      setS(r.status)
+    } finally {
+      setBusy(false)
+    }
+  }
   const WARN: Record<string, string> = {
     GEMINI_FREE_DETECTED: 'مفتاح Gemini في العرض المجاني (رصدته Google في رسالة الحصة): قد تستخدم Google البيانات المرسلة لتحسين منتجاتها. فعّلوا الفوترة على المشروع أو استعملوا Vertex AI.',
     GEMINI_TIER_UNKNOWN: 'مفتاح Gemini غير مصرّح بأنه مدفوع (MMS_GEMINI_TIER=paid): يُعامل كعرض مجاني قد تُعاد فيه استعمال البيانات.',
@@ -374,7 +389,17 @@ function AiEngines({ s }: { s: AiStatus }) {
           </li>
         ))}
       </ul>
-      <p className="sa-muted">الإعداد في ملف ‎.env: MMS_AI_PROVIDER، MMS_VERTEX_PROJECT + GOOGLE_APPLICATION_CREDENTIALS، MMS_GEMINI_TIER=paid، MMS_LLM_BASE_URL (نموذج محلي).</p>
+      {s.geminiConfigured && (
+        <p>
+          <button type="button" className={s.settings?.geminiPaid ? 'sa-btn sa-btn--ghost' : 'sa-btn'} disabled={busy} onClick={togglePaid}>
+            {s.settings?.geminiPaid ? 'إلغاء تصريح « مفتاح Gemini مدفوع »' : 'تفعّلت الفوترة على مفتاح Gemini: التصريح بأنه مدفوع'}
+          </button>{' '}
+          {s.settings?.geminiPaid && s.settings.at && <span className="sa-muted">صرّح به {s.settings.by} في {fmtDate(s.settings.at)}</span>}
+        </p>
+      )}
+      <p className="sa-muted">
+        بعد التصريح، إذا ردّت Google بحصة « free_tier » يعود التنبيه الأحمر تلقائياً. بدائل في ملف ‎.env: MMS_AI_PROVIDER، MMS_VERTEX_PROJECT + GOOGLE_APPLICATION_CREDENTIALS، MMS_GEMINI_TIER=paid، MMS_LLM_BASE_URL (نموذج محلي).
+      </p>
     </Card>
   )
 }

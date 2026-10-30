@@ -324,7 +324,26 @@ const norm = (s) =>
     .replace(/ى/g, 'ي')
     .replace(/ة/g, 'ه')
 
+/**
+ * Budget de transcription de 24 h d'audio par jour (≈ 4,32 $, approuvé par le client le 30/10/2026, audit v4) :
+ * appliqué au démarrage seulement si aucun plafond n'a encore été réglé dans MMS. Un réglage de l'administrateur
+ * (page des enregistrements) reste prioritaire et n'est jamais écrasé. MMS_TRANSCRIPTION_HEURES_DEFAUT=0 l'arrête.
+ */
+export function ensureTargetBudget() {
+  const hours = Number(process.env.MMS_TRANSCRIPTION_HEURES_DEFAUT ?? TARGET_HOURS)
+  if (!hours || savedTotal() != null) return null
+  const total = Math.min(dailyCostFor(hours), LIMITS.maxDailyTotal)
+  writeAll(readAll(), savedPart(), total)
+  return total
+}
+
 export function mountRecordings(app) {
+  try {
+    const t = ensureTargetBudget()
+    if (t != null) console.log(`Budget de transcription réglé à ${t} $ par jour (${TARGET_HOURS} h d'audio)`)
+  } catch (err) {
+    console.error('Budget de transcription :', err.message)
+  }
   const wrap = (fn) => (req, res) => {
     try {
       const out = fn(req, res)

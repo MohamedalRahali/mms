@@ -103,6 +103,7 @@ export const SECURITY_LABEL: Record<string, string> = {
 
 export const AUDIT_LABEL: Record<string, string> = {
   login: 'دخول',
+  ai_gemini_paid: 'تصريح: مفتاح Gemini مدفوع',
   logout: 'خروج',
   user_create: 'إنشاء حساب',
   user_update: 'تعديل حساب',

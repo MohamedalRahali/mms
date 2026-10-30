@@ -261,3 +261,24 @@ test('revue validée par un analyste : heure limite de livraison le lendemain', 
   rv.setDeadline('09:30')
   assert.equal(rv.dueAt('2026-10-29'), '2026-10-30T07:30:00.000Z')
 })
+
+test('IA : la facturation Gemini confirmée par le Super Admin vaut déclaration payante', async () => {
+  const ai = await import('../server/ai.js')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mms-ai-'))
+  const keep = { ...process.env }
+  try {
+    for (const k of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'MMS_GEMINI_TIER', 'MMS_AI_PROVIDER', 'MMS_AI_ECONOMY_PROVIDER', 'MMS_LLM_BASE_URL', 'MMS_VERTEX_PROJECT', 'VERTEX_API_KEY']) delete process.env[k]
+    process.env.GEMINI_API_KEY = 'x'
+    ai.initUsage(dir)
+    assert.equal(ai.geminiTier(), 'unknown')
+    ai.setGeminiPaid(true, 'superadmin')
+    assert.equal(ai.geminiTier(), 'paid')
+    assert.deepEqual(ai.aiStatus().warnings, [])
+    ai.initUsage(dir)
+    assert.equal(ai.geminiTier(), 'paid', 'gardé après redémarrage')
+    ai.setGeminiPaid(false, 'superadmin')
+    assert.equal(ai.geminiTier(), 'unknown')
+  } finally {
+    process.env = keep
+  }
+})

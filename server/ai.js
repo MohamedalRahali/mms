@@ -49,6 +49,12 @@ let usage = {} // mois (AAAA-MM) → moteur → { runs, input, output, cost }
 
 export function initUsage(dataDir) {
   usageFile = path.join(dataDir, 'ai-usage.json')
+  aiSettingsFile = path.join(dataDir, 'superadmin', 'ai-settings.json')
+  try {
+    aiSettings = JSON.parse(fs.readFileSync(aiSettingsFile, 'utf8')) || {}
+  } catch {
+    aiSettings = {}
+  }
   try {
     usage = JSON.parse(fs.readFileSync(usageFile, 'utf8')) || {}
   } catch {
@@ -127,7 +133,23 @@ export function engineConfigured(id) {
 /** Offre de la clé Gemini : 'paid' (déclarée payante et jamais vue gratuite), 'free' (vue gratuite) ou 'unknown' */
 export function geminiTier() {
   if (geminiFreeSeen) return 'free'
-  return String(process.env.MMS_GEMINI_TIER || '').toLowerCase() === 'paid' ? 'paid' : 'unknown'
+  // Déclarée payante dans .env (MMS_GEMINI_TIER=paid) ou par le Super Admin (data/superadmin/ai-settings.json)
+  return String(process.env.MMS_GEMINI_TIER || '').toLowerCase() === 'paid' || aiSettings.geminiPaid === true ? 'paid' : 'unknown'
+}
+
+/* Réglages de l'IA faits dans la console Super Admin (sans accès au serveur) : facturation de la clé Gemini confirmée */
+let aiSettingsFile = ''
+let aiSettings = {}
+export const aiSettingsOf = () => ({ ...aiSettings })
+export function setGeminiPaid(on, by = '') {
+  aiSettings = { ...aiSettings, geminiPaid: on === true, by: String(by).slice(0, 120), at: new Date().toISOString() }
+  // Nouvelle déclaration : l'alerte « free_tier » vue avant est oubliée ; elle reviendra si Google répond encore « free_tier »
+  if (on === true) geminiFreeSeen = ''
+  if (aiSettingsFile) {
+    fs.mkdirSync(path.dirname(aiSettingsFile), { recursive: true })
+    fs.writeFileSync(aiSettingsFile, JSON.stringify(aiSettings, null, 1))
+  }
+  return aiSettingsOf()
 }
 
 /** Le moteur garantit-il que les données envoyées ne servent pas à l'entraînement ? */
@@ -173,7 +195,7 @@ export function aiStatus() {
           : 'GEMINI_TIER_UNKNOWN', // clé Gemini non déclarée payante (MMS_GEMINI_TIER=paid)
       )
   if (!main) warnings.push('NO_ENGINE')
-  return { main, economy, engines, warnings: [...new Set(warnings)], freeSeen: geminiFreeSeen }
+  return { main, economy, engines, warnings: [...new Set(warnings)], freeSeen: geminiFreeSeen, settings: aiSettingsOf(), geminiConfigured: engineConfigured('gemini') }
 }
 
 function modelOf(id) {
