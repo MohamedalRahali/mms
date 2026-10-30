@@ -572,6 +572,8 @@ export default function App() {
                             d="M10 3h9a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-9v-2h9V5h-9V3zm-.6 4.6L10.8 9l-2 2H16v2H8.8l2 2-1.4 1.4L5 12l4.4-4.4z"
                           />
                         </svg>
+                        {/* Libellé visible (l'icône seule passait inaperçue : retour client du 30/10) ; masqué sur mobile */}
+                        <span className="mms-logout__label">{lang === 'ar' ? 'خروج' : 'Log out'}</span>
                       </button>
                     </div>
                   )}
@@ -624,6 +626,14 @@ export default function App() {
                         </div>
                       ))}
                     </nav>
+                    {auth && (
+                      <button type="button" className="mms-side__logout" onClick={auth.logout}>
+                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+                          <path fill="currentColor" d="M10 3h9a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-9v-2h9V5h-9V3zm-.6 4.6L10.8 9l-2 2H16v2H8.8l2 2-1.4 1.4L5 12l4.4-4.4z" />
+                        </svg>
+                        {!collapsed && <span>{lang === 'ar' ? 'تسجيل الخروج' : 'Log out'}</span>}
+                      </button>
+                    )}
                     <p className="mms-side__foot">
                       {/* Marque blanche (هوية المخرجات) : sans la marque Around */}
                       {!brand?.whiteLabel && <img className="mms-side__logo" src="/around-logo-footer.png" alt="Around Expressions" width={120} height={91} loading="lazy" />}

@@ -2414,13 +2414,15 @@ textarea:focus {
   text-overflow: ellipsis;
 }
 .mms-logout {
-  display: grid;
-  place-items: center;
-  width: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-width: 34px;
+  padding: 0 0.55rem;
   height: 34px;
-  padding: 0;
   border: 0;
-  border-radius: 50%;
+  border-radius: 999px;
   background: var(--surface-2);
   color: light-dark(#8a2a24, #c49491);
   cursor: pointer;
@@ -4758,4 +4760,39 @@ img.mms-user__avatar--img {
 }
 .mms-review__act input {
   flex: 1 1 14rem;
+}
+
+/* Déconnexion visible : libellé à côté de l'icône (barre du haut) et entrée en bas du menu latéral */
+.mms-logout__label {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+@media (max-width: 700px) {
+  .mms-logout__label {
+    display: none;
+  }
+}
+.mms-side__logout {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.5rem 0.75rem 0;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: light-dark(#8a2a24, #df928e);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mms-side__logout:hover {
+  background: var(--surface-2);
+}
+.mms-app[dir='rtl'] .mms-side__logout svg {
+  transform: scaleX(-1);
+}
+
+.mms-head .mms-user {
+  flex-shrink: 0;
 }
