@@ -261,6 +261,10 @@ export function emergingTopics(items, { hours = 24, now = Date.now(), limit = 15
     const lk = labelKey(f.label)
     const dup = kept.some((k) => {
       if (labelKey(k.label) === lk) return true
+      // Mêmes racines (« الوزراء اليوناني » / « وزراء اليونان ») : un seul sujet, quelles que soient les fiches
+      const fr = roots(f.label)
+      const kr = roots(k.label)
+      if (f.kind !== 'entity' && fr.length && fr.length === kr.length && fr.every((x) => kr.includes(x))) return true
       if (f.kind === 'entity' && k.kind === 'entity') return false
       // Une entité n'est jamais absorbée par un simple mot ; un mot ou une expression peut l'être par une entité
       if (f.kind === 'entity') return false
@@ -693,7 +697,49 @@ export function smartAlerts(items, { now = Date.now(), history = historyOf(items
       filter: { q: c.query.join(' ') },
     })
   }
-  return alerts.sort((a, b) => b.level - a.level || (b.detail.sources || 0) - (a.detail.sources || 0)).slice(0, 14)
+  return dedupeAlerts(alerts.sort((a, b) => b.level - a.level || (b.detail.sources || 0) - (a.detail.sources || 0))).slice(0, 14)
+}
+
+/** Racines des mots d'un libellé ou d'un titre (sans article, préfixes, pluriels ni « ي » final) */
+export function labelRoots(s) {
+  return new Set(words(s).map((w) => w.s.replace(/ي$/, '')).filter((r) => r.length >= 3))
+}
+const rootOverlap = (a, b) => {
+  let n = 0
+  for (const x of a) if (b.has(x)) n++
+  return n / (Math.min(a.size, b.size) || 1)
+}
+
+/**
+ * Une alerte par sujet (production du 30/10 : 4 « histoires » sur la même déclaration de Mitsotakis, plus « وزراء
+ * اليونان » en nouveau sujet) : histoires aux titres proches (moitié des racines en commun) fusionnées dans la plus
+ * reprise, nouveau sujet dont toutes les racines figurent dans une histoire ou un pic déjà retenus écarté. Les alertes
+ * gardent leur ordre (gravité puis sources) ; « related » compte les doublons fusionnés.
+ */
+export function dedupeAlerts(alerts) {
+  const order = new Map(alerts.map((a, k) => [a, k]))
+  // Pics, montées du négatif et histoires d'abord, nouveaux sujets ensuite (comparés à tout ce qui est retenu)
+  const rank = { spike: 0, negative: 0, story: 1, emerging: 2 }
+  const queue = [...alerts].sort((a, b) => (rank[a.kind] ?? 1) - (rank[b.kind] ?? 1) || order.get(a) - order.get(b))
+  const kept = []
+  const groupRoots = new Map() // alerte retenue → racines de toutes les alertes fusionnées avec elle
+  for (const a of queue) {
+    const roots = labelRoots(a.label)
+    const dupOf = kept.find((k) => {
+      const kr = groupRoots.get(k)
+      if (a.kind === 'story' && k.kind === 'story') return rootOverlap(roots, kr) >= 0.5 || rootOverlap(roots, labelRoots(k.label)) >= 0.4
+      if (a.kind === 'emerging' && k.kind !== 'negative') return roots.size > 0 && [...roots].every((r) => kr.has(r))
+      return false
+    })
+    if (dupOf) {
+      dupOf.detail.related = (dupOf.detail.related || 0) + 1
+      for (const r of roots) groupRoots.get(dupOf).add(r)
+      continue
+    }
+    kept.push(a)
+    groupRoots.set(a, new Set(roots))
+  }
+  return kept.sort((a, b) => order.get(a) - order.get(b))
 }
 
 /* ---------------------------------------------------------------- envoi des alertes critiques */

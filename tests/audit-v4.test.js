@@ -328,3 +328,19 @@ test('sujets émergents : variantes d’un même fait fusionnées (« وزراء
   assert.ok(labels.filter((l) => /يونان/.test(l)).length <= 1, labels.join(' | '))
   assert.ok(labels.filter((l) => /استثمار/.test(l)).length <= 1, labels.join(' | '))
 })
+
+test('alertes intelligentes : une seule alerte par sujet (titres relevés en production le 30/10)', async () => {
+  const { dedupeAlerts } = await import('../server/radar.js')
+  const a = (kind, label) => ({ kind, label, level: 2, detail: {} })
+  const out = dedupeAlerts([
+    a('negative', 'تركيا'),
+    a('spike', 'كيرياكوس ميتسوتاكيس'),
+    a('emerging', 'وزراء اليونان'),
+    a('story', 'رئيس وزراء اليونان يصف الاتفاق البحري الليبي التركي بغير القانوني'),
+    a('story', 'ميتسوتاكيس: الاتفاق البحري الليبي التركي الذي أقره مجلس النواب غير قانوني'),
+    a('story', 'ميتسوتاكيس: الاتفاق البحري الليبي التركي باطل وندعو طرابلس للتفاوض المباشر'),
+    a('story', 'عمومية «لايكو» تعتمد هيكلًا تنظيميًا معدلًا وتصادق على قوائم 2014-2020'),
+  ])
+  assert.deepEqual(out.map((x) => x.kind), ['negative', 'spike', 'story', 'story'])
+  assert.equal(out[2].detail.related, 3)
+})
