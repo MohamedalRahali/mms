@@ -4,7 +4,7 @@ import { emergingTopics, sentimentBarometer, smartAlerts, storyClusters } from '
 
 /**
  * Radar calculé en arrière-plan (thread séparé) : à chaque nouvelle version des données, les vues que l'interface
- * demande (sujets 6/24/72 h et 7 j, histoires 24/48 h et 7 j, baromètre 14 j, alertes) sont préparées sans bloquer
+ * demande (sujets 6/24/72 h et 7 j, histoires 24/48 h et 7 j, baromètre 7/14/30 j, alertes) sont préparées sans bloquer
  * le serveur. Les routes /api/radar/* servent ce résultat ; une combinaison non préparée est calculée comme avant.
  */
 
@@ -12,7 +12,7 @@ import { emergingTopics, sentimentBarometer, smartAlerts, storyClusters } from '
 export const JOBS = [
   ...[6, 24, 72, 168].map((hours) => ({ path: '/emerging', hours, days: 0 })),
   ...[24, 48, 168].map((hours) => ({ path: '/stories', hours, days: 0 })),
-  { path: '/sentiment', hours: 0, days: 14 },
+  ...[7, 14, 30].map((days) => ({ path: '/sentiment', hours: 0, days })),
   { path: '/alerts', hours: 0, days: 0 },
 ]
 

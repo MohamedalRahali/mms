@@ -302,40 +302,56 @@ function ToneTable({ rows, head, onPick }: { rows: ToneRow[]; head: string; onPi
   const i = useI18n()
   const r = radarText(i.lang)
   const x = useIntel()
+  if (!rows.length) return <p className="news-status">{r.tableEmpty}</p>
   return (
-    <table className="news-table radar-table">
-      <thead>
-        <tr>
-          <th>{head}</th>
-          <th>{r.volume}</th>
-          <th>{r.net}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.name}>
-            <td>
-              <button type="button" className="radar-link" onClick={() => onPick(row.name)} dir="auto">
-                {row.name}
-              </button>
-            </td>
-            <td title={TONES.map((t) => `${x.tones[t]} ${row[t]}`).join(' · ')}>
-              {i.num(row.count)}
-              <ToneBar tone={row} />
-            </td>
-            <td>
-              <span className={`radar-net ${netClass(row.sentiment)}`} dir="ltr">
-                <span className="radar-net__track">
-                  <i style={{ [row.sentiment >= 0 ? 'left' : 'right']: '50%', width: `${Math.abs(row.sentiment) / 2}%` }} />
-                </span>
-                <b>{signed(row.sentiment, i.num)}</b>
-              </span>
-            </td>
+    <div className="radar-table-wrap">
+      <table className="news-table radar-table">
+        <thead>
+          <tr>
+            <th>{head}</th>
+            <th>{r.volume}</th>
+            <th>{r.net}</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.name}>
+              <td>
+                <button type="button" className="radar-link" onClick={() => onPick(row.name)} dir="auto">
+                  {row.name}
+                </button>
+              </td>
+              <td title={TONES.map((t) => `${x.tones[t]} ${row[t]}`).join(' · ')}>
+                {i.num(row.count)}
+                <ToneBar tone={row} />
+              </td>
+              <td>
+                <span className={`radar-net ${netClass(row.sentiment)}`} dir="ltr">
+                  <span className="radar-net__track">
+                    <i style={{ [row.sentiment >= 0 ? 'left' : 'right']: '50%', width: `${Math.abs(row.sentiment) / 2}%` }} />
+                  </span>
+                  <b>{signed(row.sentiment, i.num)}</b>
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
+}
+
+const PERIODS = [7, 14, 30, 90]
+// Jour civil de Tripoli (UTC+2, sans heure d'été), décalé de `shift` jours
+const tripoliDay = (shift = 0) => new Date(Date.now() + 2 * 3_600_000 + shift * 86_400_000).toISOString().slice(0, 10)
+
+/** Période du baromètre : 7/14/30/90 jours jusqu'à aujourd'hui, ou du … au … (bornée à 90 jours par le serveur) */
+function useBaroPeriod() {
+  const [days, setDays] = useState<number | 'custom'>(14)
+  const [from, setFrom] = useState(() => tripoliDay(-13))
+  const [to, setTo] = useState(() => tripoliDay())
+  const query = days === 'custom' ? `from=${from}&to=${to}` : `days=${days}`
+  return { days, setDays, from, setFrom, to, setTo, query }
 }
 
 function SentimentBarometer({ flux }: { flux: Flux | '' }) {
@@ -343,21 +359,61 @@ function SentimentBarometer({ flux }: { flux: Flux | '' }) {
   const r = radarText(i.lang)
   const x = useIntel()
   const drill = useContext(DrillContext)
-  const { data, error } = useFetch<Barometer>(`/api/radar/sentiment?days=14${fluxParam(flux, '&')}`)
+  const p = useBaroPeriod()
+  // Les chiffres suivent la période choisie (avant : toujours 14 jours, quelle que soit la date choisie)
+  const { data, error } = useFetch<Barometer>(`/api/radar/sentiment?${p.query}${fluxParam(flux, '&')}`)
   // Vue par défaut : acteurs libyens quand le référentiel en trouve, sinon tous les acteurs
   const [allActors, setAllActors] = useState(false)
-  if (!data) return <LoadState error={error} />
+  const today = tripoliDay()
+  const head = (
+    <header className="radar-block__head">
+      <div>
+        <h3>{r.barometer}</h3>
+        <p>{r.barometerHint}</p>
+        {data?.from && data.to && <p className="radar-period__window">{r.windowOf(i.day(data.from), i.day(data.to), data.days)}</p>}
+      </div>
+      <div className="radar-period">
+        <div className="mms-seg" role="group" aria-label={r.period}>
+          {PERIODS.map((d) => (
+            <button key={d} type="button" className={p.days === d ? 'is-active' : ''} aria-pressed={p.days === d} onClick={() => p.setDays(d)}>
+              {r.periods[d]}
+            </button>
+          ))}
+          <button type="button" className={p.days === 'custom' ? 'is-active' : ''} aria-pressed={p.days === 'custom'} onClick={() => p.setDays('custom')}>
+            {r.custom}
+          </button>
+        </div>
+        {p.days === 'custom' && (
+          <div className="radar-period__dates">
+            <label>
+              <span>{r.from}</span>
+              <input type="date" value={p.from} max={p.to || today} onChange={(e) => e.target.value && p.setFrom(e.target.value)} />
+            </label>
+            <label>
+              <span>{r.to}</span>
+              <input type="date" value={p.to} min={p.from} max={today} onChange={(e) => e.target.value && p.setTo(e.target.value)} />
+            </label>
+          </div>
+        )}
+      </div>
+    </header>
+  )
+  if (!data)
+    return (
+      <section className="radar-block">
+        {head}
+        <LoadState error={error} />
+      </section>
+    )
   const hasLy = Boolean(data.actorsLy?.length)
   const actorRows = hasLy && !allActors ? data.actorsLy! : data.actors
   const max = Math.max(1, ...data.perDay.map((d) => Math.max(d.positive, d.negative)))
+  // La liste des actualités s'ouvre sur la même fenêtre que le baromètre
+  const range = data.from && data.to ? { from: data.from, to: data.to, days: '' } : { days: String(data.days) }
   return (
     <section className="radar-block">
-      <header className="radar-block__head">
-        <div>
-          <h3>{r.barometer}</h3>
-          <p>{r.barometerHint}</p>
-        </div>
-      </header>
+      {head}
+      {!data.total && <p className="news-status">{r.baroEmpty}</p>}
       <div className="radar-baro">
         <div className="news-panel radar-baro__gauge">
           <Gauge value={data.sentiment} />
@@ -379,18 +435,32 @@ function SentimentBarometer({ flux }: { flux: Flux | '' }) {
           <h4>{r.perDay}</h4>
           <div className="radar-days" dir="ltr">
             {data.perDay.map((d) => (
-              <div key={d.date} className="radar-days__col" title={`${d.date} · +${d.positive} / −${d.negative} · ${d.sentiment}`}>
+              <div key={d.date} className="radar-days__col" title={`${i.day(d.date)} · +${d.positive} / −${d.negative} · ${d.sentiment}`}>
                 <span className="radar-days__pos" style={{ height: `${(d.positive / max) * 50}%` }} />
                 <span className="radar-days__neg" style={{ height: `${(d.negative / max) * 50}%` }} />
               </div>
             ))}
           </div>
+          {data.perDay.length > 0 && (
+            <div className="radar-days__axis" dir="ltr">
+              <span dir={i.dir}>{i.day(data.perDay[0].date)}</span>
+              <span dir={i.dir}>{i.day(data.perDay[data.perDay.length - 1].date)}</span>
+            </div>
+          )}
+          <ul className="radar-baro__totals">
+            {(['positive', 'negative'] as const).map((t) => (
+              <li key={t}>
+                <i style={{ background: TONE_COLORS[t] }} aria-hidden />
+                {x.tones[t]}
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
       <div className="radar-baro__tables">
         <div className="news-panel">
-          <h4>
-            {r.byActor}
+          <div className="radar-baro__tablehead">
+            <h4>{r.byActor}</h4>
             {hasLy && (
               <span className="mms-seg radar-baro__seg" role="group">
                 <button type="button" className={!allActors ? 'is-active' : ''} aria-pressed={!allActors} onClick={() => setAllActors(false)}>
@@ -401,12 +471,14 @@ function SentimentBarometer({ flux }: { flux: Flux | '' }) {
                 </button>
               </span>
             )}
-          </h4>
-          <ToneTable rows={actorRows} head={r.actor} onPick={(name) => drill({ entity: name, days: '14' })} />
+          </div>
+          <ToneTable rows={actorRows} head={r.actor} onPick={(name) => drill({ entity: name, ...range })} />
         </div>
         <div className="news-panel">
-          <h4>{r.bySource}</h4>
-          <ToneTable rows={data.sources} head={r.source} onPick={(name) => drill({ source: name, days: '14' })} />
+          <div className="radar-baro__tablehead">
+            <h4>{r.bySource}</h4>
+          </div>
+          <ToneTable rows={data.sources} head={r.source} onPick={(name) => drill({ source: name, ...range })} />
         </div>
       </div>
     </section>
@@ -421,10 +493,8 @@ export function Radar({ flux }: { flux: Flux | '' }) {
       <PageHead title={r.title} intro={r.intro} />
       <DataSince />
       <Alerts flux={flux} />
-      <div className="radar-grid">
-        <EmergingTopics flux={flux} />
-        <SentimentBarometer flux={flux} />
-      </div>
+      <EmergingTopics flux={flux} />
+      <SentimentBarometer flux={flux} />
       <Stories flux={flux} />
     </div>
   )
@@ -485,6 +555,7 @@ export function RadarWidget({ type, flux, days }: { type: 'emerging' | 'stories'
           {signed(data.sentiment ?? 0, i.num)}
         </strong>
         <span>{r.netLabel}</span>
+        {data.from && data.to && <small>{r.windowOf(i.day(data.from), i.day(data.to), data.days ?? 0)}</small>}
         <ul className="radar-baro__totals">
           {TONES.map((t) => (
             <li key={t}>

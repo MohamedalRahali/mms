@@ -42,10 +42,15 @@
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: 0.7rem;
 }
+.radar-alerts > li {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 .radar-alert {
   --lvl: var(--medium);
   width: 100%;
-  height: 100%;
+  flex: 1;
   display: grid;
   gap: 0.3rem;
   align-content: start;
@@ -96,28 +101,20 @@
   color: var(--ink-soft);
 }
 
-/* ---------------------------------------------------------------- grille principale */
-.radar-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-  gap: 1.2rem;
-  align-items: start;
-}
-
 /* ---------------------------------------------------------------- sujets émergents */
 .radar-topics {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr));
+  column-gap: 1.6rem;
 }
 .radar-topics > li {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 1.8rem;
   align-items: center;
-}
-.radar-topics > li + li {
-  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 .radar-topic__more {
   width: 1.6rem;
@@ -239,8 +236,48 @@
 /* ---------------------------------------------------------------- baromètre */
 .radar-baro {
   display: grid;
-  grid-template-columns: minmax(170px, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
   gap: 0.9rem;
+}
+.radar-period {
+  display: grid;
+  justify-items: end;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+.radar-period .mms-seg {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.radar-period__dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.radar-period__dates label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+.radar-period__dates input {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  color-scheme: light dark;
+}
+.radar-period__dates input:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 1px;
+}
+.radar-block__head p.radar-period__window {
+  margin-top: 0.3rem;
+  font-weight: 600;
+  color: var(--ink);
 }
 .radar-baro__gauge {
   display: grid;
@@ -297,7 +334,8 @@
   stroke: var(--coral);
 }
 .radar-gauge__neu {
-  stroke: #8a9e93;
+  stroke: var(--ink-soft);
+  opacity: 0.6;
 }
 .radar-gauge__pos {
   stroke: var(--green);
@@ -354,9 +392,20 @@
 .radar-days__neg {
   align-self: start;
 }
+.radar-days__axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+.radar-baro__days .radar-baro__totals {
+  justify-content: flex-start;
+}
 .radar-baro__tables {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  align-items: start;
   gap: 0.9rem;
   margin-top: 0.9rem;
 }
@@ -382,24 +431,50 @@
   text-decoration: underline;
 }
 .radar-baro__tables > .news-panel {
+  min-width: 0;
+}
+.radar-baro__tablehead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+.radar-baro__tablehead h4 {
+  margin: 0;
+}
+/* Sur petit écran, le tableau défile horizontalement au lieu d'écraser les noms */
+.radar-table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .radar-table {
   width: 100%;
+  min-width: 360px;
+}
+.radar-table th:first-child,
+.radar-table td:first-child {
+  min-width: 9rem;
+}
+.radar-table th:nth-child(2),
+.radar-table td:nth-child(2) {
+  width: 6.5rem;
 }
 .radar-table th:last-child,
 .radar-table td:last-child {
-  width: 7.5rem;
+  width: 8.5rem;
 }
 .radar-net {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  width: 7rem;
+  width: 8rem;
 }
 .radar-net__track {
   position: relative;
   flex: 1;
+  overflow: hidden;
   height: 6px;
   border-radius: 3px;
   background: var(--surface-2);
@@ -420,7 +495,7 @@
 /* ---------------------------------------------------------------- histoires */
 .radar-stories {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
   gap: 0.9rem;
 }
 .radar-story {
@@ -563,15 +638,22 @@
 }
 
 /* ---------------------------------------------------------------- mobile */
-@media (max-width: 1100px) {
-  .radar-grid {
-    grid-template-columns: minmax(0, 1fr);
+@media (max-width: 760px) {
+  .radar-period {
+    justify-items: start;
   }
 }
 @media (max-width: 640px) {
   .radar-baro,
   .radar-baro__tables {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .radar-alerts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .radar-story {
+    grid-template-columns: 3rem minmax(0, 1fr);
+    gap: 0.6rem;
   }
   .radar-stories {
     grid-template-columns: minmax(0, 1fr);
@@ -655,12 +737,12 @@
 }
 .alert-flow.is-validated .alert-flow__status,
 .alert-flow.is-closed .alert-flow__status {
-  background: rgba(46, 158, 91, 0.16);
-  color: #2e9e5b;
+  background: var(--green-soft);
+  color: var(--green);
 }
 .alert-flow.is-escalated .alert-flow__status {
-  background: rgba(217, 83, 79, 0.16);
-  color: #d9534f;
+  background: color-mix(in srgb, var(--coral) 16%, transparent);
+  color: var(--coral);
 }
 .alert-flow__btn {
   padding: 1px 8px;
@@ -703,8 +785,6 @@
 
 /* Baromètre : bascule acteurs libyens / tous */
 .radar-baro__seg {
-  margin-inline-start: 0.6rem;
-  vertical-align: middle;
   font-size: 0.78rem;
 }
 .radar-baro__seg button {

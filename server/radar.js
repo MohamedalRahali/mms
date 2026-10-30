@@ -371,11 +371,38 @@ export function storyClusters(items, { hours = 48, now = Date.now(), limit = 20 
 
 const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tripoli', year: 'numeric', month: '2-digit', day: '2-digit' })
 
-/** Sentiment par jour, par acteur et par source, sur `days` jours */
-export function sentimentBarometer(items, { days = 14, now = Date.now() } = {}) {
-  const span = Math.min(Math.max(days, 2), 90)
+/** Jour civil de Tripoli (AAAA-MM-JJ) valide, sinon '' */
+export const validDay = (s) => {
+  const day = String(s || '')
+  const t = /^\d{4}-\d{2}-\d{2}$/.test(day) ? Date.parse(`${day}T12:00:00Z`) : NaN
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === day ? day : ''
+}
+// Tripoli : UTC+2 toute l'année (pas d'heure d'été)
+const dayStart = (day) => Date.parse(`${day}T00:00:00+02:00`)
+
+/**
+ * Fenêtre du baromètre : `days` jours jusqu'à maintenant, ou du jour `from` au jour `to` (jours de Tripoli, inclus).
+ * Les dates sont bornées : pas après aujourd'hui, de 2 à 90 jours. Renvoie { from, to, days, start, end }.
+ */
+export function barometerWindow({ days = 14, from = '', to = '', now = Date.now() } = {}) {
+  const today = dayKey.format(new Date(now))
+  const end = validDay(to) && validDay(to) < today ? validDay(to) : today
+  let span = Math.min(Math.max(Math.round(days) || 14, 2), 90)
+  if (validDay(from)) {
+    const f = validDay(from) > end ? end : validDay(from)
+    span = Math.min(Math.max(Math.round((dayStart(end) - dayStart(f)) / DAY) + 1, 2), 90)
+  }
+  const endAt = end === today ? now : dayStart(end) + DAY - 1
+  const startDay = dayKey.format(new Date(dayStart(end) - (span - 1) * DAY + 12 * HOUR))
+  return { from: startDay, to: end, days: span, start: dayStart(startDay), end: endAt }
+}
+
+/** Sentiment par jour, par acteur et par source, sur `days` jours (ou de `from` à `to`) */
+export function sentimentBarometer(items, { days = 14, from = '', to = '', now = Date.now() } = {}) {
+  const win = barometerWindow({ days, from, to, now })
+  const span = win.days
   const perDay = []
-  for (let i = span - 1; i >= 0; i--) perDay.push({ date: dayKey.format(new Date(now - i * DAY)), ...emptyTone() })
+  for (let i = 0; i < span; i++) perDay.push({ date: dayKey.format(new Date(win.start + i * DAY + 12 * HOUR)), ...emptyTone() })
   const index = new Map(perDay.map((d, i) => [d.date, i]))
   const total = emptyTone()
   let inferred = 0
@@ -388,7 +415,7 @@ export function sentimentBarometer(items, { days = 14, now = Date.now() } = {}) 
   }
   for (const it of items) {
     const t = Date.parse(it.date)
-    if (t > now || t < now - span * DAY) continue
+    if (!(t <= win.end && t >= win.start)) continue
     const r = toneOf(it)
     if (r.inferred) inferred++
     total[r.tone]++
@@ -406,6 +433,8 @@ export function sentimentBarometer(items, { days = 14, now = Date.now() } = {}) 
   const n = total.positive + total.neutral + total.negative
   return {
     days: span,
+    from: win.from,
+    to: win.to,
     total: n,
     ...total,
     sentiment: net(total),

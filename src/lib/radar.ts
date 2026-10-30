@@ -40,6 +40,8 @@ export type ToneRow = ToneCount & { name: string; count: number; sentiment: numb
 
 export type Barometer = ToneCount & {
   days: number
+  from?: string
+  to?: string
   total: number
   sentiment: number
   inferredShare: number
@@ -108,6 +110,14 @@ export const RADAR_TEXT = {
     net: 'الصافي',
     volume: 'الحجم',
     perDay: 'المزاج يوماً بيوم',
+    period: 'الفترة',
+    periods: { 7: '7 أيام', 14: '14 يوماً', 30: '30 يوماً', 90: '90 يوماً' } as Record<number, string>,
+    custom: 'من تاريخ إلى تاريخ',
+    from: 'من',
+    to: 'إلى',
+    windowOf: (from: string, to: string, n: number) => `من ${from} إلى ${to} (${n} ${n >= 3 && n <= 10 ? 'أيام' : 'يوماً'})`,
+    tableEmpty: 'لا توجد بيانات كافية في هذه الفترة.',
+    baroEmpty: 'لا توجد أخبار في هذه الفترة.',
     loading: 'جارٍ التحليل…',
     briefTitle: 'تنبيهات حرجة',
     briefMore: 'كل التنبيهات',
@@ -157,6 +167,14 @@ export const RADAR_TEXT = {
     net: 'Net',
     volume: 'Volume',
     perDay: 'Mood day by day',
+    period: 'Period',
+    periods: { 7: '7 days', 14: '14 days', 30: '30 days', 90: '90 days' } as Record<number, string>,
+    custom: 'Date range',
+    from: 'From',
+    to: 'To',
+    windowOf: (from: string, to: string, n: number) => `${from} to ${to} (${n} days)`,
+    tableEmpty: 'Not enough data in this period.',
+    baroEmpty: 'No items in this period.',
     loading: 'Analysing…',
     briefTitle: 'Critical alerts',
     briefMore: 'All alerts',

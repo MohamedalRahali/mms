@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { emergingTopics, smartAlerts, stem, storyClusters, toneOf, sentimentBarometer } from '../server/radar.js'
+import { emergingTopics, smartAlerts, stem, storyClusters, toneOf, sentimentBarometer, barometerWindow } from '../server/radar.js'
 import { compileQuery, queryError } from '../server/query.js'
 import { normalize } from '../server/watches.js'
 
@@ -84,6 +84,58 @@ test('baromètre : indice net et part estimée', () => {
   assert.equal(b.negative, 2)
   assert.equal(b.sentiment, -33)
   assert.equal(b.inferredShare, 33)
+})
+
+// Baromètre : la période choisie change vraiment le résultat (signalé « ne change pas avec la date »)
+const moodPool = () => {
+  const items = []
+  // 10 derniers jours : négatif ; 20 jours avant : positif
+  for (let d = 0; d < 10; d++) items.push(item(24 * d + 1, 'a', { tone: 'negative', people: ['الدبيبة'], origin: 'srcA' }), item(24 * d + 2, 'b', { tone: 'negative', people: ['الدبيبة'], origin: 'srcB' }))
+  for (let d = 10; d < 30; d++) items.push(item(24 * d + 1, 'c', { tone: 'positive', people: ['حفتر'], origin: 'srcC' }), item(24 * d + 2, 'd', { tone: 'positive', people: ['حفتر'], origin: 'srcC' }))
+  return items
+}
+
+test('baromètre : 7, 14 et 30 jours donnent des chiffres différents', () => {
+  const items = moodPool()
+  const b7 = sentimentBarometer(items, { days: 7, now: NOW })
+  const b14 = sentimentBarometer(items, { days: 14, now: NOW })
+  const b30 = sentimentBarometer(items, { days: 30, now: NOW })
+  assert.equal(b7.sentiment, -100)
+  assert.ok(b14.sentiment > b7.sentiment && b30.sentiment > b14.sentiment, `${b7.sentiment} ${b14.sentiment} ${b30.sentiment}`)
+  assert.deepEqual([b7.perDay.length, b14.perDay.length, b30.perDay.length], [7, 14, 30])
+  assert.equal(b7.perDay.at(-1).date, '2026-10-24')
+  // Totaux = somme des barres par jour : rien hors de la fenêtre affichée
+  for (const b of [b7, b14, b30]) assert.equal(b.total, b.perDay.reduce((n, d) => n + d.positive + d.neutral + d.negative, 0))
+  assert.deepEqual(b7.actors.map((a) => a.name), ['الدبيبة'])
+  assert.ok(b30.actors.some((a) => a.name === 'حفتر'))
+  assert.ok(!b7.sources.some((s) => s.name === 'srcC') && b30.sources.some((s) => s.name === 'srcC'))
+})
+
+test('baromètre : une date de fin passée ou une plage du … au … déplace la fenêtre', () => {
+  const items = moodPool()
+  const past = sentimentBarometer(items, { days: 7, to: '2026-10-10', now: NOW })
+  assert.equal(past.to, '2026-10-10')
+  assert.equal(past.from, '2026-10-04')
+  assert.equal(past.perDay.at(-1).date, '2026-10-10')
+  assert.equal(past.sentiment, 100)
+  assert.deepEqual(past.actors.map((a) => a.name), ['حفتر'])
+  const range = sentimentBarometer(items, { from: '2026-10-12', to: '2026-10-17', now: NOW })
+  assert.equal(range.days, 6)
+  assert.deepEqual([range.perDay[0].date, range.perDay.at(-1).date], ['2026-10-12', '2026-10-17'])
+  assert.ok(range.positive > 0 && range.negative > 0)
+  assert.notEqual(range.sentiment, past.sentiment)
+})
+
+test('baromètre : dates invalides ou hors bornes ramenées dans les limites', () => {
+  assert.equal(barometerWindow({ to: '2099-01-01', days: 7, now: NOW }).to, '2026-10-24')
+  assert.equal(barometerWindow({ to: 'pas une date', days: 7, now: NOW }).to, '2026-10-24')
+  assert.equal(barometerWindow({ to: '2026-02-31', days: 7, now: NOW }).to, '2026-10-24')
+  assert.equal(barometerWindow({ from: '2020-01-01', to: '2026-10-24', now: NOW }).days, 90)
+  // Début après la fin : au moins 2 jours
+  const w = barometerWindow({ from: '2026-10-20', to: '2026-10-18', now: NOW })
+  assert.deepEqual([w.from, w.to, w.days], ['2026-10-17', '2026-10-18', 2])
+  assert.equal(barometerWindow({ days: 500, now: NOW }).days, 90)
+  assert.equal(barometerWindow({ days: -3, now: NOW }).days, 2)
 })
 
 const match = (q, text) => compileQuery(q)(normalize(text))

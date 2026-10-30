@@ -24,7 +24,7 @@ import { mountDiffusion } from './diffusion.js'
 import { mountMedia } from './media.js'
 import { mountReports } from './reports.js'
 import { AGENTS, ANALYSES, ASK_SPEC, agentFacts, agentItems, agentStats, askPrompt, itemLines, sourceCard, specFor } from './around.js'
-import { emergingTopics, historyOf, sentimentBarometer, smartAlerts, startRadarAlerts, storyClusters, storyIndex } from './radar.js'
+import { emergingTopics, historyOf, sentimentBarometer, validDay, smartAlerts, startRadarAlerts, storyClusters, storyIndex } from './radar.js'
 import { startRadarWorker } from './radarWorker.js'
 import { sendSupportMail } from './watches.js'
 import { createWatch, deleteWatch, enabledWatches, guardWatch, itemsForWatch, mergeWatches, sendMail, setWatchAccess, similarWatches, watchesFor, watchIdsFor, sendTelegram, setEnabled, setMailBlockedListener, setWatchAlert, setWatchAlertListener, setWatchTools, startWatches, telegramReady } from './watches.js'
@@ -1049,7 +1049,7 @@ const radarReady = startRadarWorker(getItems)
 const RADAR_VIEWS = {
   '/emerging': (items, { hours }) => ({ topics: emergingTopics(items, { hours: hours || 24 }) }),
   '/stories': (items, { hours }) => ({ stories: storyClusters(items, { hours: hours || 48 }) }),
-  '/sentiment': (items, { days }) => sentimentBarometer(items, { days: days || 14 }),
+  '/sentiment': (items, { days, from, to }) => sentimentBarometer(items, { days: days || 14, from, to }),
   '/alerts': (items) => ({ alerts: smartAlerts(items) }),
 }
 /** Vue du radar (view : '/emerging', '/stories', '/sentiment', '/alerts'), servie aussi aux tableaux partagés */
@@ -1058,12 +1058,15 @@ function radarData(view, q) {
   const flux = q.flux === 'libye' || q.flux === 'mosaique' ? q.flux : ''
   const hours = Math.min(Math.max(Number(q.hours) || 0, 0), 336)
   const days = Math.min(Math.max(Number(q.days) || 0, 0), 90)
-  const key = `${view}|${flux}|${hours}|${days}|${cache.lastUpdate}`
+  // Baromètre : période choisie (du … au …, jours de Tripoli) ; bornée dans sentimentBarometer
+  const from = view === '/sentiment' ? validDay(q.from) : ''
+  const to = view === '/sentiment' ? validDay(q.to) : ''
+  const key = `${view}|${flux}|${hours}|${days}|${from}|${to}|${cache.lastUpdate}`
   const hit = radarCache.get(key)
   if (hit && Date.now() - hit.at < 60_000) return hit.data
-  const ready = flux ? null : radarReady(view, hours, days, cache.lastUpdate)
+  const ready = flux || from || to ? null : radarReady(view, hours, days, cache.lastUpdate)
   const items = flux && !ready ? cache.items.filter((it) => it.flux === flux) : cache.items
-  const data = { ...(ready || RADAR_VIEWS[view](items, { hours, days })), lastUpdate: cache.lastUpdate, demo: cache.demo }
+  const data = { ...(ready || RADAR_VIEWS[view](items, { hours, days, from, to })), lastUpdate: cache.lastUpdate, demo: cache.demo }
   if (radarCache.size > 200) radarCache.clear()
   radarCache.set(key, { at: Date.now(), data })
   return data
