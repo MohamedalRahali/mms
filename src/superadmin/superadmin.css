@@ -985,3 +985,9 @@ textarea.sa-input {
   font-size: 12px;
   word-break: break-word;
 }
+
+/* Icône مرصاد à la place de la pastille « MMS » */
+.sa-brand__mark--img {
+  background: none;
+  object-fit: contain;
+}

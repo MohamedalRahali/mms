@@ -1,8 +1,8 @@
 /* MMS — service worker : l'interface s'ouvre même hors ligne, les données restent toujours fraîches */
-const CACHE = 'mms-shell-v2'
+const CACHE = 'mms-shell-v3' // v3 : logo مرصاد (30/10/2026)
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icons-cnsd/icon-192.png'])).then(() => self.skipWaiting()))
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/brand/mearsaad-icon-192.png'])).then(() => self.skipWaiting()))
 })
 
 self.addEventListener('activate', (e) => {

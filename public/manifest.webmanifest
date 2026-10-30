@@ -1,6 +1,6 @@
 {
-  "name": "MMS — رصد الإعلام",
-  "short_name": "MMS",
+  "name": "مرصاد — Mearsaad",
+  "short_name": "مرصاد",
   "description": "منصة رصد وتحليل الأخبار",
   "start_url": "/",
   "scope": "/",
@@ -10,9 +10,8 @@
   "background_color": "#06170f",
   "theme_color": "#06170f",
   "icons": [
-    { "src": "/icons-cnsd/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icons-cnsd/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icons-cnsd/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "/icons-cnsd/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+    { "src": "/brand/mearsaad-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/brand/mearsaad-icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/brand/mearsaad-icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

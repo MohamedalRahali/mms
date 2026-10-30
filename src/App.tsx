@@ -132,14 +132,7 @@ function sinceLabel(i: I18n, iso: string | null) {
   return i.dateTime(iso)
 }
 
-function RadarMark({ size = 28 }: { size?: number }) {
-  return (
-    <svg className="mms-radar" viewBox="0 0 32 32" width={size} height={size} aria-hidden>
-      <circle cx="16" cy="16" r="3.2" />
-      <path d="M9.5 9.5a9 9 0 0 0 0 13M22.5 9.5a9 9 0 0 1 0 13M5.3 5.3a15 15 0 0 0 0 21.4M26.7 5.3a15 15 0 0 1 0 21.4" />
-    </svg>
-  )
-}
+
 
 /* Icônes du menu latéral, dans l'esprit de NewsBoard */
 const ICONS: Record<string, string> = {
@@ -459,9 +452,15 @@ export default function App() {
                     <span className="mms-head__logo">
                       <img src={theme === 'dark' ? '/logo-cnsd/v2/logo-anime-fond-sombre.svg' : '/logo-cnsd/v2/logo-anime.svg'} alt={lang === 'ar' ? 'المركز الوطني لدعم القرار' : 'National Decision Support Centre'} width={1679} height={322} />
                     </span>
+                    {/* Marque produit « مرصاد — Mearsaad » (remplace « MMS Radar », demande du client du 30/10) */}
                     <span className="mms-head__product">
-                      <RadarMark size={18} />
-                      <b>MMS Radar</b>
+                      <img
+                        className="mms-head__mearsaad"
+                        src={theme === 'dark' ? '/brand/mearsaad-dark.png' : '/brand/mearsaad-light.png'}
+                        srcSet={theme === 'dark' ? '/brand/mearsaad-dark@2x.png 2x' : '/brand/mearsaad-light@2x.png 2x'}
+                        alt="مرصاد — Mearsaad"
+                        height={36}
+                      />
                     </span>
                   </div>
                   <span className="mms-live">
@@ -638,7 +637,7 @@ export default function App() {
                       {/* Marque blanche (هوية المخرجات) : sans la marque Around */}
                       {!brand?.whiteLabel && <img className="mms-side__logo" src="/around-logo-footer.png" alt="Around Expressions" width={120} height={91} loading="lazy" />}
                       <span dir="ltr">
-                        © {new Date().getFullYear()} {brand?.whiteLabel ? brand.name || 'MMS' : 'MMS — Copyright by Around Expressions'}
+                        © {new Date().getFullYear()} {brand?.whiteLabel ? brand.name || 'MMS' : 'Mearsaad — Copyright by Around Expressions'}
                       </span>
                     </p>
                   </aside>

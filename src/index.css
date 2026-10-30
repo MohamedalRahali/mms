@@ -4796,3 +4796,26 @@ img.mms-user__avatar--img {
 .mms-head .mms-user {
   flex-shrink: 0;
 }
+
+/* Logo produit « مرصاد — Mearsaad » : barre du haut et carte de connexion */
+.mms-head__mearsaad {
+  display: block;
+  height: 34px;
+  width: auto;
+}
+.mms-head__product:has(.mms-head__mearsaad) {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.mms-login__mearsaad {
+  display: block;
+  height: 60px;
+  width: auto;
+  margin-inline: auto;
+}
+@media (max-width: 560px) {
+  .mms-head__mearsaad {
+    height: 28px;
+  }
+}

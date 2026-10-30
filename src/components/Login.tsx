@@ -73,14 +73,7 @@ const TEXT = {
   },
 }
 
-function RadarMark() {
-  return (
-    <svg viewBox="0 0 32 32" width="54" height="54" aria-hidden className="mms-login__mark">
-      <circle cx="16" cy="16" r="3.2" />
-      <path d="M9.5 9.5a9 9 0 0 0 0 13M22.5 9.5a9 9 0 0 1 0 13M5.3 5.3a15 15 0 0 0 0 21.4M26.7 5.3a15 15 0 0 1 0 21.4" />
-    </svg>
-  )
-}
+
 
 export function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const loginBrand = useBrand()
@@ -171,9 +164,9 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
           <MfaCode ticket={ticket} lang={lang} onLogin={onLogin} onBack={() => setTicket('')} />
         ) : (
         <form className="mms-login__card" onSubmit={submit}>
+          {/* Marque produit « مرصاد — Mearsaad » (carte de connexion claire) */}
           <div className="mms-login__brand">
-            <RadarMark />
-            <strong>MMS Radar</strong>
+            <img className="mms-login__mearsaad" src="/brand/mearsaad-light@2x.png" alt="مرصاد — Mearsaad" height={60} />
           </div>
           <h2>{t.title}</h2>
           <p className="mms-login__intro">{t.intro}</p>
@@ -238,7 +231,7 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
         {/* Marque blanche (هوية المخرجات) : sans la marque Around */}
         <p className="around-credit">
           {!loginBrand?.whiteLabel && <img src="/around-logo-footer.png" alt="Around Expressions" width={120} height={91} loading="lazy" />}
-          <span dir="ltr">© {new Date().getFullYear()} {loginBrand?.whiteLabel ? loginBrand.name || 'MMS' : 'MMS — Copyright by Around Expressions'}</span>
+          <span dir="ltr">© {new Date().getFullYear()} {loginBrand?.whiteLabel ? loginBrand.name || 'MMS' : 'Mearsaad — Copyright by Around Expressions'}</span>
         </p>
       </main>
     </div>

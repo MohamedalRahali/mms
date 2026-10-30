@@ -61,7 +61,7 @@ export default function SuperAdmin() {
   useEffect(() => {
     document.documentElement.dir = 'rtl'
     document.documentElement.lang = 'ar'
-    document.title = 'وحدة التحكم العليا — MMS'
+    document.title = 'وحدة التحكم العليا — مرصاد'
     setAuthLost(() => setMe(null))
     api<Me>('/me')
       .then(setMe)
@@ -92,7 +92,7 @@ export default function SuperAdmin() {
     <div className="sa">
       <aside className={menu ? 'sa-side is-open' : 'sa-side'}>
         <div className="sa-brand">
-          <span className="sa-brand__mark">MMS</span>
+          <img className="sa-brand__mark sa-brand__mark--img" src="/brand/mearsaad-icon-192.png" alt="مرصاد — Mearsaad" width={42} height={42} />
           <div>
             <strong>وحدة التحكم العليا</strong>
             <small>Super Admin</small>
@@ -119,7 +119,7 @@ export default function SuperAdmin() {
           </button>
           <p className="around-credit">
             <img src="/around-logo-footer.png" alt="Around Expressions" width={120} height={91} loading="lazy" />
-            <span dir="ltr">© {new Date().getFullYear()} MMS — Copyright by Around Expressions</span>
+            <span dir="ltr">© {new Date().getFullYear()} Mearsaad — Copyright by Around Expressions</span>
           </p>
         </div>
       </aside>
@@ -186,7 +186,7 @@ function SaLogin({ onLogin }: { onLogin: (m: Me) => void }) {
   return (
     <div className="sa-login">
       <form className="sa-card sa-login__card" onSubmit={submit}>
-        <span className="sa-brand__mark">MMS</span>
+        <img className="sa-brand__mark sa-brand__mark--img" src="/brand/mearsaad-icon-192.png" alt="مرصاد — Mearsaad" width={42} height={42} />
         <h1>وحدة التحكم العليا</h1>
         <p className="sa-muted">دخول مخصّص للمشرف الأعلى. كل محاولة تُسجَّل مع العنوان والجهاز.</p>
         <label>
