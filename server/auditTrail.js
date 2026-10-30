@@ -167,13 +167,16 @@ export function auditSummary() {
   return { total: rows.length, last7: byCat, actors: [...actors].slice(0, 200), intact: verifyAudit() === -1 }
 }
 
-export function mountAuditTrail(app) {
-  // Administrateurs du client seulement (rôle admin), lecture et export
-  const adminOnly = (req, res, next) => (req.user?.role === 'admin' ? next() : res.status(403).json({ error: 'FORBIDDEN' }))
-  app.get('/api/audit-trail', adminOnly, (req, res) => {
+/**
+ * Lecture et export du journal, montés dans la console Super Admin (routeur déjà protégé par le jeton Super Admin) :
+ * GET /api/superadmin/audit-trail et /api/superadmin/audit-trail.csv. Déplacé hors de l'application client à la
+ * demande du client (30/10) ; l'enregistrement de toutes les actions continue (auditMiddleware).
+ */
+export function mountAuditTrail(router) {
+  router.get('/audit-trail', (req, res) => {
     res.json({ rows: auditQuery(req.query), summary: auditSummary() })
   })
-  app.get('/api/audit-trail.csv', adminOnly, (req, res) => {
+  router.get('/audit-trail.csv', (req, res) => {
     const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
     const lines = auditQuery({ ...req.query, limit: 5000 }).map((r) => [r.t, r.actor, r.role, r.ip, r.category, r.action, r.target, r.status, r.detail, r.h].map(esc).join(','))
     res.setHeader('Content-Type', 'text/csv; charset=utf-8')

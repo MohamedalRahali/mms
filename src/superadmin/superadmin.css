@@ -991,3 +991,31 @@ textarea.sa-input {
   background: none;
   object-fit: contain;
 }
+
+/* سجل التدقيق / ملاحظة الأمان : choix de langue, note lisible et imprimable seule */
+.sa-lang {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+.sa-card .sa-row {
+  margin: 0;
+}
+.sa-table small {
+  color: var(--ink-soft);
+}
+.sa-secnote ul {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+  line-height: 1.8;
+}
+@media print {
+  .sa-side,
+  .sa-top,
+  .sa-secnote .sa-card__head .sa-row {
+    display: none !important;
+  }
+  .sa-secnote {
+    border: 0;
+    box-shadow: none;
+  }
+}

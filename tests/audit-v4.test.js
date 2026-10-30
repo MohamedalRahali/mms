@@ -362,3 +362,18 @@ test('sujets émergents : libellés relevés en production le 30/10 reconnus com
   assert.equal(sameRoots('البحر الأسود', 'جهاز الردع'), false)
   assert.equal(sameRoots('محمد الشحاتي', 'محفظة ليبيا أفريقيا للاستثمار'), false)
 })
+
+test("سجل التدقيق et ملاحظة الأمان : dans la console Super Admin seulement", async () => {
+  const at = await import('../server/auditTrail.js')
+  const routes = []
+  at.mountAuditTrail({ get: (p) => routes.push(p) })
+  assert.deepEqual(routes, ['/audit-trail', '/audit-trail.csv'], 'montées sur le routeur Super Admin (/api/superadmin/…)')
+  const sa = fs.readFileSync(new URL('../server/superadmin.js', import.meta.url), 'utf8')
+  assert.ok(sa.indexOf('mountAuditTrail(sa)') > sa.indexOf("if (!tok) return fail(res, 401, 'AUTH')"), "après le contrôle du jeton Super Admin")
+  const idx = fs.readFileSync(new URL('../server/index.js', import.meta.url), 'utf8')
+  assert.ok(!/mountAuditTrail\(app\)/.test(idx) && /app\.use\(auditMiddleware\)/.test(idx), "plus de route client, l'enregistrement continue")
+  const appSrc = fs.readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
+  assert.ok(!/'audit'|'security'|AuditTrail|SecurityNote/.test(appSrc), "retirées de l'application client")
+  // Les actions de la console restent inscrites
+  assert.equal(at.categoryOf('GET', '/api/superadmin/audit-trail.csv'), 'export')
+})

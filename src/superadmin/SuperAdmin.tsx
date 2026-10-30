@@ -9,11 +9,13 @@ import { EntityAICard } from './EntityAI'
 import { SupportCard } from './Support'
 import { FaceCard } from './Face'
 import { ExportHealthCard } from './ExportHealth'
+import { AuditLog } from './AuditLog'
+import { SecurityNote } from './SecurityNote'
 import { ACTIVITY_LABEL, AUDIT_LABEL, ROLE_LABEL, SECURITY_LABEL, ago, api, errText, flag, fmtBytes, fmtDate, fmtDay, fmtMinutes, fmtNum, qs, setAuthLost } from './api'
 
 /** Console Super Admin (وحدة التحكم العليا) : /superadmin, séparée de la plateforme */
 
-type Section = 'dash' | 'users' | 'team' | 'perms' | 'access' | 'analytics' | 'activity' | 'security' | 'sources' | 'entities' | 'settings'
+type Section = 'dash' | 'users' | 'team' | 'perms' | 'access' | 'analytics' | 'activity' | 'audit' | 'security' | 'secnote' | 'sources' | 'entities' | 'settings'
 const SECTIONS: [Section, string, string][] = [
   ['dash', 'لوحة المراقبة', '◉'],
   ['users', 'المستخدمون', '👥'],
@@ -22,7 +24,9 @@ const SECTIONS: [Section, string, string][] = [
   ['access', 'سجل الوصول', '⇄'],
   ['analytics', 'التحليلات والدول', '◔'],
   ['activity', 'سجل النشاط', '☰'],
+  ['audit', 'سجل التدقيق', '📜'],
   ['security', 'الأمان', '🛡'],
+  ['secnote', 'ملاحظة الأمان', '🔒'],
   ['sources', 'مصادر التغذية', '📡'],
   ['entities', 'المرجع الموحد للفاعلين', '🧭'],
   ['settings', 'الإعدادات', '⚙'],
@@ -137,6 +141,8 @@ export default function SuperAdmin() {
         {section === 'access' && <Access />}
         {section === 'analytics' && <Analytics />}
         {section === 'activity' && <Activity />}
+        {section === 'audit' && <AuditLog />}
+        {section === 'secnote' && <SecurityNote />}
         {section === 'security' && (
           <>
             <FaceCard />

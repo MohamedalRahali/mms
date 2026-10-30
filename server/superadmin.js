@@ -7,7 +7,7 @@ import { closeSessions, currentUser, hashPassword, readUsers, ROLES, setAuthList
 import { getItems, setHidden } from './store.js'
 import { keyStatus } from './keys.js'
 import { aiStatus, aiUsage, setGeminiPaid } from './ai.js'
-import { auditSummary } from './auditTrail.js'
+import { auditSummary, mountAuditTrail } from './auditTrail.js'
 import { mountPermissionsAdmin, permsOf, profileExists } from './permissions.js'
 import { initBrand, mountClientAdmin } from './clientAdmin.js'
 import { sourceHealth } from './sourceHealth.js'
@@ -353,6 +353,8 @@ export function mountSuperAdmin(app, root) {
 
   /* ---- pays et portée des sources, logo du client, clés d'API, liens de partage */
   mountClientAdmin(sa, { audit })
+  /* ---- سجل التدقيق : lecture et export CSV du journal d'audit (déplacé depuis l'application client) */
+  mountAuditTrail(sa)
 
   /* ---- صحة المصادر : état des collecteurs et enregistreurs de la veille, budgets */
   sa.get('/source-health', (_req, res) => res.json(sourceHealth(path.join(root, 'data'))))

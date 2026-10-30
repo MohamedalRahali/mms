@@ -46,8 +46,6 @@ const SearchPool = lazy(() => import('./components/SearchPool').then((m) => ({ d
 const GeoPresence = lazy(() => import('./components/GeoPresence').then((m) => ({ default: m.GeoPresence })))
 const PortalFeed = lazy(() => import('./components/PortalFeed').then((m) => ({ default: m.PortalFeed })))
 // Audit produit v4 : journal d'audit (administrateurs), note de sécurité, base des journalistes, centre d'aide
-const AuditTrail = lazy(() => import('./components/AuditTrail'))
-const SecurityNote = lazy(() => import('./components/SecurityNote'))
 const Journalists = lazy(() => import('./components/Journalists'))
 const HelpCenter = lazy(() => import('./components/HelpCenter'))
 
@@ -70,8 +68,6 @@ type View =
   | 'geo'
   | 'pool'
   | 'portal-admin'
-  | 'audit'
-  | 'security'
   | 'journalists'
   | `media-${MediaPageType}`
   | 'media-live'
@@ -94,8 +90,6 @@ const VIEWS: View[] = [
   'geo',
   'pool',
   'portal-admin',
-  'audit',
-  'security',
   'journalists',
   ...MEDIA_PAGES.map((m) => `media-${m}` as const),
   'media-live',
@@ -103,7 +97,7 @@ const VIEWS: View[] = [
 
 /** Module de permissions dont dépend chaque page (null : toujours ouverte) */
 function moduleOf(v: View): ModuleKey | null {
-  if (v === 'help' || v === 'security' || v === 'audit') return null
+  if (v === 'help') return null
   if (v === 'pool' || v === 'portal-admin' || v === 'journalists') return 'news'
   if (v.startsWith('media-')) return 'media'
   return v as ModuleKey
@@ -112,8 +106,6 @@ const viewAllowed = (user: User | undefined | null, v: View) => {
   const m = moduleOf(v)
   // إدارة البوابة العامة : seulement les profils qui ont le droit de publier sur la vitrine
   if (v === 'portal-admin' && !canDo(user, 'publish_public')) return false
-  // سجل التدقيق : administrateurs du client seulement (le serveur refuse aussi les autres)
-  if (v === 'audit' && user?.role !== 'admin') return false
   return !m || hasModule(user, m)
 }
 
@@ -399,8 +391,6 @@ export default function App() {
         group: t.sideHelp,
         items: [
           { key: 'help', label: t.sideHelp },
-          { key: 'security', label: lang === 'ar' ? 'ملاحظة الأمان' : 'Security note' },
-          { key: 'audit', label: lang === 'ar' ? 'سجل التدقيق' : 'Audit log' },
         ],
       },
     ]
@@ -679,8 +669,6 @@ export default function App() {
                       {shown === 'alerts' && <Alerts flux={flux} />}
                       {shown === 'favorites' && <Favorites />}
                       {shown === 'help' && <HelpCenter />}
-                      {shown === 'security' && <SecurityNote />}
-                      {shown === 'audit' && <AuditTrail />}
                       {shown === 'journalists' && <Journalists />}
                       {shown === 'assistant' &&
                         (canDo(auth?.user, 'ai_ask') ? (

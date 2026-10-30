@@ -16,7 +16,6 @@ const HELP: Record<'ar' | 'en', { intro: string; search: string; none: string; g
     search: 'ابحث في المساعدة (مثال: تصدير، تسجيل، رصد)',
     none: 'لا توجد نتيجة. جرّب كلمة أخرى أو راسل الدعم الفني من زر المحادثة.',
     links: [
-      ['?view=security', 'ملاحظة الأمان'],
       ['?view=watch', 'إنشاء رصد'],
       ['?view=media-broadcast', 'التلفزيون والإذاعة'],
     ],
@@ -74,7 +73,6 @@ const HELP: Record<'ar' | 'en', { intro: string; search: string; none: string; g
     search: 'Search help (e.g. export, recording, watch)',
     none: 'No result. Try another word or contact support from the chat button.',
     links: [
-      ['?view=security', 'Security note'],
       ['?view=watch', 'Create a watch'],
       ['?view=media-broadcast', 'TV & radio'],
     ],

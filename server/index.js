@@ -20,7 +20,7 @@ import { buildBriefing, comparePeriods, engagementTotals, interactions, retrieve
 import { briefingConf, briefingKey, briefingWithSummary, sendBriefing, setBriefingConf, startBriefing } from './briefing.js'
 import { imageRoute, initImages, withImages } from './images.js'
 import { mountSuperAdmin } from './superadmin.js'
-import { auditMiddleware, initAuditTrail, mountAuditTrail } from './auditTrail.js'
+import { auditMiddleware, initAuditTrail } from './auditTrail.js'
 import { startAccountPolicy } from './accountPolicy.js'
 import { mountJournalists } from './journalists.js'
 import { initReviewValidation, mountReviewValidation } from './reviewValidation.js'
@@ -1127,8 +1127,6 @@ mountMailingLists(app, {
   audit: (req, action, target, detail) => logAudit(req.user.email, String(req.ip || '').replace(/^::ffff:/, ''), action, target, detail),
 })
 mountRasd(app, { getItems, telegramReady, sendTelegram, logDispatch })
-// Journal d'audit consultable par l'administrateur du client ; compte partagé désactivé dès qu'un admin nominatif marche
-mountAuditTrail(app)
 // قاعدة الصحفيين ووسائل الإعلام : journalistes et médias libyens, historique des publications et citations
 mountJournalists(app, { getItems })
 // Revue de presse validée par un analyste, avec heure limite de livraison (audit v4, P2)

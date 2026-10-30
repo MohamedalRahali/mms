@@ -1,9 +1,9 @@
-import { useI18n } from '../lib/i18n'
-import { PageHead } from './Extras'
+import { useState } from 'react'
+import { LangToggle } from './AuditLog'
 
 /**
  * ملاحظة الأمان (audit produit v4, constat 10) : la note de sécurité d'une page — hébergement, chiffrement, 2FA, IA,
- * rôles, journal, exports, sauvegardes — lisible dans l'application et téléchargeable en fichier texte (même contenu).
+ * rôles, journal, exports, sauvegardes — lisible dans la console Super Admin (déplacée de l'application client le 30/10) et téléchargeable en fichier texte (même contenu).
  */
 
 type Section = [string, string[]]
@@ -19,7 +19,7 @@ export const SECURITY_NOTE: Record<'ar' | 'en', { title: string; intro: string; 
       ['التحقق بخطوتين', ['رموز TOTP من تطبيق المصادقة مع رموز احتياطية لمرة واحدة، إلزامية لكل الحسابات.', '« تذكرني » غير مفعّل افتراضياً: الجلسة القصيرة هي القاعدة.', 'قفل مؤقت بعد المحاولات الفاشلة، لكل حساب ولكل عنوان IP.']],
       ['الذكاء الاصطناعي', ['يُرسل للذكاء الاصطناعي نص الأخبار المرصودة وسؤال المستخدم فقط، دون كلمات مرور أو بيانات حسابات.', 'المحركات المعتمدة لا تعيد استخدام البيانات للتدريب: ‏Claude (Anthropic API)، ‏Gemini عبر Vertex AI أو مفتاح مدفوع، ‏OpenAI API، أو نموذج مستضاف محلياً.', 'إذا كان مفتاح Gemini في العرض المجاني تُنبَّه الإدارة فوراً في لوحة الإشراف.', 'حصة 60 طلباً في الساعة لكل حساب.']],
       ['الأدوار والصلاحيات', ['ثلاثة ملفات أساسية: مدير، محلل، قارئ، مع ملفات مخصصة لكل وحدة وزر.', 'تُفحص الصلاحيات على الخادم في كل طلب، وليس في الواجهة فقط.', 'حسابات اسمية لكل شخص، بما في ذلك فريق مزوّد الخدمة؛ الحساب المشترك معطّل (دون حذف).']],
-      ['سجل التدقيق', ['يُسجَّل: الدخول (الناجح والمرفوض)، التسجيلات، النشر على البوابة العامة، الرصد، التصدير والتقارير، الحسابات والصلاحيات، الإعدادات.', 'لكل سطر: التاريخ، الحساب، عنوان IP، العملية، النتيجة؛ دون كلمات مرور أو محتوى.', 'الأسطر مترابطة ببصمات SHA-256: أي تعديل أو حذف يظهر.', 'يطّلع عليه مديرو المنصة في « سجل التدقيق » ويمكن تنزيله CSV.']],
+      ['سجل التدقيق', ['يُسجَّل: الدخول (الناجح والمرفوض)، التسجيلات، النشر على البوابة العامة، الرصد، التصدير والتقارير، الحسابات والصلاحيات، الإعدادات.', 'لكل سطر: التاريخ، الحساب، عنوان IP، العملية، النتيجة؛ دون كلمات مرور أو محتوى.', 'الأسطر مترابطة ببصمات SHA-256: أي تعديل أو حذف يظهر.', 'يُطّلع عليه في وحدة التحكم العليا (Super Admin) في « سجل التدقيق » ويمكن تنزيله CSV.']],
       ['التصدير والنشر', ['التصدير (CSV، PDF، Word) لمن يملك صلاحية « تصدير » فقط، مع حماية ملفات CSV من حقن الصيغ.', 'لا يُرسل أي بريد خارج النطاقات المسموح بها.', 'البوابة العامة: نشر يدوي فقط بعد مراجعة بشرية، بعنوان وملخص معاد صياغتهما ورابط المصدر، مع سجل للنشر.']],
       ['النسخ الاحتياطي', ['نسخة يومية تلقائية من بيانات المنصة على الخادم (14 يوماً).', 'أرشيف للشيفرة قبل كل تحديث، وكل إصدار محفوظ في Git.', 'التحديثات لا تمسّ البيانات أبداً.', 'يُنصح بتفعيل النسخ الاحتياطي الخارجي لدى المستضيف (OVH) لنسخة خارج الخادم.']],
     ],
@@ -34,7 +34,7 @@ export const SECURITY_NOTE: Record<'ar' | 'en', { title: string; intro: string; 
       ['Two-factor authentication', ['TOTP codes from an authenticator app with one-time recovery codes, mandatory for every account.', '« Stay signed in » is unchecked by default: short sessions are the rule.', 'Temporary lock after failed attempts, per account and per IP address.']],
       ['Artificial intelligence', ['Only the monitored news text and the user question are sent to the AI, never passwords or account data.', 'Approved engines do not reuse data for training: Claude (Anthropic API), Gemini through Vertex AI or a paid key, OpenAI API, or a self-hosted model.', 'If the Gemini key is on the free tier, administrators are warned at once in the supervision console.', 'Quota of 60 requests per hour per account.']],
       ['Roles and permissions', ['Three base profiles (administrator, analyst, viewer) plus custom profiles per module and button.', 'Permissions are checked on the server for every request, not only in the interface.', 'Named accounts for every person, including the provider team; the shared account is disabled (not deleted).']],
-      ['Audit log', ['Recorded: sign-ins (successful and refused), recordings, public-portal publications, watches, exports and reports, accounts and permissions, settings.', 'Each line: date, account, IP address, action, result; no passwords or content.', 'Lines are chained with SHA-256 hashes: any change or deletion shows.', 'Platform administrators read it in « Audit log » and can download it as CSV.']],
+      ['Audit log', ['Recorded: sign-ins (successful and refused), recordings, public-portal publications, watches, exports and reports, accounts and permissions, settings.', 'Each line: date, account, IP address, action, result; no passwords or content.', 'Lines are chained with SHA-256 hashes: any change or deletion shows.', 'It is read in the Super Admin console, under « Audit log », and can be downloaded as CSV.']],
       ['Exports and publishing', ['Exports (CSV, PDF, Word) only for profiles with the « export » permission; CSV files are protected against formula injection.', 'No email is ever sent outside the allowed domains.', 'Public portal: manual publishing only, after human review, with a rewritten title and summary and the source link, and a publication log.']],
       ['Backups', ['Automatic daily backup of platform data on the server (14 days).', 'Code archived before every update, every version kept in Git.', 'Updates never touch the data.', 'Enabling the host (OVH) off-server backup is recommended for a copy outside the server.']],
     ],
@@ -42,11 +42,11 @@ export const SECURITY_NOTE: Record<'ar' | 'en', { title: string; intro: string; 
 }
 
 export function SecurityNote() {
-  const i = useI18n()
-  const n = SECURITY_NOTE[i.lang === 'ar' ? 'ar' : 'en']
+  const [lang, setLang] = useState<'ar' | 'en'>('ar')
+  const n = SECURITY_NOTE[lang]
   const download = () => {
     const text = [n.title, n.intro, '', ...n.sections.flatMap(([h, lines]) => [h, ...lines.map((l) => `- ${l}`), ''])].join('\r\n')
-    const url = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/plain;charset=utf-8' }))
+    const url = URL.createObjectURL(new Blob(['\ufeff' + text], { type: 'text/plain;charset=utf-8' }))
     const a = document.createElement('a')
     a.href = url
     a.download = n.file
@@ -54,28 +54,30 @@ export function SecurityNote() {
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
   return (
-    <div className="sec-note">
-      <PageHead title={n.title} intro={n.intro} />
-      <div>
-        <button type="button" className="news-btn" onClick={download}>
-          {i.lang === 'ar' ? '⬇ تنزيل الملاحظة (ملف نصي)' : '⬇ Download the note (text file)'}
-        </button>{' '}
-        <button type="button" className="news-btn news-btn--ghost" onClick={() => window.print()}>
-          {i.lang === 'ar' ? 'طباعة / PDF' : 'Print / PDF'}
-        </button>
+    <section className="sa-card sa-card--wide sa-secnote" dir={lang === 'ar' ? 'rtl' : 'ltr'} lang={lang}>
+      <div className="sa-card__head">
+        <h2>{n.title}</h2>
+        <span className="sa-row">
+          <LangToggle lang={lang} onLang={setLang} />
+          <button type="button" className="sa-btn" onClick={download}>
+            {lang === 'ar' ? '⬇ تنزيل الملاحظة (ملف نصي)' : '⬇ Download the note (text file)'}
+          </button>
+          <button type="button" className="sa-btn sa-btn--ghost" onClick={() => window.print()}>
+            {lang === 'ar' ? 'طباعة / PDF' : 'Print / PDF'}
+          </button>
+        </span>
       </div>
+      <p className="sa-muted">{n.intro}</p>
       {n.sections.map(([h, lines]) => (
-        <section key={h} className="news-card">
+        <div key={h}>
           <h3>{h}</h3>
           <ul>
             {lines.map((l) => (
               <li key={l}>{l}</li>
             ))}
           </ul>
-        </section>
+        </div>
       ))}
-    </div>
+    </section>
   )
 }
-
-export default SecurityNote
