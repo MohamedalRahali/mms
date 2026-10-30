@@ -78,7 +78,12 @@ export function initFace(dataDir, h = {}) {
   if (!key) console.warn('التحقق بالوجه : FACE_KEY absente (fichier .env du service) ; aucune inscription possible')
   try {
     const c = JSON.parse(fs.readFileSync(confFile, 'utf8'))
-    conf = { ...conf, ...c, mode: MODES.includes(c.mode) ? c.mode : 'off', trial: (c.trial || []).map(low), exceptions: c.exceptions || [], approveChange: c.approveChange !== false, rodageStart: c.rodageStart || null }
+    conf = { ...conf, ...c, mode: MODES.includes(c.mode) ? c.mode : 'off', trial: (c.trial || []).map(low), exceptions: c.exceptions || [], approveChange: c.approveChange !== false, rodageStart: c.rodageStart || null, diagOnUntil: c.diagOnUntil || null }
+    // Mode « on » déjà actif sans fenêtre de diagnostic : 7 jours à partir de maintenant, une seule fois
+    if (conf.mode === 'on' && !conf.diagOnUntil) {
+      conf.diagOnUntil = new Date(Date.now() + DIAG_ON_DAYS * 86_400_000).toISOString()
+      saveConf()
+    }
   } catch {
     // Réglages par défaut : désactivé
     conf = { mode: 'off', trial: [], exceptions: [], approveChange: true, rodageStart: null }
@@ -125,8 +130,11 @@ export function effectiveMode(now = Date.now()) {
 }
 export const rodageEnds = () => (conf.mode === 'rodage' && conf.rodageStart ? new Date(Date.parse(conf.rodageStart) + RODAGE_DAYS * 86_400_000).toISOString() : null)
 const inRodage = (now = Date.now()) => effectiveMode(now) === 'rodage'
-// Diagnostic : comptes du pilote en mode تجريبي, ou tous les comptes pendant le rodage
-const inPilot = (email) => (conf.mode === 'trial' && conf.trial.includes(low(email))) || inRodage()
+// Diagnostic : comptes du pilote en mode تجريبي, tous les comptes pendant le rodage, et tous les comptes pendant les
+// 7 premiers jours du mode « on » (arrêt automatique ensuite ; mêmes garanties : chiffres arrondis seulement)
+const DIAG_ON_DAYS = 7
+const diagOnActive = (now = Date.now()) => effectiveMode(now) === 'on' && Boolean(conf.diagOnUntil) && now < Date.parse(conf.diagOnUntil)
+const inPilot = (email) => (conf.mode === 'trial' && conf.trial.includes(low(email))) || inRodage() || diagOnActive()
 function purgeDiag(now = Date.now()) {
   const keep = diag.filter((d) => now - Date.parse(d.at) < DIAG_DAYS * 86_400_000 && inPilot(d.email))
   if (keep.length !== diag.length || (!keep.length && fs.existsSync(diagFile))) {
@@ -463,6 +471,7 @@ export function faceAdmin() {
     effectiveMode: effectiveMode(),
     rodageStart: conf.mode === 'rodage' ? conf.rodageStart : null,
     rodageEnds: rodageEnds(),
+    diagnosticsUntil: diagOnActive() ? conf.diagOnUntil : inRodage() ? rodageEnds() : null,
     trial: conf.trial,
     approveChange: conf.approveChange,
     keyReady: Boolean(key),
@@ -492,7 +501,9 @@ export function setFacePolicy(body) {
     for (const st of Object.values(status)) Object.assign(st, { fails: 0, lockUntil: 0, locks: 0 })
     saveTemplates()
   }
-  conf = { ...conf, mode, trial, approveChange, rodageStart }
+  // Passage en « on » : diagnostic pendant 7 jours, puis arrêt automatique
+  const diagOnUntil = mode === 'on' ? (conf.mode === 'on' && conf.diagOnUntil ? conf.diagOnUntil : new Date(Date.now() + DIAG_ON_DAYS * 86_400_000).toISOString()) : null
+  conf = { ...conf, mode, trial, approveChange, rodageStart, diagOnUntil }
   saveConf()
   // Fin du pilote (mode changé ou compte retiré de la liste) : son diagnostic est effacé
   purgeDiag()

@@ -8,7 +8,7 @@ import { ago, api, errText } from './api'
 
 type Account = { email: string; enrolled: boolean; enrolledAt: string | null; lastOkAt: string | null; lastFailAt: string | null; lockedUntil: string | null; changeRequestedAt: string | null; approvedUntil: string | null }
 type Exception = { email: string; until: string; reason: string; by: string; at: string }
-type State = { mode: 'off' | 'trial' | 'rodage' | 'on'; effectiveMode: 'off' | 'trial' | 'rodage' | 'on'; rodageStart: string | null; rodageEnds: string | null; trial: string[]; approveChange: boolean; keyReady: boolean; engine: { ready: boolean; missing: string[] }; exceptions: Exception[]; accounts: Account[] }
+type State = { mode: 'off' | 'trial' | 'rodage' | 'on'; effectiveMode: 'off' | 'trial' | 'rodage' | 'on'; rodageStart: string | null; rodageEnds: string | null; diagnosticsUntil: string | null; trial: string[]; approveChange: boolean; keyReady: boolean; engine: { ready: boolean; missing: string[] }; exceptions: Exception[]; accounts: Account[] }
 
 type DiagFrame = { asked: string; seen: string | null; ratio: number | null; live: number | null; quality: boolean | null }
 type Diag = { at: string; email: string; kind: string; result: string; frames: DiagFrame[]; similarity: number[] }
@@ -31,12 +31,12 @@ export function FaceCard() {
   }, [])
   useEffect(load, [load])
   useEffect(() => {
-    if (data?.mode === 'trial')
+    if (data?.mode === 'trial' || data?.diagnosticsUntil)
       api<{ entries: Diag[] }>('/face/diagnostics')
         .then((d) => setDiag(d.entries))
         .catch(() => setDiag([]))
     else setDiag([])
-  }, [data?.mode, data?.accounts.length])
+  }, [data?.mode, data?.diagnosticsUntil, data?.accounts.length])
   async function call(p: Promise<State>, ok: string) {
     try {
       const d = await p
@@ -118,7 +118,10 @@ export function FaceCard() {
       )}
       {diag.length > 0 && (
         <>
-          <h3>تشخيص التجربة (أرقام مقرّبة، دون صور ولا نماذج، تُحذف بعد 14 يوماً أو عند انتهاء التجربة)</h3>
+          <h3>
+            تشخيص التحقق (أرقام مقرّبة، دون صور ولا نماذج، تُحذف بعد 14 يوماً)
+            {data.diagnosticsUntil ? ` · يتوقف التسجيل تلقائياً في ${new Date(data.diagnosticsUntil).toLocaleDateString('ar-LY')}` : ''}
+          </h3>
           <div className="sa-table-wrap">
             <table className="sa-table">
               <thead>

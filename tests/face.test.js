@@ -290,7 +290,8 @@ test('pilote : diagnostic chiffré seulement pour les comptes listés en mode ت
   // Compte hors pilote : rien n'est enregistré
   face.setFacePolicy({ mode: 'trial', trial: ['alice@x.test', 'bob@x.test'] })
   login('bob@x.test', 'd3')
-  face.setFacePolicy({ mode: 'on', trial: ['alice@x.test'] })
+  // Fin du pilote (mode arrêté) : diagnostic effacé
+  face.setFacePolicy({ mode: 'off', trial: ['alice@x.test'] })
   assert.equal(face.faceDiagnostics().length, 0)
   assert.equal(fs.existsSync(path.join(dir, 'face', 'pilot-diagnostics.json')), false)
 })
@@ -359,4 +360,28 @@ test('rodage : entrer en rodage efface la pause et le compteur ; une pause ancie
   face.setFacePolicy({ mode: 'rodage' })
   assert.equal(face.faceStateOf('alice@x.test').lockedUntil, null)
   assert.equal((await doVerify('alice@x.test', 'z2', 'alice')).status, 200)
+})
+
+test('mode « on » : diagnostic arrondi pour tous pendant 7 jours, puis arrêt et effacement', async () => {
+  setup()
+  face.setFacePolicy({ mode: 'on' })
+  const until = Date.parse(face.faceAdmin().diagnosticsUntil)
+  assert.ok(Math.abs(until - Date.now() - 7 * 86_400_000) < 5000)
+  login('carol@x.test', 'o1')
+  await doEnroll('carol@x.test', 'o1', 'alice')
+  login('carol@x.test', 'o2')
+  await doVerify('carol@x.test', 'o2', 'alice', {}, ['center', 'center', 'center', 'center'])
+  const entries = face.faceDiagnostics()
+  assert.deepEqual(entries.map((e) => e.result), ['POSE', 'OK'])
+  assert.ok(entries.every((e) => e.frames.every((f) => !('vector' in f) && typeof f.ratio === 'number')))
+  // Passé 7 jours : plus rien n'est enregistré et le diagnostic est effacé
+  const later = until + 1000
+  const realNow = Date.now
+  Date.now = () => later
+  try {
+    assert.equal(face.faceAdmin().diagnosticsUntil, null)
+    assert.equal(face.faceDiagnostics().length, 0)
+  } finally {
+    Date.now = realNow
+  }
 })
