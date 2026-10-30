@@ -8,8 +8,8 @@
 :root {
   --radius: 12px;
   --radius-sm: 8px;
-  --on-green: light-dark(#ffffff, #06170f);
-  --head-bg: light-dark(#ffffff, #0a2117);
+  --on-green: light-dark(#ffffff, var(--p-bg-d));
+  --head-bg: light-dark(#ffffff, var(--p-ink-l));
   --crit: var(--coral);
   --high: var(--gold);
   --medium: var(--cyan);
@@ -47,7 +47,7 @@ body,
   border-radius: 50%;
   background: var(--green-soft);
   color: var(--green);
-  box-shadow: inset 0 0 0 1px light-dark(rgba(29, 122, 78, 0.25), rgba(47, 203, 129, 0.35));
+  box-shadow: inset 0 0 0 1px light-dark(color-mix(in srgb, var(--p-l) 25%, transparent), color-mix(in srgb, var(--p-d) 35%, transparent));
 }
 .mms-head__mark::after {
   content: none;
@@ -117,7 +117,7 @@ body,
   background: var(--green-soft);
   color: var(--ink);
   font-weight: 600;
-  box-shadow: inset 0 0 0 1px light-dark(rgba(29, 122, 78, 0.22), rgba(47, 203, 129, 0.22));
+  box-shadow: inset 0 0 0 1px light-dark(color-mix(in srgb, var(--p-l) 22%, transparent), color-mix(in srgb, var(--p-d) 22%, transparent));
 }
 .mms-side__item.is-active::before {
   content: none;
@@ -154,7 +154,7 @@ body,
   transform: none !important;
 }
 .is-lit {
-  border-color: light-dark(rgba(29, 122, 78, 0.35), rgba(47, 203, 129, 0.35)) !important;
+  border-color: light-dark(color-mix(in srgb, var(--p-l) 35%, transparent), color-mix(in srgb, var(--p-d) 35%, transparent)) !important;
   box-shadow: var(--glow) !important;
 }
 .mms-widget::after,
@@ -228,12 +228,12 @@ body,
 
 /* ---------------------------------------------------------------- connexion (toujours sombre, carte claire) */
 .mms-login {
-  --l-bg: #06170f;
-  --l-panel: #0a2117;
-  --l-tile: #0f261c;
-  --l-line: #1e382d;
-  --l-ink: #e6f1e9;
-  --l-soft: #93ab9e;
+  --l-bg: var(--p-bg-d);
+  --l-panel: var(--p-ink-l);
+  --l-tile: var(--p-surface-d);
+  --l-line: var(--p-line-d);
+  --l-ink: var(--p-ink-d);
+  --l-soft: var(--p-inksoft-d);
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -286,8 +286,8 @@ body,
   font-weight: 600;
 }
 .mms-login__lang button.is-active {
-  background: #2fcb81;
-  color: #06170f;
+  background: var(--p-d);
+  color: var(--p-bg-d);
 }
 .mms-login__hero {
   display: flex;
@@ -351,7 +351,7 @@ body,
 .mms-login__stats strong {
   font-size: 1.4rem;
   font-weight: 700;
-  color: #2fcb81;
+  color: var(--p-d);
   text-align: start;
 }
 .mms-login__stats span {
@@ -369,8 +369,8 @@ body,
   padding: 2.2rem 2rem 1.6rem;
   border-radius: 20px;
   border: 0;
-  background: #f3f8f4;
-  color: #0a2117;
+  background: var(--p-bg-l);
+  color: var(--p-ink-l);
   box-shadow: 0 30px 70px -30px rgba(0, 0, 0, 0.7);
   backdrop-filter: none;
   color-scheme: light;
@@ -390,73 +390,73 @@ body,
   height: 64px;
   padding: 14px;
   border-radius: 50%;
-  background: #0f3a27;
+  background: var(--p-night);
   box-shadow: none;
-  color: #2fcb81;
+  color: var(--p-d);
 }
 .mms-login__mark circle {
-  fill: #2fcb81;
+  fill: var(--p-d);
 }
 .mms-login__mark path {
-  stroke: #2fcb81;
+  stroke: var(--p-d);
   animation: none;
 }
 .mms-login__brand strong {
   font-size: 0.9rem;
   font-weight: 600;
   letter-spacing: 0;
-  color: #1d7a4e;
+  color: var(--p-l);
 }
 .mms-login__card h2 {
   margin: 0.4rem 0 0.2rem;
   font-size: 1.6rem;
   font-weight: 700;
-  color: #0a2117;
+  color: var(--p-ink-l);
   text-align: center;
 }
 .mms-login__intro {
   margin: 0 0 1.2rem;
-  color: #4f6a5c;
+  color: var(--p-inksoft-l);
   text-align: center;
 }
 .mms-login__field span {
-  color: #0a2117;
+  color: var(--p-ink-l);
   font-weight: 600;
 }
 .mms-login__field input {
   border: 1px solid #cfded5;
   border-radius: 10px;
   background: #ffffff;
-  color: #0a2117;
+  color: var(--p-ink-l);
   box-shadow: none;
 }
 .mms-login__field input:focus {
-  border-color: #1d7a4e;
-  box-shadow: 0 0 0 3px rgba(29, 122, 78, 0.18);
+  border-color: var(--p-l);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-l) 18%, transparent);
   background: #ffffff;
 }
 .mms-login__pw button {
-  color: #4f6a5c;
+  color: var(--p-inksoft-l);
 }
 .mms-login__pw button:hover {
-  background: rgba(10, 33, 23, 0.06);
+  background: color-mix(in srgb, var(--p-ink-l) 6%, transparent);
 }
 .mms-login__remember {
-  color: #0a2117;
+  color: var(--p-ink-l);
 }
 .mms-login__remember input {
-  accent-color: #1d7a4e;
+  accent-color: var(--p-l);
 }
 .mms-login__forgot {
-  color: #1d7a4e;
+  color: var(--p-l);
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 .mms-login__hint,
 .mms-login__error {
-  background: #e6f1e9;
-  color: #0a2117;
+  background: var(--p-ink-d);
+  color: var(--p-ink-l);
 }
 .mms-login__error {
   background: #fdebe6;
@@ -464,7 +464,7 @@ body,
 }
 .mms-login__submit {
   border-radius: 12px;
-  background: #1d7a4e;
+  background: var(--p-l);
   color: #ffffff;
   font-weight: 700;
   box-shadow: none;
@@ -478,7 +478,7 @@ body,
   margin-top: 1.2rem;
   padding-top: 0.9rem;
   border-top: 1px solid #dbe7df;
-  color: #4f6a5c;
+  color: var(--p-inksoft-l);
 }
 
 @media (max-width: 900px) {
@@ -512,7 +512,7 @@ body,
 }
 
 .mms-boot {
-  background: #06170f;
+  background: var(--p-bg-d);
 }
 
 /* ---------------------------------------------------------------- graphiques : barres fines, sans lueur */

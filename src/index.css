@@ -1,22 +1,22 @@
 :root {
   /* Charte graphique MMS Radar (NPDC) : vert profond, accent émeraude, or ; sombre par défaut, clair avec [data-theme='light'] */
   color-scheme: dark;
-  --green: light-dark(#1d7a4e, #2fcb81);
-  --green-deep: light-dark(#1d7a4e, #2fcb81);
-  --green-glow: #8ee5b8;
-  --green-soft: light-dark(#e3f2ea, #113625);
+  --green: light-dark(var(--p-l), var(--p-d));
+  --green-deep: light-dark(var(--p-l), var(--p-d));
+  --green-glow: var(--p-glow);
+  --green-soft: light-dark(var(--p-soft-l), var(--p-soft-d));
   --cyan: light-dark(#2f6fd6, #6ea7fd);
   --gold: light-dark(#a77d12, #e5b841);
   --coral: light-dark(#c8492b, #ff7a59);
-  --night: #0f3a27;
-  --bg: light-dark(#f3f8f4, #06170f);
-  --ink: light-dark(#0a2117, #e6f1e9);
-  --ink-soft: light-dark(#4f6a5c, #93ab9e);
-  --line: light-dark(rgba(10, 33, 23, 0.12), #1e382d);
-  --surface: light-dark(#ffffff, #0f261c);
-  --surface-solid: light-dark(#ffffff, #0f261c);
-  --surface-2: light-dark(#eaf3ed, #0a2117);
-  --glow: light-dark(0 1px 2px rgba(10, 33, 23, 0.06), none);
+  --night: var(--p-night);
+  --bg: light-dark(var(--p-bg-l), var(--p-bg-d));
+  --ink: light-dark(var(--p-ink-l), var(--p-ink-d));
+  --ink-soft: light-dark(var(--p-inksoft-l), var(--p-inksoft-d));
+  --line: light-dark(color-mix(in srgb, var(--p-ink-l) 12%, transparent), var(--p-line-d));
+  --surface: light-dark(#ffffff, var(--p-surface-d));
+  --surface-solid: light-dark(#ffffff, var(--p-surface-d));
+  --surface-2: light-dark(var(--p-surface2-l), var(--p-ink-l));
+  --glow: light-dark(0 1px 2px color-mix(in srgb, var(--p-ink-l) 6%, transparent), none);
   --libye: #e5b841;
   --font-display: 'IBM Plex Sans Arabic', 'IBM Plex Sans', Tahoma, sans-serif;
   --font-body: 'IBM Plex Sans Arabic', 'IBM Plex Sans', Tahoma, sans-serif;
@@ -79,8 +79,8 @@ select {
   gap: 0.8rem;
   padding: 0.55rem 1.1rem;
   border-radius: 14px;
-  background: linear-gradient(135deg, #0d4a33, var(--night));
-  box-shadow: 0 4px 14px rgba(6, 40, 29, 0.25);
+  background: linear-gradient(135deg, var(--p-deep), var(--night));
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--p-ink-l) 25%, transparent);
 }
 .mms-top__mark {
   display: grid;
@@ -121,7 +121,7 @@ select {
 
 .seg {
   display: inline-flex;
-  border: 1px solid rgba(29, 122, 78, 0.45);
+  border: 1px solid color-mix(in srgb, var(--p-l) 45%, transparent);
   border-radius: 10px;
   overflow: hidden;
   background: var(--surface-2);
@@ -139,7 +139,7 @@ select {
   white-space: nowrap;
 }
 .seg__btn + .seg__btn {
-  border-inline-start: 1px solid rgba(29, 122, 78, 0.25);
+  border-inline-start: 1px solid color-mix(in srgb, var(--p-l) 25%, transparent);
 }
 .seg__btn.is-active {
   background: var(--green);
@@ -163,10 +163,10 @@ select {
 }
 @keyframes mms-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(29, 122, 78, 0.55);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--p-l) 55%, transparent);
   }
   100% {
-    box-shadow: 0 0 0 9px rgba(29, 122, 78, 0);
+    box-shadow: 0 0 0 9px color-mix(in srgb, var(--p-l) 0%, transparent);
   }
 }
 
@@ -423,7 +423,7 @@ select {
   background: var(--surface-2);
 }
 .mms-side__item.is-active {
-  background: rgba(29, 122, 78, 0.1);
+  background: color-mix(in srgb, var(--p-l) 10%, transparent);
   color: var(--green-deep);
   font-weight: 700;
 }
@@ -827,7 +827,7 @@ select {
   background: var(--surface-2);
 }
 .news-badge--rep {
-  border-color: rgba(29, 122, 78, 0.35);
+  border-color: color-mix(in srgb, var(--p-l) 35%, transparent);
   color: var(--green-deep);
 }
 .mms-tag {
@@ -1249,7 +1249,7 @@ select {
   stroke: #ccc;
 }
 .mms-line__area {
-  fill: rgba(29, 122, 78, 0.12);
+  fill: color-mix(in srgb, var(--p-l) 12%, transparent);
 }
 .mms-line__stroke {
   fill: none;
@@ -1397,7 +1397,7 @@ select {
 }
 .mms-editor__types button.is-active {
   border-color: var(--green);
-  background: rgba(29, 122, 78, 0.08);
+  background: color-mix(in srgb, var(--p-l) 8%, transparent);
   color: var(--green-deep);
   box-shadow: inset 0 0 0 1px var(--green);
 }
@@ -1536,7 +1536,7 @@ select {
   gap: 0.2rem;
   padding: 0.1rem 0.25rem 0.1rem 0.6rem;
   border-radius: 999px;
-  background: rgba(29, 122, 78, 0.1);
+  background: color-mix(in srgb, var(--p-l) 10%, transparent);
   color: var(--green-deep);
   font-size: 0.88rem;
   font-weight: 600;
@@ -1578,7 +1578,7 @@ select {
   background: var(--surface-2);
 }
 .mms-theme.is-on {
-  border-color: rgba(29, 122, 78, 0.5);
+  border-color: color-mix(in srgb, var(--p-l) 50%, transparent);
   background: var(--surface);
 }
 .mms-theme__check {
@@ -1626,7 +1626,7 @@ select {
   font-weight: 800;
 }
 .mms-watch__status--active {
-  background: rgba(29, 122, 78, 0.12);
+  background: color-mix(in srgb, var(--p-l) 12%, transparent);
   color: var(--green-deep);
 }
 .mms-watch__status--upcoming {
@@ -1682,7 +1682,7 @@ select {
 }
 .news-filters__watch.is-on {
   border-color: var(--green) !important;
-  background: rgba(29, 122, 78, 0.08) !important;
+  background: color-mix(in srgb, var(--p-l) 8%, transparent) !important;
   color: var(--green-deep) !important;
   font-weight: 700;
 }
@@ -1824,7 +1824,7 @@ select {
   margin-inline-start: 0.5rem;
   padding: 0.05rem 0.45rem;
   border-radius: 999px;
-  background: rgba(29, 122, 78, 0.1);
+  background: color-mix(in srgb, var(--p-l) 10%, transparent);
   color: var(--green-deep);
   font-size: 0.78rem;
   font-weight: 600;
@@ -1886,7 +1886,7 @@ select {
   z-index: 80;
   display: flex;
   flex-direction: column;
-  background: #0f3a27;
+  background: var(--p-night);
   color: #fff;
   font-family: 'IBM Plex Sans Arabic', var(--font-body);
 }
@@ -2220,32 +2220,32 @@ select {
 /* ---------------------------------------------------------------- finitions : en-tête, menu, effets */
 :root {
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --shadow-sm: 0 1px 2px light-dark(rgba(6, 40, 29, 0.06), rgba(0, 0, 0, 0.4)), 0 1px 4px light-dark(rgba(6, 40, 29, 0.08), rgba(0, 0, 0, 0.3));
-  --shadow-md: 0 6px 18px light-dark(rgba(6, 40, 29, 0.1), rgba(0, 0, 0, 0.45)), 0 2px 6px light-dark(rgba(6, 40, 29, 0.06), rgba(0, 0, 0, 0.3));
-  --shadow-lg: 0 18px 40px light-dark(rgba(6, 40, 29, 0.16), rgba(0, 0, 0, 0.6));
+  --shadow-sm: 0 1px 2px light-dark(color-mix(in srgb, var(--p-ink-l) 6%, transparent), rgba(0, 0, 0, 0.4)), 0 1px 4px light-dark(color-mix(in srgb, var(--p-ink-l) 8%, transparent), rgba(0, 0, 0, 0.3));
+  --shadow-md: 0 6px 18px light-dark(color-mix(in srgb, var(--p-ink-l) 10%, transparent), rgba(0, 0, 0, 0.45)), 0 2px 6px light-dark(color-mix(in srgb, var(--p-ink-l) 6%, transparent), rgba(0, 0, 0, 0.3));
+  --shadow-lg: 0 18px 40px light-dark(color-mix(in srgb, var(--p-ink-l) 16%, transparent), rgba(0, 0, 0, 0.6));
 }
 html {
   scroll-behavior: smooth;
 }
 ::selection {
-  background: rgba(29, 122, 78, 0.22);
+  background: color-mix(in srgb, var(--p-l) 22%, transparent);
 }
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(23, 48, 40, 0.25) transparent;
+  scrollbar-color: color-mix(in srgb, var(--p-ink-l) 25%, transparent) transparent;
 }
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(23, 48, 40, 0.22);
+  background: color-mix(in srgb, var(--p-ink-l) 22%, transparent);
   border-radius: 10px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(23, 48, 40, 0.4);
+  background-color: color-mix(in srgb, var(--p-ink-l) 40%, transparent);
 }
 
 button,
@@ -2274,7 +2274,7 @@ select:focus,
 textarea:focus {
   outline: none;
   border-color: var(--green) !important;
-  box-shadow: 0 0 0 3px rgba(29, 122, 78, 0.16);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-l) 16%, transparent);
 }
 
 /* barre de chargement */
@@ -2335,7 +2335,7 @@ textarea:focus {
 }
 .mms-top__brand:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 22px rgba(6, 40, 29, 0.32);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--p-ink-l) 32%, transparent);
 }
 .mms-top__actions {
   flex-wrap: nowrap;
@@ -2345,7 +2345,7 @@ textarea:focus {
 .mms-live {
   padding: 0.35rem 0.75rem;
   border-radius: 999px;
-  background: rgba(29, 122, 78, 0.08);
+  background: color-mix(in srgb, var(--p-l) 8%, transparent);
   white-space: nowrap;
 }
 .mms-translate {
@@ -2362,7 +2362,7 @@ textarea:focus {
   padding: 0 0.9rem;
 }
 .seg__btn:not(.is-active):hover {
-  background: rgba(29, 122, 78, 0.1);
+  background: color-mix(in srgb, var(--p-l) 10%, transparent);
   color: var(--green-deep);
 }
 
@@ -2391,7 +2391,7 @@ textarea:focus {
   letter-spacing: 0.03em;
   box-shadow:
     0 0 0 2px #fff,
-    0 0 0 4px rgba(29, 122, 78, 0.25);
+    0 0 0 4px color-mix(in srgb, var(--p-l) 25%, transparent);
 }
 .mms-user__id {
   display: flex;
@@ -2470,7 +2470,7 @@ textarea:focus {
 }
 .mms-tabs__btn:hover {
   color: var(--green-deep);
-  background: rgba(29, 122, 78, 0.05);
+  background: color-mix(in srgb, var(--p-l) 5%, transparent);
 }
 .mms-tabs__btn:hover::after {
   transform: scaleX(0.4);
@@ -2662,7 +2662,7 @@ textarea:focus {
 }
 .news-btn:not(.news-btn--ghost):hover {
   background: var(--green-deep);
-  box-shadow: 0 6px 16px rgba(29, 122, 78, 0.3);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--p-l) 30%, transparent);
 }
 .news-btn--ghost:hover {
   background: var(--surface-2);
@@ -2976,7 +2976,7 @@ textarea:focus {
   position: absolute;
   border-radius: 50%;
   filter: blur(2px);
-  background: radial-gradient(circle at 35% 35%, rgba(29, 122, 78, 0.55), rgba(29, 122, 78, 0.05) 70%);
+  background: radial-gradient(circle at 35% 35%, color-mix(in srgb, var(--p-l) 55%, transparent), color-mix(in srgb, var(--p-l) 5%, transparent) 70%);
   animation: mms-float 9s ease-in-out infinite;
 }
 .mms-login__orb--a {
@@ -3037,7 +3037,7 @@ textarea:focus {
   cursor: pointer;
 }
 .mms-login__lang button.is-active {
-  background: #1d7a4e;
+  background: var(--p-l);
   color: #fff;
 }
 
@@ -3065,8 +3065,8 @@ textarea:focus {
   display: inline-block;
   padding: 0.3rem 1rem;
   border-radius: 999px;
-  border: 1px solid rgba(142, 229, 184, 0.45);
-  color: #8ee5b8;
+  border: 1px solid color-mix(in srgb, var(--p-glow) 45%, transparent);
+  color: var(--p-glow);
   font-weight: 700;
   font-size: 0.95rem;
 }
@@ -3078,7 +3078,7 @@ textarea:focus {
 }
 .mms-login__hero h1 em {
   font-style: normal;
-  background: linear-gradient(90deg, light-dark(#8ee5b8, rgba(30, 230, 113, 0.14)), #e5b841);
+  background: linear-gradient(90deg, light-dark(var(--p-glow), rgba(30, 230, 113, 0.14)), #e5b841);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -3107,7 +3107,7 @@ textarea:focus {
   display: block;
   font-family: var(--font-display);
   font-size: 1.6rem;
-  color: #8ee5b8;
+  color: var(--p-glow);
 }
 .mms-login__stats span {
   font-size: 0.85rem;
@@ -3142,15 +3142,15 @@ textarea:focus {
 .mms-login__mark {
   padding: 6px;
   border-radius: 50%;
-  background: radial-gradient(circle, #0d4a33, #0f3a27);
-  box-shadow: 0 0 0 6px rgba(29, 122, 78, 0.12);
+  background: radial-gradient(circle, var(--p-deep), var(--p-night));
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--p-l) 12%, transparent);
 }
 .mms-login__mark circle {
   fill: #fff;
 }
 .mms-login__mark path {
   fill: none;
-  stroke: #8ee5b8;
+  stroke: var(--p-glow);
   stroke-width: 2.2;
   stroke-linecap: round;
 }
@@ -3158,7 +3158,7 @@ textarea:focus {
   margin-top: 0.5rem;
   font-family: var(--font-display);
   font-size: 1.8rem;
-  color: light-dark(#1d7a4e, #8ee5b8);
+  color: light-dark(var(--p-l), var(--p-glow));
 }
 .mms-login__brand span {
   font-size: 0.9rem;
@@ -3199,8 +3199,8 @@ textarea:focus {
 }
 .mms-login__field input:focus {
   outline: none;
-  border-color: #1d7a4e;
-  box-shadow: 0 0 0 4px rgba(29, 122, 78, 0.15);
+  border-color: var(--p-l);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--p-l) 15%, transparent);
   background: var(--surface);
 }
 .mms-login__pw {
@@ -3246,12 +3246,12 @@ textarea:focus {
 .mms-login__remember input {
   width: 17px;
   height: 17px;
-  accent-color: light-dark(#1d7a4e, #7fd1b0);
+  accent-color: light-dark(var(--p-l), #7fd1b0);
 }
 .mms-login__forgot {
   border: 0;
   background: none;
-  color: light-dark(#1d7a4e, #8ee5b8);
+  color: light-dark(var(--p-l), var(--p-glow));
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -3278,7 +3278,7 @@ textarea:focus {
   height: 54px;
   border: 0;
   border-radius: 12px;
-  background: linear-gradient(135deg, #2fcb81, #1d7a4e);
+  background: linear-gradient(135deg, var(--p-d), var(--p-l));
   color: #fff;
   font: inherit;
   font-size: 1.1rem;
@@ -4267,7 +4267,7 @@ img.mms-user__avatar--img {
   white-space: nowrap;
 }
 .news-rel--high {
-  background: rgba(29, 122, 78, 0.12);
+  background: color-mix(in srgb, var(--p-l) 12%, transparent);
   color: var(--green-deep);
 }
 .news-rel--low {

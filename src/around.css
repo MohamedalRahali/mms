@@ -1036,7 +1036,7 @@
   height: 24px;
   padding-inline: 4px;
   border-radius: 6px;
-  background: rgba(6, 23, 15, 0.75);
+  background: color-mix(in srgb, var(--p-bg-d) 75%, transparent);
   color: #fff;
   font-size: 0.75rem;
 }

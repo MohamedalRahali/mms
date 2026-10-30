@@ -14,6 +14,8 @@ import { CommandHero } from './components/Hero'
 import { MediaIcon } from './components/MediaParts'
 import { type MediaIconName, type MediaPageType, MEDIA_PAGES, MEDIA_PAGE_TEXT, MEDIA_SUBS } from './lib/media'
 import { useFx, useTheme } from './lib/fx'
+import { PALETTES, usePalette } from './lib/palette'
+import { ThemePicker } from './components/ThemePicker'
 import { ComparePeriods, ExecutiveBriefing, ShareOfVoice } from './components/Pro'
 import { InstallButton } from './components/Install'
 import { Radar, RadarBrief } from './components/Radar'
@@ -288,6 +290,7 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop)
   }, [])
   const [theme, setTheme] = useTheme()
+  const [colors, setColors] = usePalette()
   useFx()
 
   {
@@ -400,6 +403,13 @@ export default function App() {
         keywords: 'theme dark light',
         run: () => setTheme(theme === 'dark' ? 'light' : 'dark'),
       },
+      ...PALETTES.filter((p) => p.key !== colors).map((p) => ({
+        id: `palette-${p.key}`,
+        label: lang === 'ar' ? `المظهر : ${p.ar}` : `Style: ${p.en}`,
+        group: lang === 'ar' ? 'الإعدادات' : 'Settings',
+        keywords: `theme style palette ${p.key}`,
+        run: () => setColors(p.key),
+      })),
       { id: 'lang', label: lang === 'ar' ? 'English' : 'العربية', group: lang === 'ar' ? 'الإعدادات' : 'Settings', keywords: 'language lang', run: () => setLang(other) },
     ]
 
@@ -457,6 +467,7 @@ export default function App() {
                       onLang={() => setLang(other)}
                     />
                     <InstallButton lang={lang} />
+                    <ThemePicker lang={lang} palette={colors} onPalette={setColors} theme={theme} onTheme={setTheme} />
                     <button
                       type="button"
                       className="mms-tool__btn mms-theme-btn"

@@ -52,7 +52,7 @@
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  background: linear-gradient(135deg, var(--sa-bad), #1d7a4e);
+  background: linear-gradient(135deg, var(--sa-bad), var(--p-l));
   color: #fff;
   font-weight: 800;
   font-size: 12px;

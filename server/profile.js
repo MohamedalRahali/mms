@@ -19,7 +19,7 @@ const TYPES = [
   { type: 'image/jpeg', ext: 'jpg', test: (b) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
   { type: 'image/webp', ext: 'webp', test: (b) => b.length > 12 && b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP' },
 ]
-const PREF_KEYS = { fold: 'boolean', images: 'boolean', summaries: 'boolean', notifications: 'boolean', lang: ['ar', 'en'] }
+const PREF_KEYS = { fold: 'boolean', images: 'boolean', summaries: 'boolean', notifications: 'boolean', lang: ['ar', 'en'], palette: ['cnsd', 'mms', 'marine', 'bordeaux'] }
 let dir = ''
 const uploads = new Map() // email → [dates] : 10 envois par heure au plus
 const pwTries = new Map() // email → [dates] : 5 essais par 15 minutes au plus

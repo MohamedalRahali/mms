@@ -5,6 +5,7 @@ import { useCountUp } from '../lib/motion'
 import { fairChange, formatChange } from '../lib/fair'
 import { useHistory } from '../lib/history'
 import { type V, arc, fromLatLon, rotate } from './Globe'
+import { accentRgb, useLook } from '../lib/palette'
 
 /**
  * En-tête « centre de commandement » du tableau de bord : chiffres clés animés,
@@ -143,6 +144,7 @@ function LibyaGlobe({ places, onPick }: { places: Count[]; onPick: (name: string
   const hits = useRef<{ x: number; y: number; name: string }[]>([])
   const i = useI18n()
   const placesKey = places.map((p) => `${p.name}:${p.count}`).join('|')
+  const look = useLook()
 
   useEffect(() => {
     const canvas = ref.current
@@ -151,6 +153,10 @@ function LibyaGlobe({ places, onPick }: { places: Count[]; onPick: (name: string
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const css = getComputedStyle(document.documentElement)
     const light = css.colorScheme === 'light'
+    // Accent du thème de couleurs choisi (vert pour la charte MMS, orange pour celle du centre…)
+    const acc = accentRgb()
+    // Accent fondu vers le blanc (255) ou le noir (0) : fond du globe dans les couleurs du thème
+    const tint = (k: number, to: number) => acc.split(',').map((v) => Math.round(+v + (to - +v) * k)).join(', ')
 
     // Vue rapprochée : une grille de points sur la région (Afrique du Nord, Méditerranée), et un quadrillage tous les 10°
     const dots: V[] = []
@@ -226,7 +232,7 @@ function LibyaGlobe({ places, onPick }: { places: Count[]; onPick: (name: string
     let tiltY = 0
     let raf = 0
     const start = performance.now()
-    const dotColor = light ? '0, 120, 74' : '125, 255, 179'
+    const dotColor = acc
 
     function frame(now: number) {
       const t = still ? 2 : (now - start) / 1000
@@ -248,17 +254,17 @@ function LibyaGlobe({ places, onPick }: { places: Count[]; onPick: (name: string
 
       ctx!.clearRect(0, 0, w, h)
       const halo = ctx!.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.6)
-      halo.addColorStop(0, light ? 'rgba(0, 163, 98, 0.14)' : 'rgba(25, 211, 138, 0.2)')
-      halo.addColorStop(1, 'rgba(25, 211, 138, 0)')
+      halo.addColorStop(0, `rgba(${acc}, ${light ? 0.14 : 0.2})`)
+      halo.addColorStop(1, `rgba(${acc}, 0)`)
       ctx!.fillStyle = halo
       ctx!.fillRect(0, 0, w, h)
 
       const body = ctx!.createRadialGradient(cx - R * 0.3, cy - R * 0.35, R * 0.1, cx, cy, R * 1.08)
       if (light) {
         body.addColorStop(0, 'rgba(255, 255, 255, 0.95)')
-        body.addColorStop(1, 'rgba(214, 233, 224, 0.95)')
+        body.addColorStop(1, `rgba(${tint(0.88, 255)}, 0.95)`)
       } else {
-        body.addColorStop(0, 'rgba(16, 64, 52, 0.95)')
+        body.addColorStop(0, `rgba(${tint(0.72, 0)}, 0.95)`)
         body.addColorStop(0.7, 'rgba(6, 26, 30, 0.96)')
         body.addColorStop(1, 'rgba(2, 10, 16, 0.98)')
       }
@@ -277,7 +283,7 @@ function LibyaGlobe({ places, onPick }: { places: Count[]; onPick: (name: string
       }
 
       // Quadrillage (méridiens et parallèles)
-      ctx!.strokeStyle = light ? 'rgba(0, 122, 74, 0.12)' : 'rgba(125, 255, 179, 0.09)'
+      ctx!.strokeStyle = `rgba(${acc}, ${light ? 0.12 : 0.09})`
       ctx!.lineWidth = 1
       for (const line of grid) {
         ctx!.beginPath()
@@ -297,9 +303,9 @@ function LibyaGlobe({ places, onPick }: { places: Count[]; onPick: (name: string
         else ctx!.moveTo(x, y)
       })
       ctx!.closePath()
-      ctx!.fillStyle = light ? 'rgba(0, 163, 98, 0.1)' : 'rgba(25, 211, 138, 0.09)'
+      ctx!.fillStyle = `rgba(${acc}, ${light ? 0.1 : 0.09})`
       ctx!.fill()
-      ctx!.strokeStyle = light ? 'rgba(0, 122, 74, 0.7)' : 'rgba(125, 255, 179, 0.75)'
+      ctx!.strokeStyle = `rgba(${acc}, ${light ? 0.7 : 0.75})`
       ctx!.lineWidth = 1.4
       ctx!.setLineDash([4, 3])
       ctx!.stroke()
@@ -373,7 +379,7 @@ function LibyaGlobe({ places, onPick }: { places: Count[]; onPick: (name: string
 
       ctx!.beginPath()
       ctx!.arc(cx, cy, R, 0, Math.PI * 2)
-      ctx!.strokeStyle = light ? 'rgba(0, 122, 74, 0.25)' : 'rgba(125, 255, 179, 0.22)'
+      ctx!.strokeStyle = `rgba(${acc}, ${light ? 0.25 : 0.22})`
       ctx!.lineWidth = 1.2
       ctx!.stroke()
 
@@ -382,9 +388,9 @@ function LibyaGlobe({ places, onPick }: { places: Count[]; onPick: (name: string
         const [sx, sy] = project(rot(fromLatLon(27, 17.5)))
         const sr = Math.min(w, h) * 0.62
         const sweep = ctx!.createConicGradient(t * 0.9, sx, sy)
-        sweep.addColorStop(0, light ? 'rgba(0, 163, 98, 0.18)' : 'rgba(125, 255, 179, 0.18)')
-        sweep.addColorStop(0.1, 'rgba(125, 255, 179, 0)')
-        sweep.addColorStop(1, 'rgba(125, 255, 179, 0)')
+        sweep.addColorStop(0, `rgba(${acc}, 0.18)`)
+        sweep.addColorStop(0.1, `rgba(${acc}, 0)`)
+        sweep.addColorStop(1, `rgba(${acc}, 0)`)
         ctx!.save()
         ctx!.beginPath()
         ctx!.arc(sx, sy, sr, 0, Math.PI * 2)
@@ -395,7 +401,7 @@ function LibyaGlobe({ places, onPick }: { places: Count[]; onPick: (name: string
         for (const f of [0.35, 0.7, 1]) {
           ctx!.beginPath()
           ctx!.arc(sx, sy, sr * f, 0, Math.PI * 2)
-          ctx!.strokeStyle = light ? 'rgba(0, 122, 74, 0.12)' : 'rgba(125, 255, 179, 0.1)'
+          ctx!.strokeStyle = `rgba(${acc}, ${light ? 0.12 : 0.1})`
           ctx!.stroke()
         }
         raf = requestAnimationFrame(frame)
@@ -409,7 +415,7 @@ function LibyaGlobe({ places, onPick }: { places: Count[]; onPick: (name: string
       canvas.removeEventListener('pointerleave', onLeave)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placesKey, i.lang])
+  }, [placesKey, i.lang, look])
 
   function onClick(e: RMouseEvent<HTMLCanvasElement>) {
     const b = e.currentTarget.getBoundingClientRect()

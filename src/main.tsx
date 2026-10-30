@@ -6,10 +6,12 @@ import './theme.css'
 import './brand.css'
 import './around.css'
 import './radar.css'
+import './palettes.css'
 import App from './App.tsx'
 import { Login } from './components/Login'
 import { AuthContext, type User, watchUnauthorized } from './lib/auth'
 import { applyTheme } from './lib/fx'
+import { applyPalette, readPalette } from './lib/palette'
 import { installTracking } from './lib/track'
 import { setShareToken } from './lib/news'
 import { SharedBoard } from './components/Share'
@@ -27,6 +29,7 @@ const isPortal = location.pathname === '/portal' || location.pathname.startsWith
 const Portal = lazy(() => import('./portal/Portal'))
 if (shareMatch) setShareToken(shareMatch[1])
 
+applyPalette(readPalette())
 try {
   applyTheme(localStorage.getItem('mms-theme') === 'light' ? 'light' : 'dark')
 } catch {

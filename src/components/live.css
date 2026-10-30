@@ -287,8 +287,8 @@
   z-index: 2;
   padding: 0.15rem 0.55rem;
   border-radius: 999px;
-  background: rgba(6, 23, 15, 0.78);
-  color: #e6f1e9;
+  background: color-mix(in srgb, var(--p-bg-d) 78%, transparent);
+  color: var(--p-ink-d);
   font-size: 0.72rem;
   font-weight: 600;
   pointer-events: none;

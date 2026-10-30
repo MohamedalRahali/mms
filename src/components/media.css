@@ -52,7 +52,7 @@
 .mms-msel__btn[aria-expanded='true'] {
   outline: none;
   border-color: var(--green);
-  box-shadow: 0 0 0 3px light-dark(rgba(29, 122, 78, 0.15), rgba(47, 203, 129, 0.2));
+  box-shadow: 0 0 0 3px light-dark(color-mix(in srgb, var(--p-l) 15%, transparent), color-mix(in srgb, var(--p-d) 20%, transparent));
 }
 .mms-msel__text {
   overflow: hidden;
@@ -106,7 +106,7 @@
   user-select: none;
 }
 .mms-msel__opt.is-active {
-  background: light-dark(rgba(29, 122, 78, 0.08), rgba(47, 203, 129, 0.12));
+  background: light-dark(color-mix(in srgb, var(--p-l) 8%, transparent), color-mix(in srgb, var(--p-d) 12%, transparent));
 }
 .mms-msel__opt.is-on {
   font-weight: 700;
@@ -596,7 +596,7 @@
   transform: translateY(-1px) scale(1.02);
   box-shadow:
     0 2px 4px rgba(0, 0, 0, 0.3),
-    0 10px 26px rgba(47, 203, 129, 0.25);
+    0 10px 26px color-mix(in srgb, var(--p-d) 25%, transparent);
 }
 .mms-head__product {
   display: inline-flex;
