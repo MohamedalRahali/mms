@@ -8,14 +8,14 @@ import './portal.css'
  * couleurs, la typographie et les formes de MMS, sans rien de l'interface interne. Données : /api/portal (server/portal.js).
  */
 
-type Item = { id: string; title: string; summary: string; source: string; date: string; url: string; image: string; category: string; lang: string }
+type Item = { id: string; title: string; summary: string; source: string; date: string; url: string; image: string; category: string; lang: string; type?: string; pinned?: boolean }
 type Count = { name: string; count: number }
-type Page = { total: number; page: number; pages: number; items: Item[]; facets: { categories: Count[]; sources: Count[]; langs: Count[] } }
+type Page = { total: number; page: number; pages: number; items: Item[]; facets: { categories: Count[]; sources: Count[]; langs: Count[]; types?: Count[] }; site?: { title: string; intro: string } }
 
 const TEXT = {
   ar: {
     brand: 'MMS · الأخبار',
-    tagline: 'مختارات من الأخبار المعتمدة للنشر',
+    tagline: 'مختارات من الأخبار ينتقيها فريق التحرير',
     search: 'ابحث في الأخبار',
     go: 'بحث',
     all: 'الكل',
@@ -35,13 +35,19 @@ const TEXT = {
     loading: 'جارٍ التحميل…',
     results: (n: number) => `${n} خبر`,
     theme: 'تبديل المظهر',
-    foot: 'تُعرض هنا الأخبار التي وافق فريق التحرير على نشرها فقط، مع رابط إلى مصدرها الأصلي.',
+    foot: 'تُعرض هنا الأخبار التي اختارها فريق التحرير للنشر، مع رابط إلى مصدرها الأصلي.',
     active: 'عوامل التصفية',
     remove: 'إزالة',
+    allTypes: 'كل الأنواع',
+    types: { article: 'مقالات', tv: 'تلفزيون', radio: 'إذاعة', youtube: 'يوتيوب', podcast: 'بودكاست', blog: 'مدونات', social: 'شبكات التواصل', forum: 'منتديات' } as Record<string, string>,
+    lang: 'اللغة',
+    allLangs: 'كل اللغات',
+    langs: { ar: 'العربية', en: 'الإنجليزية', fr: 'الفرنسية' } as Record<string, string>,
+    pinned: 'مثبّت',
   },
   en: {
     brand: 'MMS · News',
-    tagline: 'A selection of news approved for publication',
+    tagline: 'A selection of news chosen by the editorial team',
     search: 'Search the news',
     go: 'Search',
     all: 'All',
@@ -61,9 +67,15 @@ const TEXT = {
     loading: 'Loading…',
     results: (n: number) => `${n} news`,
     theme: 'Toggle theme',
-    foot: 'Only news approved for publication by the editorial team appear here, with a link to the original source.',
+    foot: 'Only news selected for publication by the editorial team appear here, with a link to the original source.',
     active: 'Filters',
     remove: 'Remove',
+    allTypes: 'All types',
+    types: { article: 'Articles', tv: 'TV', radio: 'Radio', youtube: 'YouTube', podcast: 'Podcasts', blog: 'Blogs', social: 'Social media', forum: 'Forums' } as Record<string, string>,
+    lang: 'Language',
+    allLangs: 'All languages',
+    langs: { ar: 'Arabic', en: 'English', fr: 'French' } as Record<string, string>,
+    pinned: 'Pinned',
   },
 }
 
@@ -82,9 +94,9 @@ export function Portal() {
   const t = TEXT[lang]
   const [theme, setTheme] = useState<'light' | 'dark'>(readTheme)
   const [draft, setDraft] = useState(params.get('q') ?? '')
-  const [f, setF] = useState({ q: params.get('q') ?? '', category: params.get('category') ?? '', source: params.get('source') ?? '', from: params.get('from') ?? '', to: params.get('to') ?? '' })
+  const [f, setF] = useState({ q: params.get('q') ?? '', category: params.get('category') ?? '', source: params.get('source') ?? '', type: params.get('type') ?? '', nlang: params.get('nlang') ?? '', from: params.get('from') ?? '', to: params.get('to') ?? '' })
   const [pages, setPages] = useState(1)
-  const [data, setData] = useState<{ items: Item[]; total: number; pages: number; facets: Page['facets'] } | null>(null)
+  const [data, setData] = useState<{ items: Item[]; total: number; pages: number; facets: Page['facets']; site?: Page['site'] } | null>(null)
   const [error, setError] = useState(false)
   const [open, setOpen] = useState<Item | null>(null)
 
@@ -99,8 +111,8 @@ export function Portal() {
   useEffect(() => {
     document.documentElement.lang = lang
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr'
-    document.title = t.brand
-  }, [lang, t.brand])
+    document.title = data?.site?.title || t.brand
+  }, [lang, t.brand, data?.site?.title])
   // Filtres gardés dans l'adresse : lien partageable, bouton « retour » du navigateur cohérent
   useEffect(() => {
     const p = new URLSearchParams(Object.entries({ ...f, lang: lang === 'en' ? 'en' : '' }).filter(([, v]) => v))
@@ -113,14 +125,15 @@ export function Portal() {
       const all: Item[] = []
       let last: Page | null = null
       for (let p = 1; p <= pages; p++) {
-        const q = new URLSearchParams(Object.entries({ ...f, page: String(p), size: '12' }).filter(([, v]) => v))
+        const { nlang, ...rest } = f
+        const q = new URLSearchParams(Object.entries({ ...rest, lang: nlang, page: String(p), size: '12' }).filter(([, v]) => v))
         const r = await fetch(`/api/portal/news?${q}`)
         if (!r.ok) throw new Error(String(r.status))
         last = (await r.json()) as Page
         all.push(...last.items)
         if (p >= last.pages) break
       }
-      if (!off && last) setData({ items: all, total: last.total, pages: last.pages, facets: last.facets })
+      if (!off && last) setData({ items: all, total: last.total, pages: last.pages, facets: last.facets, site: last.site })
     }
     load().catch(() => !off && setError(true))
     return () => {
@@ -136,13 +149,16 @@ export function Portal() {
     e.preventDefault()
     set({ q: draft.trim() })
   }
-  const filtered = Boolean(f.q || f.category || f.source || f.from || f.to)
-  const featured = !filtered ? data?.items.filter((x) => x.image).slice(0, 1)[0] : undefined
+  const filtered = Boolean(f.q || f.category || f.source || f.type || f.nlang || f.from || f.to)
+  // À la une : une actualité épinglée avec image d'abord, sinon la plus récente avec image
+  const featured = !filtered ? (data?.items.find((x) => x.pinned && x.image) ?? data?.items.find((x) => x.image)) : undefined
   const rest = (data?.items ?? []).filter((x) => x !== featured)
   const chips = [
     f.q && { k: 'q' as const, label: `« ${f.q} »` },
     f.category && { k: 'category' as const, label: i.category(f.category) },
     f.source && { k: 'source' as const, label: f.source },
+    f.type && { k: 'type' as const, label: t.types[f.type] ?? f.type },
+    f.nlang && { k: 'nlang' as const, label: t.langs[f.nlang] ?? f.nlang },
     f.from && { k: 'from' as const, label: `${t.from} ${f.from}` },
     f.to && { k: 'to' as const, label: `${t.to} ${f.to}` },
   ].filter(Boolean) as { k: keyof typeof f; label: string }[]
@@ -155,8 +171,8 @@ export function Portal() {
             MMS
           </span>
           <div>
-            <h1>{t.brand}</h1>
-            <p>{t.tagline}</p>
+            <h1 dir="auto">{data?.site?.title || t.brand}</h1>
+            <p dir="auto">{data?.site?.intro || t.tagline}</p>
           </div>
         </div>
         <div className="pt-head__tools">
@@ -179,6 +195,19 @@ export function Portal() {
           <input type="search" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={t.search} aria-label={t.search} dir="auto" />
           <button type="submit">{t.go}</button>
         </form>
+
+        {data && (data.facets.types?.length ?? 0) > 1 && (
+          <nav className="pt-types" aria-label={t.allTypes}>
+            <button type="button" className={!f.type ? 'is-on' : ''} aria-pressed={!f.type} onClick={() => set({ type: '' })}>
+              {t.allTypes}
+            </button>
+            {data.facets.types!.map((c) => (
+              <button key={c.name} type="button" className={f.type === c.name ? 'is-on' : ''} aria-pressed={f.type === c.name} onClick={() => set({ type: f.type === c.name ? '' : c.name })}>
+                {t.types[c.name] ?? c.name} <small>{c.count}</small>
+              </button>
+            ))}
+          </nav>
+        )}
 
         {data && data.facets.categories.length > 0 && (
           <nav className="pt-cats" aria-label="Categories">
@@ -205,6 +234,19 @@ export function Portal() {
               ))}
             </select>
           </label>
+          {data && data.facets.langs.length > 1 && (
+            <label>
+              <span>{t.lang}</span>
+              <select value={f.nlang} onChange={(e) => set({ nlang: e.target.value })}>
+                <option value="">{t.allLangs}</option>
+                {data.facets.langs.map((l) => (
+                  <option key={l.name} value={l.name}>
+                    {t.langs[l.name] ?? l.name.toUpperCase()} ({l.count})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             <span>{t.from}</span>
             <input type="date" value={f.from} onChange={(e) => set({ from: e.target.value })} />
@@ -219,7 +261,7 @@ export function Portal() {
               className="pt-reset"
               onClick={() => {
                 setDraft('')
-                set({ q: '', category: '', source: '', from: '', to: '' })
+                set({ q: '', category: '', source: '', type: '', nlang: '', from: '', to: '' })
               }}
             >
               {t.reset}
@@ -267,7 +309,9 @@ export function Portal() {
                   {x.image && <img src={x.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}
                   <div className="pt-card__body">
                     <p className="pt-meta">
+                      {x.pinned && <span className="pt-pin">📌 {t.pinned}</span>}
                       <b dir="auto">{x.source}</b> · {i.dateTime(x.date)}
+                      {x.type && x.type !== 'article' && ` · ${t.types[x.type] ?? x.type}`}
                     </p>
                     <h3 dir="auto">
                       <button type="button" onClick={() => setOpen(x)}>

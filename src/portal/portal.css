@@ -114,6 +114,42 @@
   display: inline-flex;
   align-items: center;
 }
+/* Types de contenu (مقالات، تلفزيون، إذاعة…) : onglets au-dessus des thèmes */
+.pt-types {
+  display: flex;
+  gap: 0.3rem;
+  margin: 1rem 0 0;
+  padding-bottom: 0.1rem;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+.pt-types button {
+  padding: 0.55rem 0.9rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pt-types button.is-on {
+  border-bottom-color: var(--green);
+  color: var(--green-deep);
+}
+.pt-types small {
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+.pt-pin {
+  margin-inline-end: 0.4rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 6px;
+  background: var(--green-soft);
+  color: var(--green-deep);
+  font-weight: 700;
+}
 .pt-cats {
   display: flex;
   flex-wrap: wrap;

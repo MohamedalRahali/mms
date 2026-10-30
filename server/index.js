@@ -49,6 +49,7 @@ import { mountRasd } from './rasd.js'
 import { avatarUrl, initProfile, mountProfile } from './profile.js'
 import { initItemEdits, mountItemEdits } from './itemEdits.js'
 import { mountPortal } from './portal.js'
+import { initPortalFeed, mountPortalFeed } from './portalFeed.js'
 import { refreshSourcePolicy } from './store.js'
 import { initSourcePolicy } from './sourcePolicy.js'
 import { dispatchHistory, initDispatchLog, logDispatch } from './dispatchLog.js'
@@ -1109,6 +1110,9 @@ mountProfile(app)
 // Corrections d'articles, articles ajoutés à la main, approbation pour la vitrine publique
 initItemEdits(path.join(root, 'data'), { changed: refreshSourcePolicy })
 mountItemEdits(app, { getItems, isAdmin: (u) => (u?.role || 'admin') === 'admin' })
+// Diffusion automatique sur la vitrine publique : règles, épingles, exclusions et aperçu (إدارة البوابة العامة)
+initPortalFeed(path.join(root, 'data'))
+mountPortalFeed(app, { getItems })
 // سجل الإرسال : envois des veilles, alertes du radar, briefing et rapports
 app.get('/api/watches/history', (_req, res) => res.json({ rows: dispatchHistory() }))
 

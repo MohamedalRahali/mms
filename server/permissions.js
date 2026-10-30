@@ -156,6 +156,7 @@ const MODULE_RULES = [
   [/^\/recordings(\/|$)/, ['media']],
   [/^\/rasd(\/|$)/, ['media']],
   [/^\/items(\/|$)/, ['news', 'media']],
+  [/^\/portal-feed(\/|$)/, ['news', 'media']],
   [/^\/report$/, ['report']],
 ]
 
@@ -183,6 +184,8 @@ function actionFor(method, p) {
   if (write && p.startsWith('/rasd')) return 'tags'
   // Vitrine publique : approbation réservée (administrateurs par défaut) ; corrections et ajouts : analystes et administrateurs
   if (write && /^\/items\/[^/]+\/public$/.test(p)) return 'publish_public'
+  // Gestion de la diffusion sur la vitrine (règles, épingles, exclusions, aperçu) : même droit, lecture comprise
+  if (p.startsWith('/portal-feed')) return 'publish_public'
   if (write && p.startsWith('/items')) return 'edit_items'
   if (write && /^\/reports\/[^/]+\/email$/.test(p)) return 'send_email'
   if ((write && p.startsWith('/briefing/schedule')) || p === '/briefing/send') return 'schedule'

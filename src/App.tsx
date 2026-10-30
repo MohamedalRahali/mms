@@ -44,6 +44,7 @@ const LiveWall = lazy(() => import('./components/LiveWall').then((m) => ({ defau
 const ClipModal = lazy(() => import('./components/BroadcastStudio').then((m) => ({ default: m.ClipModal })))
 const SearchPool = lazy(() => import('./components/SearchPool').then((m) => ({ default: m.SearchPool })))
 const GeoPresence = lazy(() => import('./components/GeoPresence').then((m) => ({ default: m.GeoPresence })))
+const PortalFeed = lazy(() => import('./components/PortalFeed').then((m) => ({ default: m.PortalFeed })))
 
 type View =
   | 'dashboard'
@@ -63,6 +64,7 @@ type View =
   | 'reports'
   | 'geo'
   | 'pool'
+  | 'portal-admin'
   | `media-${MediaPageType}`
   | 'media-live'
 const VIEWS: View[] = [
@@ -83,6 +85,7 @@ const VIEWS: View[] = [
   'reports',
   'geo',
   'pool',
+  'portal-admin',
   ...MEDIA_PAGES.map((m) => `media-${m}` as const),
   'media-live',
 ]
@@ -90,12 +93,14 @@ const VIEWS: View[] = [
 /** Module de permissions dont dépend chaque page (null : toujours ouverte) */
 function moduleOf(v: View): ModuleKey | null {
   if (v === 'help') return null
-  if (v === 'pool') return 'news'
+  if (v === 'pool' || v === 'portal-admin') return 'news'
   if (v.startsWith('media-')) return 'media'
   return v as ModuleKey
 }
 const viewAllowed = (user: User | undefined | null, v: View) => {
   const m = moduleOf(v)
+  // إدارة البوابة العامة : seulement les profils qui ont le droit de publier sur la vitrine
+  if (v === 'portal-admin' && !canDo(user, 'publish_public')) return false
   return !m || hasModule(user, m)
 }
 
@@ -371,6 +376,10 @@ export default function App() {
           { key: 'alerts', label: t.sideAlerts, count: alerts.length },
           { key: 'favorites', label: t.sideFavorites, count: fav.list.length },
         ],
+      },
+      {
+        group: lang === 'ar' ? 'النشر' : 'Publishing',
+        items: [{ key: 'portal-admin', label: lang === 'ar' ? 'إدارة البوابة العامة' : 'Public portal' }],
       },
       {
         group: t.sideHelp,
@@ -655,6 +664,7 @@ export default function App() {
                       {shown === 'reports' && <Reports onNews={() => go('news')} />}
                       {shown === 'geo' && <GeoPresence />}
                       {shown === 'pool' && <SearchPool flux={flux} />}
+                      {shown === 'portal-admin' && <PortalFeed />}
                       </Suspense>
                     </div>
                   </main>

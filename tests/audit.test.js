@@ -498,7 +498,7 @@ test('vitrine publique : seulement les fiches approuvées, seulement les champs 
   const items = [it('a', true), it('b', false), it('c', true, { category: 'sport', date: '2026-10-20T08:00:00Z' }), it('d', undefined)]
   const all = portalNews(items, {})
   assert.deepEqual(all.items.map((x) => x.id), ['a', 'c'])
-  assert.deepEqual(Object.keys(all.items[0]).sort(), ['category', 'date', 'id', 'image', 'lang', 'source', 'summary', 'title', 'url'])
+  assert.deepEqual(Object.keys(all.items[0]).sort(), ['category', 'date', 'id', 'image', 'lang', 'pinned', 'source', 'summary', 'title', 'type', 'url'])
   assert.equal(all.items[0].image, '', 'adresse d’image non http écartée')
   assert.equal(portalNews(items, { category: 'sport' }).total, 1)
   assert.equal(portalNews(items, { from: '2026-10-25' }).total, 1)
