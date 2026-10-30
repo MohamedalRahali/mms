@@ -1,7 +1,7 @@
 import { getItems, reactionsOf } from './store.js'
 import { countList } from './intel.js'
 import { toDay } from './insights.js'
-import { mountLive } from './live.js'
+import { captureChannels, mountLive } from './live.js'
 import { mountBroadcast } from './broadcast.js'
 import { mountRecordings } from './recordings.js'
 
@@ -54,9 +54,29 @@ function perDayOf(items, span, now) {
   return rows
 }
 
-function broadcastPart(found, inSpan, span, now) {
+/** Compteurs de l'en-tête, indépendants de la période choisie : aujourd'hui (jour de Tripoli), 7 jours, sources actives sur 7 jours */
+export function countersOf(all, now) {
+  const today = toDay(new Date(now).toISOString())
+  const week = all.filter((it) => Date.parse(it.date) >= now - 7 * DAY)
+  return { today: all.filter((it) => toDay(it.date) === today).length, week: week.length, sourcesWeek: new Set(week.map((it) => it.origin)).size }
+}
+
+/** Chaînes enregistrées (tv, radio) avec leur état et le nombre de fiches de la période ; pas pour le sous-type youtube */
+export function capturePart(channels, found, sub) {
+  if (sub === 'youtube') return []
+  const perOrigin = new Map()
+  for (const it of found) perOrigin.set(it.origin, (perOrigin.get(it.origin) || 0) + 1)
+  const order = { ok: 0, stale: 1, offline: 2, blocked: 3, error: 4, nosource: 5, never: 6, disabled: 7, liveOnly: 8 }
+  return channels
+    .filter((c) => !sub || c.sub === sub)
+    .map((c) => ({ ...c, count: perOrigin.get(c.name) || 0 }))
+    .sort((a, b) => order[a.state] - order[b.state] || b.count - a.count || a.name.localeCompare(b.name, 'ar'))
+}
+
+function broadcastPart(found, inSpan, span, now, sub) {
   const top = counts(found, 'origin', 6)
   return {
+    capture: capturePart(captureChannels(now), found, sub),
     subTypes: counts(found, 'subType'),
     channels: top.map((c) => {
       const mine = inSpan.filter((it) => it.origin === c.name)
@@ -179,6 +199,7 @@ export function mountMedia(app) {
       total: found.length,
       allTime: all.length,
       last: latestOf(all),
+      counters: countersOf(all, now),
       sourcesCount: new Set(found.map((it) => it.origin)).size,
       transcripts: transcribed.length,
       minutes: Math.round(transcribed.reduce((n, it) => n + words(it.transcription), 0) / WORDS_PER_MINUTE),
@@ -189,7 +210,7 @@ export function mountMedia(app) {
       people: countList(found, 'people', 10),
       orgs: countList(found, 'orgs', 10),
       places: countList(found, 'places', 10),
-      ...(type === 'broadcast' ? broadcastPart(found, inSpan, span, now) : {}),
+      ...(type === 'broadcast' ? broadcastPart(found, inSpan, span, now, sub) : {}),
       ...(type === 'podcast' ? podcastPart(all, found) : {}),
       ...(type === 'blog' ? blogPart(found) : {}),
       ...(type === 'comment' ? commentPart(found, cache.byId) : {}),

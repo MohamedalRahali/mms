@@ -91,6 +91,41 @@ export function liveSources() {
   return list.filter((c) => c.actif !== false)
 }
 
+const DAY = 86_400_000
+
+/** État d'enregistrement d'une chaîne d'après la veille : motif de l'échec ramené à une catégorie (jamais le message brut) */
+export function captureState(c, now = Date.now()) {
+  if (c.liveOnly) return 'liveOnly'
+  if (c.actif === false) return 'disabled'
+  const err = String(c.erreur || '')
+  if (/confirm you.?re not a bot|cookies/i.test(err)) return 'blocked'
+  if (/not currently live|does not have a streams tab|is not live/i.test(err)) return 'offline'
+  if (/introuvable|not found|404/i.test(err)) return 'nosource'
+  if (err) return 'error'
+  const last = Date.parse(c.dernier_succes || c.dernier_enregistrement || '')
+  if (!last) return 'never'
+  return now - last <= 1.5 * DAY ? 'ok' : 'stale'
+}
+
+/**
+ * Chaînes enregistrées par la veille (actives ou non) et chaînes du mur seulement, avec leur état :
+ * en-tête « حالة القنوات » de la page Broadcasts (tv, radio)
+ */
+export function captureChannels(now = Date.now()) {
+  const status = readJson(path.join(dataDir, 'libye-diffusion-etat.json'), { chaines: [] })
+  const pending = new Map((readJson(path.join(dataDir, 'libye-diffusion.json'), { sources: [] }).sources || []).map((s) => [s.id, s]))
+  const list = (status.chaines || []).map((c) => ({ ...c, ...(pending.get(c.id) || {}) }))
+  for (const s of LIVE_ONLY) if (!list.some((c) => c.id === s.id)) list.push({ ...s, ...(pending.get(s.id) || {}), liveOnly: true })
+  return list.map((c) => ({
+    id: c.id,
+    name: c.nom || c.id,
+    sub: c.canal === 'radio' ? 'radio' : 'tv',
+    state: captureState(c, now),
+    last: c.dernier_enregistrement || c.dernier_succes || '',
+    via: c.flux ? 'stream' : c.youtube ? 'youtube' : '',
+  }))
+}
+
 export function mountLive(app) {
   app.get('/api/media/live', async (_req, res) => {
     const list = liveSources()

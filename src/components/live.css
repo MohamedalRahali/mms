@@ -1258,3 +1258,63 @@
     grid-column: 1 / -1;
   }
 }
+
+/* Recherche, filtre « على الهواء / خارج البث » et chaînes épinglées */
+.lw-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.8rem;
+  margin: 0.7rem 0 0;
+}
+.lw-tools input {
+  flex: 0 1 260px;
+  min-width: 0;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+}
+.lw-pin {
+  position: absolute;
+  top: 0.4rem;
+  inset-inline-end: 0.4rem;
+  z-index: 3;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--p-bg-d) 62%, transparent);
+  color: var(--p-ink-d);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.lw-pin.is-on {
+  color: #f0b44c;
+}
+.lw-pin:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.lw-radiobox {
+  position: relative;
+  display: grid;
+}
+.lw-radiobox .lw-pin {
+  top: auto;
+  bottom: 0.4rem;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+}
+.lw-radiobox .lw-pin.is-on {
+  color: #b9770e;
+}
+@media (max-width: 700px) {
+  .lw-tools input {
+    flex: 1 1 100%;
+  }
+}

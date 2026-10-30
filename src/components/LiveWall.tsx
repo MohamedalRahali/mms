@@ -57,6 +57,12 @@ const TEXT = {
     record: 'تسجيل حسب الطلب: اختيار قناة وفترة محددة، تفريغ النص وتنزيله',
     sortBuzz: 'الأكثر أخباراً',
     sort: 'الترتيب',
+    find: 'بحث عن قناة',
+    show: 'العرض',
+    shows: { all: 'الكل', live: 'على الهواء', off: 'خارج البث' } as Record<string, string>,
+    pin: 'تثبيت القناة في الأعلى',
+    unpin: 'إلغاء التثبيت',
+    none: 'لا توجد قناة مطابقة.',
   },
   en: {
     title: 'Live wall',
@@ -88,6 +94,12 @@ const TEXT = {
     record: 'Record on demand: pick a channel and a precise period, then read and download the transcript',
     sortBuzz: 'Most news',
     sort: 'Order',
+    find: 'Find a channel',
+    show: 'Show',
+    shows: { all: 'All', live: 'On air', off: 'Off air' } as Record<string, string>,
+    pin: 'Pin this channel on top',
+    unpin: 'Unpin',
+    none: 'No matching channel.',
   },
 }
 
@@ -181,7 +193,17 @@ function StatChip({ stat }: { stat?: LiveStat }) {
   return <span className="lw-stat">{x.stat(i.num(stat.news), i.num(Math.round(stat.minutes)))}</span>
 }
 
-function Tile({ c, play, onOpen, stat }: { c: LiveChannel; play: boolean; onOpen: () => void; stat?: LiveStat }) {
+/** Étoile d'épingle d'une chaîne (en haut du mur, mémorisée dans ce navigateur) */
+function PinButton({ name, pinned, onPin }: { name: string; pinned: boolean; onPin: () => void }) {
+  const x = TEXT[useI18n().lang]
+  return (
+    <button type="button" className={pinned ? 'lw-pin is-on' : 'lw-pin'} aria-pressed={pinned} aria-label={`${pinned ? x.unpin : x.pin} · ${name}`} title={pinned ? x.unpin : x.pin} onClick={onPin}>
+      {pinned ? '★' : '☆'}
+    </button>
+  )
+}
+
+function Tile({ c, play, onOpen, stat, pinned, onPin }: { c: LiveChannel; play: boolean; onOpen: () => void; stat?: LiveStat; pinned: boolean; onPin: () => void }) {
   const i = useI18n()
   const x = TEXT[i.lang]
   const [ref, seen] = useOnScreen<HTMLDivElement>()
@@ -195,9 +217,7 @@ function Tile({ c, play, onOpen, stat }: { c: LiveChannel; play: boolean; onOpen
     <div ref={ref} className={`lw-tile${ok ? ' is-live' : ' is-off'}`}>
       <div className="lw-tile__screen">
         {running && c.mode === 'hls' && c.src && <HlsVideo src={c.src} low onFail={fail} />}
-        {running && c.mode === 'youtube' && (
-          <iframe src={ytEmbed(c, false)} title={c.nom} allow="autoplay; encrypted-media; picture-in-picture" loading="lazy" tabIndex={-1} />
-        )}
+        {running && c.mode === 'youtube' && <iframe src={ytEmbed(c, false)} title={c.nom} allow="autoplay; encrypted-media; picture-in-picture" loading="lazy" tabIndex={-1} />}
         {!running && (
           <div className="lw-tile__poster">
             <MediaIcon name="tv" size={34} />
@@ -218,33 +238,60 @@ function Tile({ c, play, onOpen, stat }: { c: LiveChannel; play: boolean; onOpen
         <span className="lw-tile__via">{viaOf(c, x)}</span>
       </button>
       <StatChip stat={stat} />
+      <PinButton name={c.nom} pinned={pinned} onPin={onPin} />
     </div>
   )
 }
 
-function RadioTile({ c, active, onOpen, stat }: { c: LiveChannel; active: boolean; onOpen: () => void; stat?: LiveStat }) {
+function RadioTile({ c, active, onOpen, stat, pinned, onPin }: { c: LiveChannel; active: boolean; onOpen: () => void; stat?: LiveStat; pinned: boolean; onPin: () => void }) {
   const i = useI18n()
   const x = TEXT[i.lang]
   const ok = playable(c)
   return (
-    <button type="button" className={`lw-radio${ok ? ' is-live' : ' is-off'}${active ? ' is-on' : ''}`} onClick={onOpen}>
-      <MediaIcon name="radio" size={22} />
-      <span className="lw-radio__name" dir="auto">
-        {c.nom}
-      </span>
-      {ok ? (
-        <span className="lw-eq" aria-hidden>
-          <i />
-          <i />
-          <i />
-          <i />
-          <i />
+    <div className="lw-radiobox">
+      <button type="button" className={`lw-radio${ok ? ' is-live' : ' is-off'}${active ? ' is-on' : ''}`} onClick={onOpen}>
+        <MediaIcon name="radio" size={22} />
+        <span className="lw-radio__name" dir="auto">
+          {c.nom}
         </span>
-      ) : null}
-      <small>{ok ? x.listen : statusOf(c, x)}</small>
-      <StatChip stat={stat} />
-    </button>
+        {ok ? (
+          <span className="lw-eq" aria-hidden>
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+        ) : null}
+        <small>{ok ? x.listen : statusOf(c, x)}</small>
+        <StatChip stat={stat} />
+      </button>
+      <PinButton name={c.nom} pinned={pinned} onPin={onPin} />
+    </div>
   )
+}
+
+/** Chaînes épinglées du mur (navigateur seulement) */
+function usePinnedChannels() {
+  const key = 'mms.live.pinned'
+  const [list, setList] = useState<string[]>(() => {
+    try {
+      const v: unknown = JSON.parse(localStorage.getItem(key) || '[]')
+      return Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string').slice(0, 40) : []
+    } catch {
+      return []
+    }
+  })
+  function toggle(id: string) {
+    const next = list.includes(id) ? list.filter((s) => s !== id) : [...list, id]
+    setList(next)
+    try {
+      localStorage.setItem(key, JSON.stringify(next))
+    } catch {
+      /* stockage indisponible : l'épingle vaut pour la session */
+    }
+  }
+  return [list, toggle] as const
 }
 
 function Focus({ c, onClose, stat }: { c: LiveChannel; onClose: () => void; stat?: LiveStat }) {
@@ -282,9 +329,7 @@ function Focus({ c, onClose, stat }: { c: LiveChannel; onClose: () => void; stat
         </header>
         <div className={c.canal === 'radio' ? 'lw-focus__stage is-radio' : 'lw-focus__stage'}>
           {ok && c.mode === 'hls' && c.src && <HlsVideo src={c.src} low={false} onFail={fail} />}
-          {ok && c.mode === 'youtube' && (
-            <iframe src={ytEmbed(c, true)} title={c.nom} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />
-          )}
+          {ok && c.mode === 'youtube' && <iframe src={ytEmbed(c, true)} title={c.nom} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />}
           {ok && c.mode === 'audio' && c.src && (
             <div className="lw-focus__radio">
               <span className="lw-eq is-big" aria-hidden>
@@ -339,10 +384,17 @@ export function LiveWall() {
   // Buzz de chaque chaîne (24 h), par nom de chaîne ; ordre : écrans en direct d'abord, ou chaînes les plus citées
   const stats = new Map((useFetch<{ channels: LiveStat[] }>('/api/media/live/stats', 120_000).data?.channels ?? []).map((s) => [s.name, s]))
   const [order, setOrder] = useState<'live' | 'buzz'>('live')
+  const [pinned, togglePin] = usePinnedChannels()
+  const [find, setFind] = useState('')
+  const [show, setShow] = useState<'all' | 'live' | 'off'>('all')
   const rank = (a: LiveChannel, b: LiveChannel) =>
-    order === 'buzz' ? (stats.get(b.nom)?.news ?? 0) - (stats.get(a.nom)?.news ?? 0) || Number(playable(b)) - Number(playable(a)) : Number(playable(b)) - Number(playable(a))
-  const tvs = channels.filter((c) => c.canal === 'tv').sort(rank)
-  const radios = channels.filter((c) => c.canal === 'radio').sort(rank)
+    Number(pinned.includes(b.id)) - Number(pinned.includes(a.id)) ||
+    (order === 'buzz' ? (stats.get(b.nom)?.news ?? 0) - (stats.get(a.nom)?.news ?? 0) || Number(playable(b)) - Number(playable(a)) : Number(playable(b)) - Number(playable(a)))
+  const needle = find.trim().toLowerCase()
+  const kept = (c: LiveChannel) => (!needle || c.nom.toLowerCase().includes(needle)) && (show === 'all' || playable(c) === (show === 'live'))
+  const tvs = channels.filter((c) => c.canal === 'tv' && kept(c)).sort(rank)
+  const radios = channels.filter((c) => c.canal === 'radio' && kept(c)).sort(rank)
+  const filtering = !!needle || show !== 'all'
   const onAir = channels.filter(playable).length
 
   return (
@@ -373,6 +425,18 @@ export function LiveWall() {
           ))}
         </div>
       )}
+      {data && (
+        <div className="lw-tools">
+          <input type="search" value={find} onChange={(e) => setFind(e.target.value)} placeholder={x.find} aria-label={x.find} maxLength={80} dir="auto" />
+          <div className="seg" role="group" aria-label={x.show}>
+            {(['all', 'live', 'off'] as const).map((k) => (
+              <button key={k} type="button" className={show === k ? 'seg__btn is-active' : 'seg__btn'} aria-pressed={show === k} onClick={() => setShow(k)}>
+                {x.shows[k]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {error && <p className="news-status news-status--error">{i.t.loadError}</p>}
       {!data && !error && <p className="news-status">{i.t.loading}</p>}
@@ -380,20 +444,20 @@ export function LiveWall() {
       {data && (
         <>
           <h3 className="lw-h">{x.tv}</h3>
-          {tvs.length === 0 && <p className="mms-mpage__empty">{x.noTv}</p>}
+          {tvs.length === 0 && <p className="mms-mpage__empty">{filtering ? x.none : x.noTv}</p>}
           <div className="lw-grid">
             {tvs.map((c) => (
-              <Tile key={c.id} c={c} play={visible && !focus} onOpen={() => setFocus(c)} stat={stats.get(c.nom)} />
+              <Tile key={c.id} c={c} play={visible && !focus} onOpen={() => setFocus(c)} stat={stats.get(c.nom)} pinned={pinned.includes(c.id)} onPin={() => togglePin(c.id)} />
             ))}
           </div>
 
           <h3 className="lw-h">{x.radios}</h3>
           {radios.length === 0 ? (
-            <p className="mms-mpage__empty">{x.noRadio}</p>
+            <p className="mms-mpage__empty">{filtering ? x.none : x.noRadio}</p>
           ) : (
             <div className="lw-radios">
               {radios.map((c) => (
-                <RadioTile key={c.id} c={c} active={focus?.id === c.id} onOpen={() => setFocus(c)} stat={stats.get(c.nom)} />
+                <RadioTile key={c.id} c={c} active={focus?.id === c.id} onOpen={() => setFocus(c)} stat={stats.get(c.nom)} pinned={pinned.includes(c.id)} onPin={() => togglePin(c.id)} />
               ))}
             </div>
           )}

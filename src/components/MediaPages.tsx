@@ -2,6 +2,7 @@ import { useContext, useEffect, useState, type FormEvent } from 'react'
 import { BroadcastStudio } from './BroadcastStudio'
 import { type Count, type Flux, type NewsResponse, type Tone, DrillContext, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
+import { canDo, useAuth } from '../lib/auth'
 import { type MediaIconName, type MediaPageType, MEDIA_PAGE_TEXT, MEDIA_SUBS, useMedia } from '../lib/media'
 import { BuzzBars } from './Dashboard'
 import { Donut, Line } from './Charts'
@@ -16,11 +17,15 @@ import { useIntel } from '../lib/intel'
 /** Pages « الوسائط » : tableau de bord et liste propres à chaque type de média (menu latéral) */
 
 type Card = { id: string; title: string; summary: string; origin: string; url: string; date: string; tone?: Tone | ''; lang?: string; subType?: string; author?: string }
+type Capture = { id: string; name: string; sub: string; state: string; last: string; via: string; count: number }
 type Reply = { id: string; author: string; text: string; date: string; tone?: Tone | ''; url?: string; depth?: number }
 type Overview = {
+  type?: MediaPageType
   total: number
   allTime: number
   last: string
+  counters?: { today: number; week: number; sourcesWeek: number }
+  capture?: Capture[]
   sourcesCount: number
   transcripts: number
   minutes: number
@@ -129,9 +134,75 @@ export function MediaPage({
       {type === 'broadcast' ? (
         <BroadcastStudio days={days} sub={sub} flux={flux} channels={(data?.sources ?? []).map((s) => s.name)} />
       ) : (
-        <Feed type={type} sub={sub} days={days} flux={flux} />
+        <Feed type={type} sub={sub} days={days} flux={flux} sources={(data?.sources ?? []).map((s) => s.name)} />
       )}
     </div>
+  )
+}
+
+/** Bandeau commun des pages : fiches du jour (Tripoli), des 7 derniers jours et sources actives, quelle que soit la période */
+function Counters({ data }: { data: Overview }) {
+  const i = useI18n()
+  const p = MEDIA_PAGE_TEXT[i.lang]
+  if (!data.counters) return null
+  const c = data.counters
+  return (
+    <ul className="mms-mcount">
+      <li>
+        <span>{p.counters.today}</span>
+        <b>{i.num(c.today)}</b>
+      </li>
+      <li>
+        <span>{p.counters.week}</span>
+        <b>{i.num(c.week)}</b>
+      </li>
+      <li>
+        <span>{p.counters.sources}</span>
+        <b>{i.num(c.sourcesWeek)}</b>
+      </li>
+      {/* Broadcasts : la dernière fiche est déjà la tuile « آخر التقاط » */}
+      {data.type !== 'broadcast' && (
+        <li className="is-text">
+          <span>{p.counters.last}</span>
+          <b>{data.last ? i.dateTime(data.last) : p.never}</b>
+        </li>
+      )}
+    </ul>
+  )
+}
+
+/** État de chaque chaîne enregistrée (يعمل، خارج البث، محجوب…) : la raison d'une page vide ou d'une chaîne absente */
+function CapturePanel({ rows }: { rows: Capture[] }) {
+  const i = useI18n()
+  const c = MEDIA_PAGE_TEXT[i.lang].capture
+  const recorded = rows.filter((r) => r.state !== 'liveOnly' && r.state !== 'disabled')
+  const working = recorded.filter((r) => r.state === 'ok').length
+  const blocked = rows.filter((r) => r.state === 'blocked').length
+  return (
+    <details className="mms-capture" open={working < recorded.length || !recorded.length}>
+      <summary>
+        <b>{c.title}</b>
+        <span>{recorded.length ? c.summary(i.num(working), i.num(recorded.length)) : c.none}</span>
+      </summary>
+      {blocked > 0 && <p className="mms-capture__note">{c.blockedNote(i.num(blocked))}</p>}
+      <ul className="mms-capture__list">
+        {rows.map((r) => (
+          <li key={r.id} className={`is-${r.state}`}>
+            <MediaIcon name={r.sub === 'radio' ? 'radio' : 'tv'} size={15} />
+            <span className="mms-capture__name" dir="auto">
+              {r.name}
+            </span>
+            <span className="mms-capture__badge" title={c.hints[r.state]}>
+              {c.states[r.state] ?? r.state}
+            </span>
+            <small>
+              {r.count > 0 && `${c.inPeriod} ${i.num(r.count)} · `}
+              {r.last ? `${c.last} ${i.dateTime(r.last)}` : c.hints[r.state]}
+            </small>
+          </li>
+        ))}
+      </ul>
+    </details>
   )
 }
 
@@ -198,16 +269,28 @@ function Board({ type, data, days }: { type: MediaPageType; data: Overview; days
     ],
   }
 
+  // Pas de chaîne de ce type en cours d'enregistrement (radios aujourd'hui) : la page vide le dit
+  const noActive = !!data.capture && !data.capture.some((c) => ['ok', 'stale', 'offline'].includes(c.state))
+
   return (
     <>
+      <Counters data={data} />
       <Tiles tiles={tiles[type]} />
       {empty && (
         <p className="mms-mpage__empty">
           <MediaIcon name={type} size={20} />
-          {p.pages[type].empty}
+          {data.allTime === 0 ? p.emptyNever : p.pages[type].empty}
           {data.allTime > 0 && days < 90 && <span>{p.tryLonger}</span>}
+          {data.allTime > 0 && data.last && (
+            <span>
+              {' · '}
+              {p.counters.last} : {i.dateTime(data.last)}
+            </span>
+          )}
+          {noActive && <span className="mms-mpage__reason">{p.emptyNoActive}</span>}
         </p>
       )}
+      {!!data.capture && <CapturePanel rows={data.capture} />}
       <div className="mms-pro-grid">
         <Panel title={p.panels.volume} wide>
           <Line perDay={data.perDay} />
@@ -473,24 +556,95 @@ function Threads({ threads }: { threads: NonNullable<Overview['threads']> }) {
   )
 }
 
-/** Liste paginée des fiches du type, avec recherche ; mêmes cartes que لوحة الأخبار */
-function Feed({ type, sub, days, flux }: { type: MediaPageType; sub: string; days: number; flux: Flux | '' }) {
+/** Sources épinglées d'une page (navigateur seulement) : filtre en un clic */
+function usePinned(type: MediaPageType) {
+  const key = `mms.media.pinned.${type}`
+  const [list, setList] = useState<string[]>(() => {
+    try {
+      const v: unknown = JSON.parse(localStorage.getItem(key) || '[]')
+      return Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string').slice(0, 20) : []
+    } catch {
+      return []
+    }
+  })
+  function toggle(name: string) {
+    const next = list.includes(name) ? list.filter((s) => s !== name) : [...list, name].slice(-20)
+    setList(next)
+    try {
+      localStorage.setItem(key, JSON.stringify(next))
+    } catch {
+      /* stockage indisponible : l'épingle vaut pour la session */
+    }
+  }
+  return [list, toggle] as const
+}
+
+// Cellule CSV : guillemets si besoin ; « = + - @ » en tête neutralisés (formules exécutées par les tableurs)
+const csvCell = (raw: string) => {
+  const v = /^[=+\-@]/.test(raw) ? `'${raw}` : raw
+  return /[",;\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
+}
+
+/** Export CSV de la liste filtrée (mêmes filtres et même limite par rôle que les exports Word et PDF) */
+async function exportCsv(query: URLSearchParams, name: string, cols: string[], fmt: (iso: string) => string, tone: (t: string) => string, sort: string) {
+  const res = await fetch(`/api/news/export.json?${query}`)
+  if (!res.ok) throw new Error(String(res.status))
+  const data = (await res.json()) as { items: { date: string; origin: string; title: string; summary: string; tone: string; url: string }[] }
+  const items = data.items.slice()
+  if (sort === 'source') items.sort((a, b) => a.origin.localeCompare(b.origin, 'ar') || b.date.localeCompare(a.date))
+  else items.sort((a, b) => (sort === 'asc' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)))
+  const rows = [cols, ...items.map((it) => [fmt(it.date), it.origin, it.title, it.summary, it.tone ? tone(it.tone) : '', it.url])]
+  // BOM : Excel lit l'arabe en UTF-8
+  const body = rows.map((r) => r.map((v) => csvCell(String(v ?? ''))).join(',')).join('\r\n')
+  const url = URL.createObjectURL(new Blob(['\ufeff' + body], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${name}-${new Date().toISOString().slice(0, 10)}.csv`
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 30_000)
+}
+
+/** Liste paginée des fiches du type, avec recherche, source, tri et export ; mêmes cartes que لوحة الأخبار */
+function Feed({ type, sub, days, flux, sources }: { type: MediaPageType; sub: string; days: number; flux: Flux | ''; sources: string[] }) {
   const i = useI18n()
   const p = MEDIA_PAGE_TEXT[i.lang]
+  const f = p.feed
   const x = useIntel()
+  const auth = useAuth()
   const drill = useContext(DrillContext)
   const [draft, setDraft] = useState('')
   const [q, setQ] = useState('')
   const [tones, setTones] = useState<Tone[]>([])
+  const [source, setSource] = useState('')
+  const [sort, setSort] = useState('')
+  const [pinned, togglePin] = usePinned(type)
+  const [csv, setCsv] = useState<'' | 'busy' | 'error'>('')
   const [page, setPage] = useState(1)
-  useEffect(() => setPage(1), [type, sub, days, flux, q, tones])
-  const params = new URLSearchParams({ page: String(page), size: '10', media: type, days: String(days) })
-  if (sub) params.set('sub', sub)
-  if (flux) params.set('flux', flux)
-  if (q) params.set('q', q)
-  if (tones.length) params.set('tone', tones.join(','))
+  useEffect(() => setPage(1), [type, sub, days, flux, q, tones, source, sort])
+  const filters = new URLSearchParams({ media: type, days: String(days) })
+  if (sub) filters.set('sub', sub)
+  if (flux) filters.set('flux', flux)
+  if (q) filters.set('q', q)
+  if (tones.length) filters.set('tone', tones.join(','))
+  if (source) filters.set('source', source)
+  const params = new URLSearchParams(filters)
+  params.set('page', String(page))
+  params.set('size', '10')
+  if (sort === 'asc') params.set('dir', 'asc')
+  if (sort === 'source') params.set('sort', 'source')
   const ar = i.lang === 'ar'
   const { data, error, loading } = useFetch<NewsResponse>(`/api/news?${params}`)
+  const sourceList = [...new Set([...pinned, ...sources, ...(source ? [source] : [])])]
+
+  async function onCsv() {
+    setCsv('busy')
+    try {
+      await exportCsv(filters, `mms-${type}`, f.cols, i.dateTime, (t) => x.tones[t as Tone] ?? t, sort)
+      setCsv('')
+    } catch {
+      setCsv('error')
+    }
+  }
 
   function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -521,18 +675,71 @@ function Feed({ type, sub, days, flux }: { type: MediaPageType; sub: string; day
           <button
             type="button"
             className="news-btn news-btn--ghost"
-            onClick={() => drill({ media: type, ...(sub ? { sub } : {}), days: String(days), ...(q ? { q } : {}), ...(tones.length ? { tone: tones.join(',') } : {}) })}
+            onClick={() =>
+              drill({ media: type, ...(sub ? { sub } : {}), days: String(days), ...(q ? { q } : {}), ...(tones.length ? { tone: tones.join(',') } : {}), ...(source ? { source } : {}) })
+            }
           >
             {ar ? 'كل عوامل التصفية' : 'All filters'}
           </button>
         </form>
       </div>
-      {(q || tones.length > 0) && (
+      <div className="mms-feedtools">
+        <label>
+          <span>{f.source}</span>
+          <select value={source} onChange={(e) => setSource(e.target.value)} dir="auto">
+            <option value="">{f.allSources}</option>
+            {sourceList.map((s) => (
+              <option key={s} value={s}>
+                {pinned.includes(s) ? `★ ${s}` : s}
+              </option>
+            ))}
+          </select>
+        </label>
+        {source && (
+          <button type="button" className="news-btn news-btn--ghost" aria-pressed={pinned.includes(source)} onClick={() => togglePin(source)}>
+            {pinned.includes(source) ? `★ ${f.unpin}` : `☆ ${f.pin}`}
+          </button>
+        )}
+        <label>
+          <span>{f.sort}</span>
+          <select value={sort} onChange={(e) => setSort(e.target.value)}>
+            {Object.entries(f.sorts).map(([k, label]) => (
+              <option key={k} value={k}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {canDo(auth?.user, 'export') && (
+          <button type="button" className="news-btn news-btn--ghost mms-feedtools__csv" disabled={csv === 'busy' || !data?.total} onClick={onCsv}>
+            {csv === 'busy' ? f.csvBusy : f.csv}
+          </button>
+        )}
+        {csv === 'error' && <small className="news-status news-status--error">{f.csvError}</small>}
+      </div>
+      {pinned.length > 0 && (
+        <p className="mms-feedtools__pins" aria-label={f.pinned}>
+          {pinned.map((s) => (
+            <button key={s} type="button" className={s === source ? 'is-on' : undefined} aria-pressed={s === source} onClick={() => setSource(s === source ? '' : s)} dir="auto">
+              ★ {s}
+            </button>
+          ))}
+        </p>
+      )}
+      {(q || tones.length > 0 || source) && (
         <p className="news-active">
           {q && (
             <span className="mms-filterchip">
               {ar ? 'البحث' : 'Search'}: <b dir="auto">{q}</b>
               <button type="button" aria-label={ar ? 'إزالة' : 'Remove'} onClick={() => (setQ(''), setDraft(''))}>
+                ×
+              </button>
+            </span>
+          )}
+          {source && (
+            <span className="mms-filterchip">
+              {f.source}: <b dir="auto">{source}</b>
+              <button type="button" aria-label={ar ? 'إزالة' : 'Remove'} onClick={() => setSource('')}>
                 ×
               </button>
             </span>
