@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { closeSessions, readUsers, writeUsers } from './auth.js'
-import { all } from './monitor.js'
 import { recordAudit } from './auditTrail.js'
 
 /**
@@ -10,9 +9,10 @@ import { recordAudit } from './auditTrail.js'
  * son compte nominatif (créé dans la console Super Admin) et le compte partagé est DÉSACTIVÉ — jamais supprimé :
  * le Super Admin peut le réactiver d'un clic, son historique reste.
  *
- * Garde-fou contre le verrouillage : la désactivation n'a lieu que si un compte administrateur nominatif
- * (MMS_NOMINATIVE_ADMIN, par défaut belgacem.ounissi@aroundexpressions.com ou l'identifiant « belgacem ») existe, est
- * actif, a le rôle admin et s'est déjà connecté avec succès (journal de sécurité ou double authentification active).
+ * Garde-fou contre le verrouillage : la désactivation n'a lieu que si au moins UN compte administrateur nominatif
+ * (n'importe lequel, hors comptes partagés ; MMS_NOMINATIVE_ADMIN peut restreindre à une liste) existe, est actif, a
+ * le rôle admin et a sa double authentification ACTIVÉE (code validé) : preuve qu'une personne s'y connecte vraiment.
+ * Un enrôlement commencé mais non validé (totpPending) ne compte pas.
  * Sinon rien ne change et la raison est inscrite au journal d'audit ; nouvel essai toutes les heures.
  * Une fois faite, la désactivation n'est plus jamais refaite (data/superadmin/migrations.json) : une réactivation par
  * le Super Admin est respectée. MMS_KEEP_SHARED=1 suspend la règle.
@@ -35,17 +35,21 @@ const readMig = () => {
   }
 }
 
-/** Le compte nominatif peut-il administrer ? { ok, reason, email } */
-export function nominativeAdmin(users = readUsers(), security = all('security') || []) {
-  const wanted = list(process.env.MMS_NOMINATIVE_ADMIN, 'belgacem.ounissi@aroundexpressions.com,belgacem')
-  const u = users.find((x) => wanted.includes(String(x.email).toLowerCase()) || wanted.includes(String(x.username || '').toLowerCase()))
-  if (!u) return { ok: false, reason: 'NOMINATIVE_MISSING' }
-  if (u.disabled) return { ok: false, reason: 'NOMINATIVE_DISABLED', email: u.email }
-  if (roleOf(u) !== 'admin') return { ok: false, reason: 'NOMINATIVE_NOT_ADMIN', email: u.email }
-  const email = String(u.email).toLowerCase()
-  const loggedIn = Boolean(u.totp?.secret) || security.some((r) => r.type === 'login_ok' && String(r.login || '').toLowerCase() === email)
-  if (!loggedIn) return { ok: false, reason: 'NOMINATIVE_NEVER_LOGGED_IN', email: u.email }
-  return { ok: true, reason: '', email: u.email }
+/** Un compte administrateur nominatif utilisable existe-t-il ? { ok, reason, email } */
+export function nominativeAdmin(users = readUsers()) {
+  const shared = list(process.env.MMS_SHARED_ACCOUNTS, 'aroundexpressions@gmail.com')
+  const only = list(process.env.MMS_NOMINATIVE_ADMIN, '')
+  const candidates = users.filter(
+    (x) =>
+      !shared.includes(String(x.email).toLowerCase()) &&
+      (!only.length || only.includes(String(x.email).toLowerCase()) || only.includes(String(x.username || '').toLowerCase())),
+  )
+  if (!candidates.length) return { ok: false, reason: 'NOMINATIVE_MISSING' }
+  const admins = candidates.filter((x) => !x.disabled && roleOf(x) === 'admin')
+  if (!admins.length) return { ok: false, reason: 'NOMINATIVE_NOT_ADMIN' }
+  const ready = admins.find((x) => Boolean(x.totp?.secret))
+  if (!ready) return { ok: false, reason: 'NOMINATIVE_NO_2FA', email: admins[0].email }
+  return { ok: true, reason: '', email: ready.email }
 }
 
 /** Désactive les comptes partagés si le garde-fou le permet ; renvoie ce qui a été fait */

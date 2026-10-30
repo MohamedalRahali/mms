@@ -89,21 +89,23 @@ test('compte partagé : désactivé seulement si un admin nominatif connecté ex
     { email: 'belgacem.ounissi@aroundexpressions.com', username: 'belgacem', role: 'admin', salt: 's', hash: 'h' },
   ]
   auth.writeUsers(users)
-  // Jamais connecté : on ne touche à rien (pas de verrouillage)
-  assert.deepEqual(pol.nominativeAdmin(auth.readUsers(), []), { ok: false, reason: 'NOMINATIVE_NEVER_LOGGED_IN', email: 'belgacem.ounissi@aroundexpressions.com' })
+  // Double authentification pas encore activée (enrôlement commencé seulement) : on ne touche à rien
+  auth.writeUsers([users[0], { ...users[1], totpPending: { secret: 'P' } }])
+  assert.deepEqual(pol.nominativeAdmin(auth.readUsers()), { ok: false, reason: 'NOMINATIVE_NO_2FA', email: 'belgacem.ounissi@aroundexpressions.com' })
   let r = pol.applySharedAccountPolicy()
   assert.equal(r.done, false)
   assert.equal(auth.readUsers()[0].disabled, undefined)
-  // Double authentification active = compte qui fonctionne : le compte partagé est désactivé, pas supprimé
-  auth.writeUsers([users[0], { ...users[1], totp: { secret: 'S' } }])
+  // N'importe quel administrateur nominatif avec la double authentification active suffit (pas seulement « belgacem »)
+  auth.writeUsers([users[0], users[1], { email: 'operateur@aroundexpressions.com', role: 'admin', salt: 's', hash: 'h', totp: { secret: 'S' } }])
+  assert.equal(pol.nominativeAdmin(auth.readUsers()).email, 'operateur@aroundexpressions.com')
   r = pol.applySharedAccountPolicy()
   assert.deepEqual(r.disabled, ['aroundexpressions@gmail.com'])
   const after = auth.readUsers()
-  assert.equal(after.length, 2)
+  assert.equal(after.length, 3)
   assert.equal(after[0].disabled, true)
   assert.match(after[0].disabledReason, /Réactivable/)
   // Réactivé par le Super Admin : la règle ne revient pas
-  auth.writeUsers([{ ...after[0], disabled: false }, after[1]])
+  auth.writeUsers([{ ...after[0], disabled: false }, after[1], after[2]])
   assert.equal(pol.applySharedAccountPolicy().already, true)
   assert.equal(auth.readUsers()[0].disabled, false)
 })
