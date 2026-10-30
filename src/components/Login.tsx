@@ -24,6 +24,9 @@ const TEXT = {
       LOCKED: 'محاولات كثيرة غير ناجحة. أعد المحاولة بعد 15 دقيقة.',
       DISABLED: 'تم تعطيل هذا الحساب. اتصل بمسؤول المنصة.',
       MAINTENANCE: 'المنصة قيد الصيانة. أعد المحاولة لاحقًا.',
+      BLOCKED: 'الدخول من هذا العنوان أو هذا البلد محظور. اتصل بمسؤول المنصة.',
+      BAD_REQUEST: 'البيانات المُدخلة غير صالحة.',
+      NETWORK: 'المتصفح لا يصل إلى الخادم. أعد تحميل الصفحة (Ctrl+F5) أو جرّب نافذة خاصة.',
       FAILED: 'تعذّر الاتصال بالخادم. أعد المحاولة.',
     } as Record<string, string>,
     badge: 'رصد · تحليل · قرار',
@@ -53,6 +56,9 @@ const TEXT = {
       LOCKED: 'Too many attempts. Try again in 15 minutes.',
       DISABLED: 'This account has been disabled. Contact the platform administrator.',
       MAINTENANCE: 'The platform is under maintenance. Try again later.',
+      BLOCKED: 'Access from this address or country is blocked. Contact the platform administrator.',
+      BAD_REQUEST: 'Invalid input.',
+      NETWORK: 'Your browser cannot reach the server. Reload the page (Ctrl+F5) or try a private window.',
       FAILED: 'Unable to reach the server. Try again.',
     } as Record<string, string>,
     badge: 'Monitoring · Analysis · Decision',
@@ -95,13 +101,16 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
     setBusy(true)
     setError('')
     try {
+      // Réseau injoignable (fetch rejeté) ≠ réponse du serveur : deux messages distincts (retour client du 30/10)
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ login: login.trim(), password, remember }),
+      }).catch(() => {
+        throw new Error('NETWORK')
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || 'FAILED')
+      if (!res.ok) throw new Error(json.error || `HTTP_${res.status}`)
       if (json.mfa === 'code' && json.ticket) {
         setTicket(json.ticket)
         setPassword('')
@@ -109,7 +118,9 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
       }
       onLogin(json.user)
     } catch (err) {
-      setError(t.errors[(err as Error).message] ?? t.errors.FAILED)
+      const code = (err as Error).message
+      // Code inconnu de cet écran : message générique avec le code, pour le diagnostic
+      setError(t.errors[code] ?? `${t.errors.FAILED} (${code})`)
       setPassword('')
     } finally {
       setBusy(false)

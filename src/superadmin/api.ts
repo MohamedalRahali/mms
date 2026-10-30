@@ -17,6 +17,9 @@ export async function api<T = unknown>(path: string, method = 'GET', body?: unkn
     credentials: 'same-origin',
     headers: method === 'GET' ? {} : { 'content-type': 'application/json', 'x-superadmin': '1' },
     body: body === undefined ? undefined : JSON.stringify(body),
+  }).catch(() => {
+    // Réseau injoignable : message distinct d'une réponse d'erreur du serveur
+    throw new ApiError('NETWORK', 0)
   })
   const json = await res.json().catch(() => ({}))
   if (res.status === 401 && path !== '/login') onAuthLost()
@@ -159,6 +162,8 @@ export const ERROR_LABEL: Record<string, string> = {
   BAD_PROFILE: 'ملف الصلاحيات غير موجود.',
   BUILTIN: 'لا يمكن حذف ملفات الأدوار الأساسية.',
   TOO_MANY: 'عدد ملفات الصلاحيات بلغ الحد الأقصى (40).',
+  NETWORK: 'المتصفح لا يصل إلى الخادم. أعد تحميل الصفحة (Ctrl+F5) أو جرّب نافذة خاصة.',
+  BLOCKED: 'الدخول من هذا العنوان أو هذا البلد محظور.',
   FAILED: 'تعذّر الاتصال بالخادم.',
 }
 export const errText = (e: unknown) => ERROR_LABEL[(e as Error)?.message] || ERROR_LABEL.FAILED
