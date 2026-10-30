@@ -3,7 +3,7 @@ import { useI18n } from '../lib/i18n'
 
 /** سجل الإرسال : envois des veilles, alertes du radar, briefing et rapports (server/dispatchLog.js) */
 
-type Row = { at: string; kind: 'watch' | 'radar' | 'briefing' | 'report'; name: string; count: number; channels: string[]; recipients: number; status: 'sent' | 'failed' | 'blocked'; error?: string; by?: string }
+type Row = { at: string; kind: 'watch' | 'radar' | 'briefing' | 'report'; name: string; count: number; channels: string[]; recipients: number; status: 'sent' | 'failed' | 'blocked' | 'skipped'; error?: string; by?: string }
 
 const TEXT = {
   ar: {
@@ -11,7 +11,7 @@ const TEXT = {
     intro: 'كل ما أرسلته المنصة بالبريد أو Telegram: الرصد، تنبيهات الرادار، التقرير التنفيذي والتقارير.',
     empty: 'لم يُرسل شيء بعد.',
     kinds: { watch: 'رصد', radar: 'تنبيه الرادار', briefing: 'تقرير تنفيذي', report: 'تقرير' },
-    status: { sent: 'أُرسل', failed: 'فشل', blocked: 'محجوب (خارج النطاقات)' },
+    status: { sent: 'أُرسل', failed: 'فشل', blocked: 'محجوب (خارج النطاقات)', skipped: 'لم يُرسل (بلا مستلم)' },
     cols: ['الوقت', 'النوع', 'الموضوع', 'الأخبار', 'القنوات', 'المستلمون', 'النتيجة'],
   },
   en: {
@@ -19,7 +19,7 @@ const TEXT = {
     intro: 'Everything the platform sent by email or Telegram: watches, radar alerts, executive briefing and reports.',
     empty: 'Nothing sent yet.',
     kinds: { watch: 'Watch', radar: 'Radar alert', briefing: 'Executive briefing', report: 'Report' },
-    status: { sent: 'Sent', failed: 'Failed', blocked: 'Blocked (domain)' },
+    status: { sent: 'Sent', failed: 'Failed', blocked: 'Blocked (domain)', skipped: 'Not sent (no recipient)' },
     cols: ['Time', 'Type', 'Subject', 'News', 'Channels', 'Recipients', 'Result'],
   },
 }

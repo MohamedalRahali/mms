@@ -15,8 +15,8 @@ const TEXT = {
     tone: 'النبرة',
     auto: 'كما حددها الرصد',
     category: 'الموضوع',
-    publicLabel: 'نشر في الواجهة العامة للأخبار',
-    publicHint: 'لا يظهر في الواجهة العامة إلا ما تتم الموافقة عليه صراحة: العنوان والملخص والمصدر والتاريخ والرابط فقط.',
+    publicLabel: 'الواجهة العامة للأخبار',
+    publicHint: 'النشر على الواجهة العامة يتم من صفحة « إدارة البوابة العامة » فقط، بعد المراجعة وإعادة صياغة العنوان والملخص وإرفاق رابط المصدر.',
     save: 'حفظ',
     cancel: 'إلغاء',
     saved: 'تم الحفظ.',
@@ -42,8 +42,8 @@ const TEXT = {
     tone: 'Tone',
     auto: 'As set by the monitoring',
     category: 'Topic',
-    publicLabel: 'Publish on the public news portal',
-    publicHint: 'Only explicitly approved news appear on the public portal: title, summary, source, date and link only.',
+    publicLabel: 'Public news portal',
+    publicHint: 'Publishing on the public portal is done only from « Public portal management », after review, with a rewritten title and summary and the source link.',
     save: 'Save',
     cancel: 'Cancel',
     saved: 'Saved.',
@@ -98,15 +98,15 @@ export function EditItemButton({ item }: { item: NewsItem }) {
   const [open, setOpen] = useState(false)
   const [tone, setTone] = useState<Tone | ''>('')
   const [category, setCategory] = useState(item.category)
-  const [pub, setPub] = useState(Boolean(item.public))
+
   const [msg, setMsg] = useState('')
-  if (!canEdit && !canPublish) return null
+  if (!canEdit) return null
   async function save(e: FormEvent) {
     e.preventDefault()
     setMsg('')
     const calls: Promise<Response>[] = []
     if (canEdit) calls.push(fetch(`/api/items/${encodeURIComponent(item.id)}/edit`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tone, category: category === item.category && !item.edited ? '' : category }) }))
-    if (canPublish && pub !== Boolean(item.public)) calls.push(fetch(`/api/items/${encodeURIComponent(item.id)}/public`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ public: pub }) }))
+
     const res = await Promise.all(calls)
     const bad = res.find((r) => !r.ok)
     if (bad) return setMsg(t.errors[(await bad.json().catch(() => ({}))).error] ?? t.errors.generic)
@@ -122,7 +122,7 @@ export function EditItemButton({ item }: { item: NewsItem }) {
   }
   return (
     <>
-      <button type="button" className={item.public ? 'news-card__fav is-on' : 'news-card__fav'} title={item.public ? `${t.edit} · ${t.publicLabel}` : t.edit} aria-label={t.edit} onClick={() => setOpen(true)}>
+      <button type="button" className="news-card__fav" title={t.edit} aria-label={t.edit} onClick={() => setOpen(true)}>
         ✎
       </button>
       {open && (
@@ -158,13 +158,12 @@ export function EditItemButton({ item }: { item: NewsItem }) {
               </>
             )}
             {canPublish && (
-              <label className="item-edit__check">
-                <input type="checkbox" checked={pub} onChange={(e) => setPub(e.target.checked)} />
+              <p className="item-edit__check">
                 <span>
                   {t.publicLabel}
                   <small>{t.publicHint}</small>
                 </span>
-              </label>
+              </p>
             )}
             {item.edited && <p className="news-status">{t.edited(item.edited.by)}</p>}
             <div className="mms-modal__actions">

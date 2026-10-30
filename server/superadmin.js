@@ -6,7 +6,8 @@ import express from 'express'
 import { closeSessions, currentUser, hashPassword, readUsers, ROLES, setAuthListener, userSessions, writeUsers } from './auth.js'
 import { getItems, setHidden } from './store.js'
 import { keyStatus } from './keys.js'
-import { aiUsage } from './ai.js'
+import { aiStatus, aiUsage } from './ai.js'
+import { auditSummary } from './auditTrail.js'
 import { mountPermissionsAdmin, permsOf, profileExists } from './permissions.js'
 import { initBrand, mountClientAdmin } from './clientAdmin.js'
 import { sourceHealth } from './sourceHealth.js'
@@ -475,6 +476,9 @@ export function mountSuperAdmin(app, root) {
       // Clés présentes ou absentes (jamais leur valeur) et dépense estimée de l'analyse intelligente
       keys: keyStatus(root),
       aiUsage: aiUsage(),
+      // Moteurs d'IA : réutilisation des données, clé Gemini gratuite détectée (audit v4)
+      aiStatus: aiStatus(),
+      audit: auditSummary(),
     })
   })
 

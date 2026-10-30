@@ -7,7 +7,7 @@ import { NewsList } from './components/NewsList'
 import { StatsView } from './components/StatsView'
 import { DailyReport } from './components/DailyReport'
 import { Toolbar } from './components/Toolbar'
-import { AiAnalysis, Alerts, Favorites, Help, Presentation, Survey, UpdateToast } from './components/Extras'
+import { AiAnalysis, Alerts, Favorites, Presentation, Survey, UpdateToast } from './components/Extras'
 import { type Filters, type Flux, type NewsResponse, DrillContext, RefreshContext, ReloadContext, useFetch } from './lib/news'
 import { SpikeBanner } from './components/Intel'
 import { CommandHero } from './components/Hero'
@@ -45,6 +45,11 @@ const ClipModal = lazy(() => import('./components/BroadcastStudio').then((m) => 
 const SearchPool = lazy(() => import('./components/SearchPool').then((m) => ({ default: m.SearchPool })))
 const GeoPresence = lazy(() => import('./components/GeoPresence').then((m) => ({ default: m.GeoPresence })))
 const PortalFeed = lazy(() => import('./components/PortalFeed').then((m) => ({ default: m.PortalFeed })))
+// Audit produit v4 : journal d'audit (administrateurs), note de sécurité, base des journalistes, centre d'aide
+const AuditTrail = lazy(() => import('./components/AuditTrail'))
+const SecurityNote = lazy(() => import('./components/SecurityNote'))
+const Journalists = lazy(() => import('./components/Journalists'))
+const HelpCenter = lazy(() => import('./components/HelpCenter'))
 
 type View =
   | 'dashboard'
@@ -65,6 +70,9 @@ type View =
   | 'geo'
   | 'pool'
   | 'portal-admin'
+  | 'audit'
+  | 'security'
+  | 'journalists'
   | `media-${MediaPageType}`
   | 'media-live'
 const VIEWS: View[] = [
@@ -86,14 +94,17 @@ const VIEWS: View[] = [
   'geo',
   'pool',
   'portal-admin',
+  'audit',
+  'security',
+  'journalists',
   ...MEDIA_PAGES.map((m) => `media-${m}` as const),
   'media-live',
 ]
 
 /** Module de permissions dont dépend chaque page (null : toujours ouverte) */
 function moduleOf(v: View): ModuleKey | null {
-  if (v === 'help') return null
-  if (v === 'pool' || v === 'portal-admin') return 'news'
+  if (v === 'help' || v === 'security' || v === 'audit') return null
+  if (v === 'pool' || v === 'portal-admin' || v === 'journalists') return 'news'
   if (v.startsWith('media-')) return 'media'
   return v as ModuleKey
 }
@@ -101,6 +112,8 @@ const viewAllowed = (user: User | undefined | null, v: View) => {
   const m = moduleOf(v)
   // إدارة البوابة العامة : seulement les profils qui ont le droit de publier sur la vitrine
   if (v === 'portal-admin' && !canDo(user, 'publish_public')) return false
+  // سجل التدقيق : administrateurs du client seulement (le serveur refuse aussi les autres)
+  if (v === 'audit' && user?.role !== 'admin') return false
   return !m || hasModule(user, m)
 }
 
@@ -152,6 +165,9 @@ const ICONS: Record<string, string> = {
   pool: 'M3 5h11v2H3zm0 4h7v2H3zm0 4h7v2H3zm0 4h11v2H3zm13.5-8a4.5 4.5 0 0 1 3.6 7.2l2.6 2.6-1.4 1.4-2.6-2.6A4.5 4.5 0 1 1 16.5 9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z',
   geo: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2a8 8 0 0 1 7.7 6H15l-1.5-2.5L12 10l-1.5-2.5L9 10H4.3A8 8 0 0 1 12 4zm0 16a8 8 0 0 1-7.7-8H9l1.5 2.5L12 12l1.5 2.5L15 12h4.7A8 8 0 0 1 12 20z',
   team: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm7 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM1 20c0-3.3 3.6-6 8-6s8 2.7 8 6v1H1v-1zm17.5 1v-1c0-1.9-.8-3.6-2.1-4.8 3.5.3 6.6 2.3 6.6 4.8v1h-4.5z',
+  journalists: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm7 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM1 20c0-3.3 3.6-6 8-6s8 2.7 8 6v1H1v-1zm17.5 1v-1c0-1.9-.8-3.6-2.1-4.8 3.5.3 6.6 2.3 6.6 4.8v1h-4.5z',
+  security: 'M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3zm-1 14-4-4 1.4-1.4L11 13.2l4.6-4.6L17 10l-6 6z',
+  audit: 'M5 3h10l4 4v14H5V3zm9 1.5V8h3.5L14 4.5zM7 11h10v1.6H7zm0 3.5h10v1.6H7zm0 3.5h6v1.6H7z',
 }
 
 const SUN =
@@ -302,8 +318,12 @@ export default function App() {
     const status = useFetch<NewsResponse>('/api/news?size=1').data
     // Pages de médias sans aucune publication dans la base (aujourd'hui : les podcasts) : retirées du menu, elles
     // reviennent d'elles-mêmes dès que la veille en collecte ; l'adresse directe reste valable
-    const mediaCounts = useFetch<{ media?: { name: string; count: number }[] }>('/api/news/facets').data?.media
-    const shownMedia = MEDIA_PAGES.filter((m) => m !== 'podcast' || !mediaCounts || mediaCounts.some((c) => c.name === m && c.count > 0))
+    const facets = useFetch<{ media?: { name: string; count: number }[]; mediaLast?: Record<string, string> }>('/api/news/facets').data
+    const mediaCounts = facets?.media
+    // Podcasts : section masquée sans épisode depuis 21 jours (les émissions suivies ne publient plus, audit v4)
+    const podcastLast = facets?.mediaLast?.podcast
+    const podcastLive = Boolean(podcastLast && Date.now() - Date.parse(podcastLast) < 21 * 86_400_000)
+    const shownMedia = MEDIA_PAGES.filter((m) => m !== 'podcast' || !facets || (podcastLive && Boolean(mediaCounts?.some((c) => c.name === m && c.count > 0))))
 
     function setLang(next: Lang) {
       if (next !== lang) track('lang', next)
@@ -357,6 +377,7 @@ export default function App() {
           { key: 'compare', label: pro.navCompare },
           { key: 'geo', label: lang === 'ar' ? 'الحضور في إجابات النموذج الداخلي' : 'Presence in internal-model answers' },
           { key: 'pool', label: lang === 'ar' ? 'مجمع البحث' : 'Search pool' },
+          { key: 'journalists', label: lang === 'ar' ? 'الصحفيون ووسائل الإعلام' : 'Journalists & media' },
         ],
       },
       {
@@ -385,6 +406,8 @@ export default function App() {
         group: t.sideHelp,
         items: [
           { key: 'help', label: t.sideHelp },
+          { key: 'security', label: lang === 'ar' ? 'ملاحظة الأمان' : 'Security note' },
+          { key: 'audit', label: lang === 'ar' ? 'سجل التدقيق' : 'Audit log' },
         ],
       },
     ]
@@ -646,7 +669,10 @@ export default function App() {
                       {shown === 'report' && <DailyReport key={`${flux}|${reportDay}`} flux={flux} initialDay={reportDay} />}
                       {shown === 'alerts' && <Alerts flux={flux} />}
                       {shown === 'favorites' && <Favorites />}
-                      {shown === 'help' && <Help />}
+                      {shown === 'help' && <HelpCenter />}
+                      {shown === 'security' && <SecurityNote />}
+                      {shown === 'audit' && <AuditTrail />}
+                      {shown === 'journalists' && <Journalists />}
                       {shown === 'assistant' &&
                         (canDo(auth?.user, 'ai_ask') ? (
                           <Around flux={flux} />

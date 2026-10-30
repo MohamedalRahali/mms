@@ -1,13 +1,15 @@
 /**
  * Vitrine publique d'actualités (/portal) : API en lecture seule, sans connexion.
  *
- * Seules les fiches retenues par la diffusion (server/portalFeed.js : règles automatiques réglées dans MMS, épingles,
- * approbations une à une, exclusions) sont exposées, et seulement ces champs : titre, résumé (600 caractères au plus),
- * source, date, lien vers l'original, image, thème, langue, type de contenu, épinglée. Rien d'autre (tonalité, entités, transcriptions, réglages, comptes, statistiques internes) ne
- * sort par ici. Limite de débit par adresse IP, cache public court, pas d'indexation des pages de détail sans lien.
+ * Seules les fiches publiées à la main (server/portalFeed.js : validation humaine, titre et résumé réécrits, lien vers
+ * la source) sont exposées, avec le texte publié et non celui de la source, et seulement ces champs : titre, résumé
+ * (600 caractères au plus), source, date, lien vers l'original, image (articles et blogs seulement : jamais la vignette
+ * d'une vidéo YouTube ni d'un message X), thème, langue, type de contenu, épinglée. Rien d'autre (tonalité, entités,
+ * transcriptions, réglages, comptes, statistiques internes) ne sort par ici. Limite de débit par adresse IP, cache
+ * public court, pas d'indexation des pages de détail sans lien.
  */
 
-import { portalSelection, portalSite, typeOf, TYPES } from './portalFeed.js'
+import { portalSelection, portalSite, publishedOf, typeOf, TYPES } from './portalFeed.js'
 
 const httpUrl = (u) => (/^https?:\/\/[^\s"'<>]+$/i.test(String(u || '')) ? String(u) : '')
 const shortText = (s, n) => {
@@ -15,20 +17,26 @@ const shortText = (s, n) => {
   return t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t
 }
 
-/** Champs publics d'une fiche approuvée */
+// Contenus de tiers (vidéos, messages des réseaux, émissions) : jamais leur image, seulement le texte réécrit et le lien
+const IMAGE_TYPES = new Set(['article', 'blog'])
+
+/** Champs publics d'une fiche publiée : le texte réécrit et validé, pas celui de la source */
 export function portalItem(it, pinned = false) {
+  const pub = publishedOf(it.id)
+  const type = typeOf(it)
   return {
     id: it.id,
-    title: shortText(it.title, 300),
-    summary: shortText(it.summary, 600),
+    title: shortText(pub?.title ?? it.title, 300),
+    summary: shortText(pub?.summary ?? it.summary, 600),
     source: it.origin,
     date: it.date,
-    url: httpUrl(it.url),
-    image: httpUrl(it.image),
+    url: httpUrl(pub?.url || it.url),
+    image: IMAGE_TYPES.has(type) ? httpUrl(it.image) : '',
     category: it.category || '',
     lang: it.lang || 'ar',
-    type: typeOf(it),
+    type,
     pinned: Boolean(pinned),
+    publishedAt: pub?.at || '',
   }
 }
 
@@ -42,10 +50,10 @@ const norm = (s) =>
 
 /**
  * Liste filtrée et paginée des fiches publiques (recherche, thème, source, langue, type, période).
- * Sans sélection fournie (tests, ancien appel), seules les fiches approuvées une à une sont publiques.
+ * Sans sélection fournie (tests, ancien appel), seules les fiches publiées à la main sont publiques.
  */
 export function portalNews(items, q = {}, selection = null) {
-  const pub = selection ? selection.list : items.filter((it) => it.public === true)
+  const pub = selection ? selection.list : items.filter((it) => publishedOf(it.id))
   const pinned = selection?.pinned || new Set()
   const needle = norm(String(q.q || '').trim().slice(0, 200))
   const from = /^\d{4}-\d{2}-\d{2}$/.test(q.from || '') ? Date.parse(`${q.from}T00:00:00+02:00`) : 0
@@ -59,7 +67,7 @@ export function portalNews(items, q = {}, selection = null) {
         (!q.type || typeOf(it) === q.type) &&
         Date.parse(it.date) >= from &&
         Date.parse(it.date) <= to &&
-        (!needle || norm(`${it.title} ${it.summary} ${it.origin}`).includes(needle)),
+        (!needle || norm(`${publishedOf(it.id)?.title ?? it.title} ${publishedOf(it.id)?.summary ?? it.summary} ${it.origin}`).includes(needle)),
     )
     .sort((a, b) => Number(pinned.has(b.id)) - Number(pinned.has(a.id)) || b.date.localeCompare(a.date))
   const size = Math.min(Math.max(Number(q.size) || 12, 1), 48)

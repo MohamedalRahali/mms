@@ -21,6 +21,8 @@ type Chaine = {
   ajout?: boolean
   attente?: boolean
   erreur?: string | null
+  coupe_depuis?: string | null
+  continu?: boolean
   dernier_succes?: string | null
   dernier_enregistrement?: string | null
   derniere_transcription?: string | null
@@ -68,6 +70,7 @@ const TEXT = {
     kind: 'النوع',
     badInput: 'بيانات غير صالحة (تحقق من الرابط والأوقات).',
     never: '—',
+    errs: { STREAM_DOWN: 'البث لا يستجيب حالياً.', YOUTUBE_BLOCKED: 'يوتيوب يرفض الخادم مؤقتاً: يُفضَّل رابط بث مباشر.', TIMEOUT: 'البث لم يستجب في الوقت المحدد.', TECHNICAL: 'خلل تقني في مصدر البث.', NO_AUDIO: 'لم يُستقبل صوت.' } as Record<string, string>,
     updated: 'تحديث الحالة',
     max: (n: number) => `حدّ التسجيل المتزامن: ${n}`,
     legal: 'استعمل فقط روابط تنشرها القناة نفسها أو دليلًا عامًا (radio-browser.info).',
@@ -110,6 +113,7 @@ const TEXT = {
     kind: 'Type',
     badInput: 'Invalid input (check the URL and slots).',
     never: '—',
+    errs: { STREAM_DOWN: 'The stream is not responding.', YOUTUBE_BLOCKED: 'YouTube is refusing the server for now: a direct stream link is better.', TIMEOUT: 'The stream did not answer in time.', TECHNICAL: 'Technical problem with the stream source.', NO_AUDIO: 'No audio received.' } as Record<string, string>,
     updated: 'Status updated',
     max: (n: number) => `Max simultaneous recordings: ${n}`,
     legal: 'Only use streams published by the channel itself or a public directory (radio-browser.info).',
@@ -197,9 +201,16 @@ function Row({ ch, onChange }: { ch: Chaine; onChange: () => void }) {
       </td>
       <td>
         <span className={`dif-state dif-state--${state}`}>{d[state]}</span>
+        {ch.coupe_depuis && (
+          <small className="dif-warn" role="alert">
+            {i.lang === 'ar' ? `⚠ البث منقطع منذ ${i.dateTime(ch.coupe_depuis)} (تم تنبيه الفريق)` : `⚠ Stream cut since ${i.dateTime(ch.coupe_depuis)} (team alerted)`}
+          </small>
+        )}
+        {ch.continu && <small>{i.lang === 'ar' ? 'تسجيل متواصل 24/24' : 'Continuous 24/7 recording'}</small>}
         {ch.erreur && (
-          <small className="dif-warn" dir="ltr" title={ch.erreur}>
-            {ch.erreur.slice(0, 120)}
+          // Non-administrateurs : le serveur ne renvoie qu'un code (STREAM_DOWN|3…), traduit ici en phrase claire
+          <small className="dif-warn" dir={/^[A-Z_]+(\|\d+)?$/.test(ch.erreur) ? 'auto' : 'ltr'} title={ch.erreur}>
+            {/^[A-Z_]+(\|\d+)?$/.test(ch.erreur) ? (d.errs[ch.erreur.split('|')[0]] ?? d.errs.TECHNICAL) : ch.erreur.slice(0, 120)}
           </small>
         )}
         <label className="dif-switch">

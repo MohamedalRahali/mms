@@ -4,9 +4,10 @@ import { PageHead } from './Extras'
 import './portalFeed.css'
 
 /**
- * إدارة البوابة العامة : ce qui passe automatiquement sur la vitrine publique /portal (server/portalFeed.js).
- * Règles à gauche, aperçu à droite calculé sur les règles en cours de modification (avant enregistrement),
- * épingler, exclure ou rétablir une actualité depuis l'aperçu. Réservé au droit « publish_public ».
+ * إدارة البوابة العامة : publication MANUELLE sur la vitrine publique /portal (server/portalFeed.js).
+ * Les règles à gauche ne font que proposer des actualités (onglet « مقترحة ») ; chaque publication passe par
+ * l'éditeur : titre et résumé réécrits, lien vers la source, case de validation. Journal des publications en bas.
+ * Réservé au droit « publish_public ».
  */
 
 type FeedType = 'article' | 'tv' | 'radio' | 'youtube' | 'podcast' | 'blog' | 'social' | 'forum'
@@ -32,9 +33,13 @@ type Config = {
 }
 type Count = { name: string; count: number }
 type Mark = { id: string; by: string; at: string; until?: string; title: string; source: string; date: string; missing: boolean }
+type Published = { title: string; summary: string; url: string; by: string; at: string; updatedBy?: string; updatedAt?: string }
+type LogRow = { at: string; action: string; by: string; id: string; title: string; original?: string; source?: string }
 type FeedState = {
   config: Config
   defaults: Config
+  published: Mark[]
+  log: LogRow[]
   pins: Mark[]
   excluded: Mark[]
   updatedBy: string
@@ -54,17 +59,18 @@ type Row = {
   image: string
   url: string
   importance: number
-  status: 'pinned' | 'shown' | 'hidden' | 'excluded'
+  status: 'pinned' | 'shown' | 'suggested' | 'hidden' | 'excluded'
   reason: string
+  published: Published | null
 }
 type Preview = {
-  stats: { shown: number; pinned: number; approved: number; excluded: number; last24h: number; byType: Record<string, number>; byLang: Record<string, number>; bySource: Count[]; hiddenBy: Record<string, number> }
+  stats: { shown: number; suggested: number; pinned: number; approved: number; excluded: number; last24h: number; byType: Record<string, number>; byLang: Record<string, number>; bySource: Count[]; hiddenBy: Record<string, number> }
   total: number
   page: number
   pages: number
   items: Row[]
 }
-type Tab = 'shown' | 'hidden' | 'pinned' | 'excluded'
+type Tab = 'suggested' | 'shown' | 'hidden' | 'pinned' | 'excluded'
 
 const TYPES: FeedType[] = ['article', 'tv', 'radio', 'youtube', 'podcast', 'blog', 'social', 'forum']
 const ICON: Record<FeedType, string> = { article: '📰', tv: '📺', radio: '📻', youtube: '▶', podcast: '🎙', blog: '✍', social: '💬', forum: '🗨' }
@@ -72,7 +78,38 @@ const ICON: Record<FeedType, string> = { article: '📰', tv: '📺', radio: '�
 const TEXT = {
   ar: {
     title: 'إدارة البوابة العامة',
-    intro: 'تُنشر الأخبار تلقائياً على البوابة العامة حسب القواعد أدناه. اختر الأنواع والمصادر والمواضيع واللغات والكلمات، ثبّت خبراً في الصدارة أو استبعده، وراجع النتيجة في المعاينة قبل الحفظ.',
+    intro: 'النشر على البوابة العامة يدوي فقط: القواعد أدناه تقترح الأخبار، ولا يُنشر أي خبر إلا بعد مراجعته وإعادة صياغة عنوانه وملخصه وإرفاق رابط المصدر. كل عملية نشر أو سحب مسجّلة في سجل النشر.',
+    manualOnly: 'نشر يدوي فقط — لا شيء يُنشر تلقائياً',
+    manualHint: 'القواعد تحدد الأخبار المقترحة فقط. افتح « مقترحة »، ثم « إعادة الصياغة والنشر ».',
+    kSuggested: 'مقترحة (30 يوماً)',
+    publishBtn: 'إعادة الصياغة والنشر',
+    editBtn: 'تعديل النص المنشور',
+    unpublish: 'سحب من البوابة',
+    unpublishAsk: 'سحب هذا الخبر من البوابة العامة؟',
+    edTitle: 'العنوان المنشور (بصياغتكم)',
+    edSummary: 'الملخص المنشور (بصياغتكم، 40 إلى 600 حرف)',
+    edUrl: 'رابط المصدر الأصلي',
+    edOriginal: 'النص الأصلي (للمرجع، لا يُنشر)',
+    edConfirm: 'راجعتُ الخبر وتحققتُ من مصدره، وأعدتُ صياغة العنوان والملخص.',
+    edNote: 'لا تُنشر الفيديوهات ولا منشورات X والشبكات كاملة: الملخص المعاد صياغته والرابط فقط.',
+    edSave: 'نشر على البوابة',
+    edUpdate: 'حفظ التعديل',
+    edCancel: 'إلغاء',
+    pubBy: (by: string, at: string) => `نشره ${by || '—'} في ${at}`,
+    errs: {
+      NOT_CONFIRMED: 'يجب تأكيد المراجعة قبل النشر.',
+      TITLE_LENGTH: 'العنوان بين 10 و200 حرف.',
+      SUMMARY_LENGTH: 'الملخص بين 40 و600 حرف.',
+      NO_URL: 'رابط المصدر مطلوب (يبدأ بـ http).',
+      TITLE_COPY: 'العنوان منسوخ من المصدر: أعيدوا صياغته.',
+      SUMMARY_COPY: 'الملخص منسوخ من المصدر: أعيدوا صياغته.',
+      NOT_PUBLISHED: 'لا يمكن تثبيت خبر غير منشور.',
+      TYPE: 'التعليقات لا تُنشر.',
+    } as Record<string, string>,
+    log: 'سجل النشر',
+    logCsv: 'تنزيل السجل (CSV)',
+    logEmpty: 'لا توجد عمليات نشر بعد.',
+    acts: { publish: 'نشر', update: 'تعديل', unpublish: 'سحب', pin: 'تثبيت', unpin: 'إلغاء تثبيت', exclude: 'استبعاد', include: 'إرجاع', manual_only: 'تفعيل النشر اليدوي فقط' } as Record<string, string>,
     open: 'فتح البوابة ↗',
     on: 'النشر مفعّل',
     off: 'النشر متوقف',
@@ -115,12 +152,12 @@ const TEXT = {
     reqImage: 'صورة مطلوبة',
     cap: 'الحد الأقصى لكل مصدر في اليوم',
     capNone: 'بدون حد',
-    approved: 'إضافة الأخبار المعتمدة يدوياً (✎ « الواجهة العامة ») حتى لو لم تطابق القواعد',
+    approved: '',
     site: 'واجهة البوابة',
     siteTitle: 'عنوان البوابة',
     siteIntro: 'نص تعريفي قصير',
     siteHint: 'يظهر في رأس البوابة. اتركه فارغاً للنص الافتراضي.',
-    save: 'حفظ ونشر',
+    save: 'حفظ قواعد الاقتراح',
     saving: 'جارٍ الحفظ…',
     saved: 'تم الحفظ. البوابة تتحدّث خلال دقيقة.',
     discard: 'تجاهل التغييرات',
@@ -128,7 +165,7 @@ const TEXT = {
     resetAsk: 'إرجاع كل القواعد إلى الإعدادات الافتراضية؟ التثبيت والاستبعاد لا يتغيران.',
     dirty: 'تغييرات غير محفوظة — المعاينة تعرض النتيجة بعد الحفظ',
     preview: 'المعاينة',
-    tabs: { shown: 'المعروض', hidden: 'غير المعروض', pinned: 'المثبّت', excluded: 'المستبعد' } as Record<Tab, string>,
+    tabs: { suggested: 'مقترحة', shown: 'المنشور', hidden: 'غير المقترح', pinned: 'المثبّت', excluded: 'المستبعد' } as Record<Tab, string>,
     search: 'ابحث في العناوين',
     allTypes: 'كل الأنواع',
     pinFor: 'مدة التثبيت',
@@ -151,7 +188,8 @@ const TEXT = {
     reasons: {
       pinned: 'مثبّت',
       approved: 'معتمد يدوياً',
-      rules: 'يطابق القواعد',
+      published: 'منشور بعد المراجعة',
+      rules: 'مقترح (يطابق القواعد)',
       excluded: 'مستبعد يدوياً',
       disabled: 'النشر متوقف',
       notAuto: 'النشر التلقائي غير مفعّل',
@@ -168,7 +206,7 @@ const TEXT = {
       image: 'بدون صورة',
       cap: 'تجاوز حد المصدر اليومي',
     } as Record<string, string>,
-    hiddenBy: 'أسباب عدم النشر (30 يوماً)',
+    hiddenBy: 'أسباب عدم الاقتراح (30 يوماً)',
     byType: 'التوزيع حسب النوع',
     bySource: 'أكثر المصادر حضوراً',
     history: 'سجل التغييرات',
@@ -178,7 +216,38 @@ const TEXT = {
   },
   en: {
     title: 'Public portal management',
-    intro: 'News is published automatically on the public portal according to the rules below. Pick types, sources, topics, languages and keywords, pin a story to the top or exclude it, and check the result in the preview before saving.',
+    intro: 'Publishing on the public portal is manual only: the rules below suggest news, and nothing is published until someone has reviewed it, rewritten its title and summary and attached the source link. Every publication and withdrawal is recorded in the publication log.',
+    manualOnly: 'Manual publishing only — nothing is published automatically',
+    manualHint: 'The rules only select suggested news. Open « Suggested », then « Rewrite and publish ».',
+    kSuggested: 'Suggested (30 days)',
+    publishBtn: 'Rewrite and publish',
+    editBtn: 'Edit published text',
+    unpublish: 'Withdraw from portal',
+    unpublishAsk: 'Withdraw this story from the public portal?',
+    edTitle: 'Published title (your own wording)',
+    edSummary: 'Published summary (your own wording, 40 to 600 characters)',
+    edUrl: 'Link to the original source',
+    edOriginal: 'Original text (reference only, not published)',
+    edConfirm: 'I reviewed this story, checked its source and rewrote the title and summary.',
+    edNote: 'Videos, X posts and social media are never republished in full: only the rewritten summary and the link.',
+    edSave: 'Publish on the portal',
+    edUpdate: 'Save changes',
+    edCancel: 'Cancel',
+    pubBy: (by: string, at: string) => `Published by ${by || '—'} on ${at}`,
+    errs: {
+      NOT_CONFIRMED: 'Please confirm the review before publishing.',
+      TITLE_LENGTH: 'Title must be 10 to 200 characters.',
+      SUMMARY_LENGTH: 'Summary must be 40 to 600 characters.',
+      NO_URL: 'A source link (http…) is required.',
+      TITLE_COPY: 'The title copies the source: please rewrite it.',
+      SUMMARY_COPY: 'The summary copies the source: please rewrite it.',
+      NOT_PUBLISHED: 'Only published stories can be pinned.',
+      TYPE: 'Comments are never published.',
+    } as Record<string, string>,
+    log: 'Publication log',
+    logCsv: 'Download log (CSV)',
+    logEmpty: 'Nothing published yet.',
+    acts: { publish: 'Published', update: 'Edited', unpublish: 'Withdrawn', pin: 'Pinned', unpin: 'Unpinned', exclude: 'Excluded', include: 'Restored', manual_only: 'Manual-only publishing enabled' } as Record<string, string>,
     open: 'Open the portal ↗',
     on: 'Publishing on',
     off: 'Publishing paused',
@@ -221,12 +290,12 @@ const TEXT = {
     reqImage: 'Image required',
     cap: 'Maximum per source per day',
     capNone: 'No limit',
-    approved: 'Also show news approved one by one (✎ « public portal »), even if it does not match the rules',
+    approved: '',
     site: 'Portal header',
     siteTitle: 'Portal title',
     siteIntro: 'Short introduction',
     siteHint: 'Shown at the top of the portal. Leave empty for the default text.',
-    save: 'Save and publish',
+    save: 'Save suggestion rules',
     saving: 'Saving…',
     saved: 'Saved. The portal updates within a minute.',
     discard: 'Discard changes',
@@ -234,7 +303,7 @@ const TEXT = {
     resetAsk: 'Reset all rules to the defaults? Pins and exclusions stay.',
     dirty: 'Unsaved changes — the preview shows the result after saving',
     preview: 'Preview',
-    tabs: { shown: 'Shown', hidden: 'Not shown', pinned: 'Pinned', excluded: 'Excluded' } as Record<Tab, string>,
+    tabs: { suggested: 'Suggested', shown: 'Published', hidden: 'Not suggested', pinned: 'Pinned', excluded: 'Excluded' } as Record<Tab, string>,
     search: 'Search titles',
     allTypes: 'All types',
     pinFor: 'Pin for',
@@ -257,7 +326,8 @@ const TEXT = {
     reasons: {
       pinned: 'Pinned',
       approved: 'Approved manually',
-      rules: 'Matches the rules',
+      published: 'Published after review',
+      rules: 'Suggested (matches the rules)',
       excluded: 'Excluded manually',
       disabled: 'Publishing paused',
       notAuto: 'Automatic publishing off',
@@ -274,7 +344,7 @@ const TEXT = {
       image: 'No image',
       cap: 'Over the daily source limit',
     } as Record<string, string>,
-    hiddenBy: 'Why news is not shown (30 days)',
+    hiddenBy: 'Why news is not suggested (30 days)',
     byType: 'By type',
     bySource: 'Top sources',
     history: 'Change log',
@@ -346,7 +416,8 @@ export function PortalFeed() {
   const [cfg, setCfg] = useState<Config | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
-  const [tab, setTab] = useState<Tab>('shown')
+  const [tab, setTab] = useState<Tab>('suggested')
+  const [editing, setEditing] = useState<string>('')
   const [q, setQ] = useState('')
   const [type, setType] = useState('')
   const [page, setPage] = useState(1)
@@ -415,7 +486,22 @@ export function PortalFeed() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, until: action === 'pin' && pinDays ? tripoliDay(pinDays) : '' }),
     })
+    if (!r.ok) {
+      const e = (await r.json().catch(() => ({}))) as { error?: string }
+      return setMsg(t.errs[e.error ?? ''] ?? t.loadErr)
+    }
+    setPvBump((n) => n + 1)
+    load()
+  }
+  async function unpublish(id: string) {
+    if (!window.confirm(t.unpublishAsk)) return
+    const r = await fetch(`/api/portal-feed/unpublish/${encodeURIComponent(id)}`, { method: 'POST' })
     if (!r.ok) return setMsg(t.loadErr)
+    setPvBump((n) => n + 1)
+    load()
+  }
+  const published = () => {
+    setEditing('')
     setPvBump((n) => n + 1)
     load()
   }
@@ -456,20 +542,16 @@ export function PortalFeed() {
           <span className="pf-switch__knob" aria-hidden />
           {cfg.enabled ? t.on : t.off}
         </button>
-        <div className="pf-seg" role="radiogroup" aria-label={t.mode}>
-          <button type="button" role="radio" aria-checked={cfg.auto} className={cfg.auto ? 'is-on' : ''} onClick={() => set({ auto: true })}>
-            {t.auto}
-          </button>
-          <button type="button" role="radio" aria-checked={!cfg.auto} className={!cfg.auto ? 'is-on' : ''} onClick={() => set({ auto: false })}>
-            {t.manual}
-          </button>
-        </div>
+        <p className="pf-manual" title={t.manualHint}>
+          ✋ <b>{t.manualOnly}</b>
+          <small>{t.manualHint}</small>
+        </p>
         <div className="pf-kpis">
           <span>
             <b>{s?.shown ?? '—'}</b> {t.kShown}
           </span>
           <span>
-            <b>{s?.last24h ?? '—'}</b> {t.k24}
+            <b>{s?.suggested ?? '—'}</b> {t.kSuggested}
           </span>
           <span>
             <b>{s?.pinned ?? '—'}</b> {t.kPinned}
@@ -484,7 +566,7 @@ export function PortalFeed() {
 
       <div className="pf-grid">
         <div className="pf-rules">
-          <fieldset className="pf-card" disabled={!cfg.auto}>
+          <fieldset className="pf-card">
             <legend>{t.types}</legend>
             <Chips
               values={TYPES.map((x) => ({ name: x, label: t.type[x], count: typeCount.get(x) ?? 0 }))}
@@ -495,7 +577,7 @@ export function PortalFeed() {
             <small className="pf-hint">{t.typesHint}</small>
           </fieldset>
 
-          <fieldset className="pf-card" disabled={!cfg.auto}>
+          <fieldset className="pf-card">
             <legend>{t.langs}</legend>
             <Chips values={opts.langs.map((x) => ({ ...x }))} picked={cfg.langs} onChange={(v) => set({ langs: v })} label={(x) => t.lang[x] ?? x} allLabel={t.all} />
             <legend className="pf-sub">{t.cats}</legend>
@@ -503,7 +585,7 @@ export function PortalFeed() {
             <small className="pf-hint">{t.allHint}</small>
           </fieldset>
 
-          <fieldset className="pf-card" disabled={!cfg.auto}>
+          <fieldset className="pf-card">
             <legend>{t.sources}</legend>
             <div className="pf-seg pf-seg--small" role="radiogroup" aria-label={t.sources}>
               {(['all', 'include', 'exclude'] as const).map((m) => (
@@ -538,14 +620,14 @@ export function PortalFeed() {
             )}
           </fieldset>
 
-          <fieldset className="pf-card" disabled={!cfg.auto}>
+          <fieldset className="pf-card">
             <legend>{t.keywords}</legend>
             <Words label="" hint={t.keywordsHint} words={cfg.keywords} onChange={(w) => set({ keywords: w })} placeholder={t.addWord} />
             <legend className="pf-sub">{t.banned}</legend>
             <Words label="" hint={t.bannedHint} words={cfg.excludeKeywords} onChange={(w) => set({ excludeKeywords: w })} placeholder={t.addWord} tone="bad" />
           </fieldset>
 
-          <fieldset className="pf-card" disabled={!cfg.auto}>
+          <fieldset className="pf-card">
             <legend>{t.quality}</legend>
             <div className="pf-row">
               <label className="pf-field">
@@ -593,9 +675,7 @@ export function PortalFeed() {
 
           <fieldset className="pf-card">
             <legend>{t.site}</legend>
-            <label className="pf-checks pf-approved">
-              <input type="checkbox" checked={cfg.includeApproved} onChange={(e) => set({ includeApproved: e.target.checked })} /> {t.approved}
-            </label>
+
             <label className="pf-field">
               <span className="pf-label">{t.siteTitle}</span>
               <input value={cfg.title} maxLength={80} onChange={(e) => set({ title: e.target.value })} dir="auto" />
@@ -607,6 +687,31 @@ export function PortalFeed() {
             <small className="pf-hint">{t.siteHint}</small>
           </fieldset>
 
+          <section className="pf-card pf-log">
+            <h3>
+              {t.log}
+              <a className="pf-link" href="/api/portal-feed/log.csv" download>
+                {t.logCsv}
+              </a>
+            </h3>
+            {st.log.length === 0 ? (
+              <p className="pf-hint">{t.logEmpty}</p>
+            ) : (
+              <ul>
+                {st.log.slice(0, 30).map((h, k) => (
+                  <li key={k}>
+                    <span>{i.dateTime(h.at)}</span> · <b dir="auto">{h.by || '—'}</b> · {t.acts[h.action] ?? h.action}
+                    {h.title && (
+                      <>
+                        {' '}
+                        · <span dir="auto">{h.title}</span>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
           {st.history.length > 0 && (
             <details className="pf-card pf-history">
               <summary>{t.history}</summary>
@@ -667,7 +772,7 @@ export function PortalFeed() {
             )}
 
             <div className="pf-tabs" role="tablist">
-              {(['shown', 'hidden', 'pinned', 'excluded'] as Tab[]).map((k) => (
+              {(['suggested', 'shown', 'pinned', 'excluded', 'hidden'] as Tab[]).map((k) => (
                 <button
                   key={k}
                   type="button"
@@ -680,7 +785,7 @@ export function PortalFeed() {
                   }}
                 >
                   {t.tabs[k]}
-                  {s && <small>{k === 'shown' ? s.shown : k === 'pinned' ? s.pinned : k === 'excluded' ? s.excluded : ''}</small>}
+                  {s && <small>{k === 'suggested' ? s.suggested : k === 'shown' ? s.shown : k === 'pinned' ? s.pinned : k === 'excluded' ? s.excluded : ''}</small>}
                 </button>
               ))}
             </div>
@@ -742,8 +847,10 @@ export function PortalFeed() {
                         </span>
                         <b dir="auto">{x.source}</b> · {i.dateTime(x.date)} · {i.category(x.category)} {x.lang && `· ${x.lang.toUpperCase()}`}
                       </p>
-                      <h4 dir="auto">{x.title}</h4>
-                      {x.summary && <p dir="auto">{x.summary}</p>}
+                      <h4 dir="auto">{x.published?.title ?? x.title}</h4>
+                      {(x.published?.summary ?? x.summary) && <p dir="auto">{x.published?.summary ?? x.summary}</p>}
+                      {x.published && <small className="pf-hint">{t.pubBy(x.published.updatedBy || x.published.by, i.dateTime(x.published.updatedAt || x.published.at))}</small>}
+                      {editing === x.id && <PublishEditor row={x} t={t} onDone={published} onCancel={() => setEditing('')} />}
                       <p className="pf-item__why">
                         <span className={`pf-reason pf-reason--${x.status}`}>{t.reasons[x.reason] ?? x.reason}</span>
                         {x.status === 'pinned' && pin?.until && (
@@ -759,12 +866,22 @@ export function PortalFeed() {
                       </p>
                     </div>
                     <div className="pf-item__acts">
+                      {x.status !== 'excluded' && editing !== x.id && (
+                        <button type="button" className="pf-pub" onClick={() => setEditing(x.id)}>
+                          ✍ {x.published ? t.editBtn : t.publishBtn}
+                        </button>
+                      )}
+                      {x.published && (
+                        <button type="button" onClick={() => unpublish(x.id)}>
+                          ⤺ {t.unpublish}
+                        </button>
+                      )}
                       {x.status === 'pinned' ? (
                         <button type="button" onClick={() => mark(x.id, 'unpin')}>
                           📌 {t.unpin}
                         </button>
                       ) : (
-                        x.status !== 'excluded' && (
+                        x.published && (
                           <button type="button" onClick={() => mark(x.id, 'pin')}>
                             📌 {t.pin}
                           </button>
@@ -809,6 +926,73 @@ export function PortalFeed() {
         </button>
         <button type="button" className="news-btn" disabled={!dirty || busy} onClick={save}>
           {busy ? t.saving : t.save}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+type T = (typeof TEXT)['ar'] | (typeof TEXT)['en']
+
+/** Éditeur de publication : texte réécrit, lien, validation humaine ; le serveur refuse une copie de la source */
+function PublishEditor({ row, t, onDone, onCancel }: { row: Row; t: T; onDone: () => void; onCancel: () => void }) {
+  const [title, setTitle] = useState(row.published?.title ?? '')
+  const [summary, setSummary] = useState(row.published?.summary ?? '')
+  const [url, setUrl] = useState(row.published?.url ?? row.url)
+  const [confirm, setConfirm] = useState(false)
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  async function send() {
+    setBusy(true)
+    setErr('')
+    const r = await fetch(`/api/portal-feed/publish/${encodeURIComponent(row.id)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, summary, url, confirm }),
+    })
+    setBusy(false)
+    if (r.ok) return onDone()
+    const e = (await r.json().catch(() => ({}))) as { error?: string }
+    setErr(t.errs[e.error ?? ''] ?? t.loadErr)
+  }
+  return (
+    <div className="pf-editor">
+      <details>
+        <summary>{t.edOriginal}</summary>
+        <p dir="auto">
+          <b>{row.title}</b>
+        </p>
+        {row.summary && <p dir="auto">{row.summary}</p>}
+      </details>
+      <label className="pf-field">
+        <span className="pf-label">{t.edTitle}</span>
+        <input value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} dir="auto" />
+      </label>
+      <label className="pf-field">
+        <span className="pf-label">
+          {t.edSummary} <small>{summary.trim().length}/600</small>
+        </span>
+        <textarea value={summary} maxLength={600} rows={4} onChange={(e) => setSummary(e.target.value)} dir="auto" />
+      </label>
+      <label className="pf-field">
+        <span className="pf-label">{t.edUrl}</span>
+        <input value={url} onChange={(e) => setUrl(e.target.value)} dir="ltr" inputMode="url" />
+      </label>
+      <small className="pf-hint">{t.edNote}</small>
+      <label className="pf-checks">
+        <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} /> {t.edConfirm}
+      </label>
+      {err && (
+        <p className="mms-note" role="alert">
+          {err}
+        </p>
+      )}
+      <div className="pf-editor__acts">
+        <button type="button" className="news-btn" disabled={busy || !confirm} onClick={send}>
+          {row.published ? t.edUpdate : t.edSave}
+        </button>
+        <button type="button" className="news-btn news-btn--ghost" onClick={onCancel}>
+          {t.edCancel}
         </button>
       </div>
     </div>

@@ -280,7 +280,7 @@ function WatchRow({ watch, onChange, onOpen, nameOf }: { watch: Watch; onChange:
       )}
       <WatchAccessRow watch={watch} onSaved={onChange} />
       <WatchAlertRow id={watch.id} alert={watch.alert} pending={watch.pending} onSaved={onChange} editable={watch.mayEdit !== false} />
-      {watch.lastError && <p className="news-status news-status--error">{watch.lastError === 'smtp_missing' ? w.smtpMissing : w.smtpError}</p>}
+      {watch.lastError && <p className="news-status news-status--error">{watch.lastError === 'smtp_missing' ? w.smtpMissing : watch.lastError === 'no_recipients' ? w.noRecipientsSent : w.smtpError}</p>}
       {watch.matches.length > 0 && (
         <details>
           <summary>{w.lastSent}</summary>

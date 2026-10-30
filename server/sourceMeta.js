@@ -106,6 +106,8 @@ export const sourceMetaOf = (name) => meta[name] || null
 export const RELIABILITY = ['high', 'medium', 'low']
 // Réseaux sociaux : niveau moyen par défaut (comptes officiels et anonymes s'y côtoient, au Super Admin de trancher)
 const LOW_CHANNELS = new Set(['reddit', 'blog', 'forum', 'comment'])
+// Agences de presse et services publics d'information (fiabilité élevée par défaut, modifiable par le Super Admin)
+const HIGH_HOSTS = ['reuters.com', 'apnews.com', 'afp.com', 'bbc.com', 'bbc.co.uk', 'dw.com', 'france24.com', 'rfi.fr', 'ansa.it', 'aa.com.tr', 'lana.ly', 'lana-news.ly', 'un.org', 'unsmil.unmissions.org']
 /** Fiabilité d'une source : réglage du Super Admin, sinon déduite (site officiel, réseau social, média) */
 export function reliabilityOf(it) {
   const set = meta[it?.origin]?.reliability
@@ -117,6 +119,8 @@ export function reliabilityOf(it) {
     host = ''
   }
   if (/(^|\.)gov(\.[a-z]{2})?$|\.gov\.|(^|\.)gouv\./.test(host)) return 'high'
+  // Presse : agences de presse et services publics d'information reconnus → élevée ; autres médias → moyenne
+  if (HIGH_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) return 'high'
   if (LOW_CHANNELS.has(it?.channel) || ['forum', 'comment'].includes(it?.media)) return 'low'
   return 'medium'
 }

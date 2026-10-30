@@ -11,7 +11,14 @@ import path from 'node:path'
  */
 
 // Fils Reddit automatiques ou hors sujet relevés par l'audit v3, et motifs de comptes automatiques ou inappropriés
-const DEFAULT_BLOCKED = ['r/AutoNewspaper', 'r/ALJAZEERAauto', 'r/MapPorn', 'r/MilitaryPorn', 'r/WhitePeopleTwitter']
+const DEFAULT_BLOCKED = ['r/AutoNewspaper', 'r/ALJAZEERAauto', 'r/MapPorn', 'r/MilitaryPorn', 'r/WhitePeopleTwitter', 'r/PredictionCodesMarket', 'r/TrueChristianPolitics']
+
+// Audit v4 : forums Reddit autorisés par défaut (liste blanche) ; le Super Admin en ajoute dans « forumAllow »
+export const REDDIT_ALLOW = ['r/libya', 'r/LibyaNews', 'r/Libyan', 'r/worldnews', 'r/geopolitics', 'r/MiddleEast', 'r/MiddleEastNews', 'r/africa', 'r/arabs', 'r/europe', 'r/news', 'r/anime_titties', 'r/UnitedNations', 'r/OSINT', 'r/CredibleDefense']
+// Sources religieuses ou de prédication, sur tous les canaux (audit v4 : Awqaf, lecteur du Coran, cheikh Belal Elsanhoury)
+const RELIGIOUS_SOURCE = /أوقاف|اوقاف|awqaf|السنهوري|sanhoury|الشيخ |شيخ |sheikh|imam |إمام |الدعوة|دعوية|فتاوى|fatwa|islamic ?(channel|tv|radio)|dawah/i
+// Titres de vidéos YouTube clairement religieux ou de divertissement (une actualité sur un concours de Coran reste)
+const YOUTUBE_OFFTOPIC_TITLE = /تلاوة|ترتيل|تجويد|رقية شرعية|خطبة الجمعة|سورة [^\s]+ (كاملة|بصوت)|بصوت الشيخ|درس ديني|محاضرة دينية|نشيد|أنشودة|كليب|أغنية|مسلسل .* الحلقة|official (music )?video|full episode/i
 const BOT_PATTERNS = [/^r\/\w*auto$/i, /^r\/auto\w*newspaper/i, /porn/i, /nsfw/i, /\bbot$/i, /_bot\b/i]
 
 // YouTube : chaînes hors sujet pour une veille d'actualité (récitation, religion, divertissement, musique), d'après le
@@ -65,7 +72,10 @@ export function excludedBySource(it) {
   if (DEFAULT_BLOCKED.some((b) => lower(b) === lo) || policy.blocked.some((b) => lower(canonicalOrigin(b)) === lo)) return true
   const social = it.channel === 'reddit' || it.media === 'forum' || it.media === 'social'
   if (social && BOT_PATTERNS.some((re) => re.test(o))) return true
-  if (it.channel === 'youtube' && YOUTUBE_OFFTOPIC.test(o)) return true
+  if (it.channel === 'youtube' && (YOUTUBE_OFFTOPIC.test(o) || YOUTUBE_OFFTOPIC_TITLE.test(String(it.title || '')))) return true
+  if (RELIGIOUS_SOURCE.test(o) && it.channel !== 'site') return true
+  // Reddit : forums de la liste blanche seulement (défaut + ajouts du Super Admin)
+  if (it.channel === 'reddit' && lo.startsWith('r/') && ![...REDDIT_ALLOW, ...policy.forumAllow].some((f) => lower(canonicalOrigin(f)) === lo)) return true
   // Comptes personnels Reddit (u/…) : pas des médias, ni des forums
   if (it.channel === 'reddit' && lo.startsWith('u/')) return true
   if (policy.forumAllow.length && it.media === 'forum' && !policy.forumAllow.some((f) => lower(canonicalOrigin(f)) === lo)) return true

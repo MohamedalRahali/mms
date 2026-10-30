@@ -541,6 +541,13 @@ export async function sendTelegram(text) {
   }
 }
 
+/** Nombre de discussions Telegram qui reçoivent les alertes (TELEGRAM_CHAT_ID, séparées par des virgules) */
+export const telegramChats = () =>
+  String(process.env.TELEGRAM_CHAT_ID || '')
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean).length
+
 /* ---------------------------------------------------------------- vérification */
 
 /** Vérifie chaque veille active ; un verrou empêche deux passages simultanés */
@@ -577,12 +584,29 @@ export async function runWatches() {
         // Telegram en plus de l'e-mail ; son échec ne fait pas renvoyer l'e-mail
         const byTelegram = telegramReady() && conf.channels.includes('telegram')
         const byEmail = conf.channels.includes('email')
-        if (byTelegram) await sendTelegram(buildAlertTelegram(watch, found)).catch((err) => console.error(`Veille « ${watch.name} » : ${err.message}`))
+        // Destinataires réellement atteints (audit v4, constat 12 : le journal affichait 0) : discussions Telegram
+        // jointes + adresses acceptées par le serveur SMTP (et non le nombre d'adresses saisies)
+        let telegramTo = 0
+        if (byTelegram)
+          await sendTelegram(buildAlertTelegram(watch, found))
+            .then(() => (telegramTo = telegramChats()))
+            .catch((err) => console.error(`Veille « ${watch.name} » : ${err.message}`))
         // Sans SMTP mais avec Telegram, l'alerte part seulement sur Telegram, sans erreur
         const smtp = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS)
-        if (byEmail && watch.recipients.length && (smtp || !byTelegram)) await sendMail(watch.recipients, buildAlertEmail(watch, found))
-        watch.lastError = null
-        logDispatch({ kind: 'watch', name: watch.name, count: found.length, channels: [...(byTelegram ? ['telegram'] : []), ...(byEmail && watch.recipients.length && smtp ? ['email'] : [])], recipients: watch.recipients.length })
+        let mailTo = 0
+        if (byEmail && watch.recipients.length && (smtp || !byTelegram)) {
+          const info = await sendMail(watch.recipients, buildAlertEmail(watch, found))
+          mailTo = Array.isArray(info?.accepted) ? info.accepted.length : watch.recipients.length
+        }
+        const channels = [...(telegramTo ? ['telegram'] : []), ...(mailTo ? ['email'] : [])]
+        if (!channels.length) {
+          // Rien n'est parti (aucune adresse valable, Telegram absent) : noté comme tel, pas comme « envoyé »
+          watch.lastError = 'no_recipients'
+          logDispatch({ kind: 'watch', name: watch.name, count: found.length, channels: [], recipients: 0, status: 'skipped', error: 'NO_RECIPIENTS' })
+        } else {
+          watch.lastError = null
+          logDispatch({ kind: 'watch', name: watch.name, count: found.length, channels, recipients: mailTo + telegramTo })
+        }
         try {
           onWatchAlert({ watch: { id: watch.id, name: watch.name }, count: found.length, titles: found.slice(0, 5).map(({ it }) => it.title), ...conf })
         } catch (err) {
@@ -595,7 +619,7 @@ export async function runWatches() {
         const code = err.code === 'smtp_missing' ? 'smtp_missing' : 'smtp_error'
         if (watch.lastError !== code) console.error(`Veille « ${watch.name} » : ${err.message}`)
         watch.lastError = code
-        logDispatch({ kind: 'watch', name: watch.name, count: found.length, channels: ['email'], recipients: watch.recipients.length, status: err.code === 'DOMAIN_BLOCKED' ? 'blocked' : 'failed', error: err.code || code })
+        logDispatch({ kind: 'watch', name: watch.name, count: found.length, channels: ['email'], recipients: 0, status: err.code === 'DOMAIN_BLOCKED' ? 'blocked' : 'failed', error: err.code || code })
         watch.matchCount -= found.length
         watch.matches = watch.matches.slice(found.length)
       }

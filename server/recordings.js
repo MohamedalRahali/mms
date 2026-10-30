@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import express from 'express'
+import { isAdminReq, redactErrors } from './redact.js'
 import { fileURLToPath } from 'node:url'
 import { passagesOf } from './broadcast.js'
 import { liveSources } from './live.js'
@@ -34,6 +35,8 @@ export const LIMITS = {
   defaultPart: 1.1,
   // Enregistrements simultanés au plus pour la veille (créneaux fixes + demandes, LIBYE_CAPTURES_MAX)
   maxCaptures: Number(process.env.MMS_CAPTURES_MAX) || 6,
+  // Plafond total de transcription réglable dans MMS ($ par jour)
+  maxDailyTotal: Number(process.env.MMS_TRANSCRIPTION_MAX_JOUR) || 15,
 }
 export const TERMINAL = new Set(['termine', 'echoue', 'annule'])
 
@@ -54,11 +57,30 @@ export const savedPart = () => {
   const v = readJson(FILE(), {}).part_demandes_jour
   return typeof v === 'number' && Number.isFinite(v) ? v : null
 }
-export function writeAll(list, part = savedPart()) {
+/** Plafond total de transcription du jour réglé par l'administrateur dans MMS (en $), ou null (celui du .env) */
+export const savedTotal = () => {
+  const v = readJson(FILE(), {}).plafond_jour
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
+export function writeAll(list, part = savedPart(), total = savedTotal()) {
   fs.mkdirSync(dataDir, { recursive: true })
   const tmp = `${FILE()}.${process.pid}.tmp`
-  fs.writeFileSync(tmp, JSON.stringify({ maj: new Date().toISOString(), ...(part != null ? { part_demandes_jour: part } : {}), enregistrements: list }, null, 1))
+  const conf = { ...(part != null ? { part_demandes_jour: part } : {}), ...(total != null ? { plafond_jour: total } : {}) }
+  fs.writeFileSync(tmp, JSON.stringify({ maj: new Date().toISOString(), ...conf, enregistrements: list }, null, 1))
   fs.renameSync(tmp, FILE())
+}
+
+// Audit v4 : budget de transcription réglable par l'administrateur, au plus LIMITS.maxDailyTotal $ par jour (même borne
+// que LIBYE_PLAFOND_MAX_JOUR côté veille) ; cible : au moins 24 h d'audio par jour
+export const TARGET_HOURS = 24
+export const dailyCostFor = (hours) => round(hours * 60 * LIMITS.costPerMinute)
+export function setTotal(value) {
+  const v = Number(value)
+  if (value === null || value === '' || !Number.isFinite(v) || v < 0 || v > LIMITS.maxDailyTotal) throw fail('BAD_TOTAL', 400, { max: LIMITS.maxDailyTotal })
+  const part = savedPart()
+  // La part des demandes reste dans le nouveau plafond
+  writeAll(readAll(), part != null ? Math.min(part, round(v)) : part, round(v))
+  return round(v)
 }
 export const statusFile = () => readJson(STATUS(), null)
 
@@ -133,13 +155,18 @@ export function budgetOf(list, st, now = Date.now(), at = now, part = savedPart(
     fixed: st?.budget?.fixes ? { spent: round(st.budget.fixes.jour), cap: round(st.budget.fixes.plafond_jour) } : null,
     month: st?.budget ? { spent: round(st.budget.mois), cap: round(st.budget.plafond_mois) } : null,
     known: Boolean(st?.budget),
+    // Réglage de l'administrateur (null : plafond du .env de la veille), cible 24 h d'audio par jour et son coût
+    totalSet: savedTotal(),
+    target: { hours: TARGET_HOURS, costPerDay: dailyCostFor(TARGET_HOURS), costPerMonth: round(dailyCostFor(TARGET_HOURS) * 31) },
+    hoursPerDay: total != null ? Math.round((total / LIMITS.costPerMinute / 60) * 10) / 10 : null,
+    maxTotal: LIMITS.maxDailyTotal,
   }
 }
 
 /** Règle la part quotidienne des demandes (bornée par le plafond de transcription du jour quand il est connu) */
 export function setPart(value, st = statusFile()) {
   const v = Number(value)
-  const total = st?.budget?.total_jour ?? 10
+  const total = savedTotal() ?? st?.budget?.total_jour ?? 10
   if (value === null || value === '' || !Number.isFinite(v) || v < 0 || v > total) throw fail('BAD_PART', 400, { max: round(total) })
   writeAll(readAll(), round(v))
   return round(v)
@@ -309,7 +336,7 @@ export function mountRecordings(app) {
 
   app.get(
     '/api/recordings',
-    wrap(() => {
+    wrap((req) => {
       const now = Date.now()
       const list = readAll()
       const st = statusFile()
@@ -332,7 +359,9 @@ export function mountRecordings(app) {
         }))
         .sort((x, y) => y.debut.localeCompare(x.debut))
       const channels = recordableChannels().map(({ stream, ...c }) => c)
-      return { items, channels, limits: LIMITS, budget: budgetOf(list, st, now), veille: { maj: st?.maj || null } }
+      // Non-administrateurs : codes d'erreur lisibles seulement ; « admin » dit à l'interface d'afficher les coûts
+      const admin = isAdminReq(req)
+      return { items: admin ? items : redactErrors(items), channels: admin ? channels : redactErrors(channels), limits: LIMITS, budget: budgetOf(list, st, now), veille: { maj: st?.maj || null }, admin }
     }),
   )
 
@@ -351,7 +380,11 @@ export function mountRecordings(app) {
   app.put(
     '/api/recordings/budget',
     express.json({ limit: '1kb' }),
-    wrap((req) => ({ part: setPart(req.body?.part) })),
+    wrap((req) => {
+      // { total } : plafond total du jour (toutes chaînes) ; { part } : part des demandes dans ce plafond
+      if (req.body?.total !== undefined) return { total: setTotal(req.body.total) }
+      return { part: setPart(req.body?.part) }
+    }),
   )
 
   app.post(

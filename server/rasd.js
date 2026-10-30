@@ -284,7 +284,8 @@ async function alertFresh(fresh, { telegramReady, sendTelegram, logDispatch }) {
     const text = [`🎙 الرصد المبرمج — ${watch.name}`, `${rec.nom} · ${tripoliDay(Date.parse(rec.debut))}`, ...found.slice(0, 5).map((h) => `• ~${time.format(new Date(h.at))} : ${h.terms.join('، ')}`), `(${found.length})`].join('\n')
     try {
       if (telegramReady()) await sendTelegram(text)
-      logDispatch({ kind: 'rasd', name: watch.name, count: found.length, channels: telegramReady() ? ['telegram'] : [], status: telegramReady() ? 'sent' : 'skipped' })
+      const chats = String(process.env.TELEGRAM_CHAT_ID || '').split(',').filter((c) => c.trim()).length
+      logDispatch({ kind: 'rasd', name: watch.name, count: found.length, channels: telegramReady() ? ['telegram'] : [], recipients: telegramReady() ? chats : 0, status: telegramReady() ? 'sent' : 'skipped', ...(telegramReady() ? {} : { error: 'NO_RECIPIENTS' }) })
     } catch (err) {
       logDispatch({ kind: 'rasd', name: watch.name, count: found.length, channels: ['telegram'], status: 'failed', error: String(err.message || err).slice(0, 200) })
     }

@@ -337,6 +337,46 @@ type Dash = {
   sync: { lastUpdate: string | null; minutesAgo: number | null; total: number; last24: number; dirs: { dir: string; found: boolean }[] }
   keys?: { mms: KeyRow[]; libye: KeyRow[] | null }
   aiUsage?: { month: string; current: Record<string, UsageRow>; total: Record<string, UsageRow> }
+  aiStatus?: AiStatus
+  audit?: { total: number; last7: Record<string, number>; actors: string[]; intact: boolean }
+}
+type AiStatus = {
+  main: string
+  economy: string
+  warnings: string[]
+  freeSeen: string
+  engines: { id: string; label: string; configured: boolean; noReuse: boolean; tier: string; model: string }[]
+}
+
+/** Moteurs d'IA : lequel sert, réutilisation des données par le fournisseur, clé Gemini gratuite (audit v4) */
+function AiEngines({ s }: { s: AiStatus }) {
+  const WARN: Record<string, string> = {
+    GEMINI_FREE_DETECTED: 'مفتاح Gemini في العرض المجاني (رصدته Google في رسالة الحصة): قد تستخدم Google البيانات المرسلة لتحسين منتجاتها. فعّلوا الفوترة على المشروع أو استعملوا Vertex AI.',
+    GEMINI_TIER_UNKNOWN: 'مفتاح Gemini غير مصرّح بأنه مدفوع (MMS_GEMINI_TIER=paid): يُعامل كعرض مجاني قد تُعاد فيه استعمال البيانات.',
+    NO_ENGINE: 'لا يوجد محرك ذكاء اصطناعي مُعدّ: ميزات التحليل متوقفة.',
+  }
+  const name = (id: string) => s.engines.find((e) => e.id === id)?.label || '—'
+  return (
+    <Card title="محركات الذكاء الاصطناعي وحماية البيانات">
+      {s.warnings.map((w) => (
+        <p key={w} className="sa-error" role="alert">
+          ⚠ {WARN[w] ?? w}
+        </p>
+      ))}
+      <p>
+        المحرك الرئيسي: <b>{name(s.main)}</b> · المهام الخلفية: <b>{name(s.economy)}</b>
+      </p>
+      <ul className="sa-list">
+        {s.engines.map((e) => (
+          <li key={e.id}>
+            <span className={e.configured ? 'sa-dot is-on' : 'sa-dot'} /> {e.label} <span className="sa-muted">{e.model}</span>{' '}
+            {e.configured && <span className={e.noReuse ? 'sa-tag is-ok' : 'sa-tag is-warn'}>{e.noReuse ? 'لا إعادة استخدام للبيانات' : 'عرض مجاني: بيانات قد يُعاد استخدامها'}</span>}
+          </li>
+        ))}
+      </ul>
+      <p className="sa-muted">الإعداد في ملف ‎.env: MMS_AI_PROVIDER، MMS_VERTEX_PROJECT + GOOGLE_APPLICATION_CREDENTIALS، MMS_GEMINI_TIER=paid، MMS_LLM_BASE_URL (نموذج محلي).</p>
+    </Card>
+  )
 }
 type KeyRow = { name: string; set: boolean; budget?: number }
 type UsageRow = { runs: number; input: number; output: number; cost: number }
@@ -359,7 +399,9 @@ function Dashboard({ onUser }: { onUser: (e: string) => void }) {
         <Kpi label="الحسابات" value={`${d.counts.users} · ${d.counts.admins} مدير`} />
         <Kpi label="تنبيهات أمنية (24 س)" value={a.fails24 + a.saFails24 + a.blocked24} tone={alertTone} />
         <Kpi label="مزامنة الأخبار" value={d.sync.lastUpdate ? ago(d.sync.lastUpdate) : 'لا شيء'} tone={late ? 'warn' : 'ok'} />
+        {d.audit && <Kpi label="سجل التدقيق" value={d.audit.intact ? `${fmtNum(d.audit.total)} · سليم` : 'سلسلة مكسورة'} tone={d.audit.intact ? 'ok' : 'bad'} />}
       </div>
+      {d.aiStatus && <AiEngines s={d.aiStatus} />}
 
       <Card title="المتصلون الآن">
         {d.online.length ? (

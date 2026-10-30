@@ -157,6 +157,7 @@ const MODULE_RULES = [
   [/^\/rasd(\/|$)/, ['media']],
   [/^\/items(\/|$)/, ['news', 'media']],
   [/^\/portal-feed(\/|$)/, ['news', 'media']],
+  [/^\/journalists(\/|$)/, ['news', 'media']],
   [/^\/report$/, ['report']],
 ]
 

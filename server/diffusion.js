@@ -5,6 +5,7 @@ import dns from 'node:dns/promises'
 import net from 'node:net'
 import { spawn } from 'node:child_process'
 import express from 'express'
+import { isAdminReq, redactErrors } from './redact.js'
 
 /**
  * Chaînes TV et radios de la veille Libye : état, réglages des administrateurs, test d'un flux.
@@ -123,12 +124,13 @@ export function mountDiffusion(app, dataDir) {
   let testing = 0
 
   // Liste des chaînes : état écrit par le collecteur + réglages en attente (pas encore relus par le collecteur)
-  app.get('/api/diffusion', (_req, res) => {
+  app.get('/api/diffusion', (req, res) => {
     const status = readJson(statusFile, { chaines: [] })
     const pending = new Map(settings().sources.map((s) => [s.id, s]))
     const chaines = (status.chaines || []).map((c) => ({ ...c, ...(pending.get(c.id) || {}) }))
     for (const s of pending.values()) if (s.ajout && !chaines.some((c) => c.id === s.id)) chaines.push({ ...s, attente: true })
-    res.json({ maj: status.maj || null, max: status.max_simultanes || null, chaines })
+    // Non-administrateurs : code d'erreur lisible seulement (jamais le message brut de yt-dlp ou ffmpeg)
+    res.json({ maj: status.maj || null, max: status.max_simultanes || null, chaines: isAdminReq(req) ? chaines : redactErrors(chaines) })
   })
 
   // Modifier une chaîne (actif, créneaux, flux, referer, nom, canal)

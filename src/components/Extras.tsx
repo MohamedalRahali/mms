@@ -174,6 +174,18 @@ export function Alerts({ flux }: { flux: Flux | '' }) {
   const { t } = useI18n()
   const [words, setWords] = useAlerts()
   const [draft, setDraft] = useState('')
+  // Veilles du serveur (droit « watch » du profil) ; sans ce droit, seulement les mots de ce navigateur
+  const [watches, setWatches] = useState<WatchRow[] | null>(null)
+  useEffect(() => {
+    let live = true
+    fetch('/api/watches')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => live && setWatches(d ? (d.watches as WatchRow[]).filter((w) => w.enabled) : null))
+      .catch(() => live && setWatches(null))
+    return () => {
+      live = false
+    }
+  }, [])
   function add(e: FormEvent) {
     e.preventDefault()
     const w = draft.trim()
@@ -189,11 +201,58 @@ export function Alerts({ flux }: { flux: Flux | '' }) {
           {t.alertsAdd}
         </button>
       </form>
-      {words.length === 0 && <p className="news-status">{t.alertsEmpty}</p>}
+      {words.length === 0 && !watches?.length && <p className="news-status">{t.alertsEmpty}</p>}
       {words.map((w) => (
         <AlertBlock key={w} word={w} flux={flux} onRemove={() => setWords(words.filter((x) => x !== w))} />
       ))}
+      <WatchAlerts watches={watches} />
     </>
+  )
+}
+
+type WatchRow = { id: string; name: string; rules: string[]; query?: string; status: string; enabled: boolean; matchCount: number; lastRun?: string | null; matches: { id: string; title: string; origin: string; date: string; url: string }[] }
+
+/**
+ * Alertes des veilles (الرصد) : les mots-clés suivis par l'équipe sur le serveur, avec leurs derniers résultats,
+ * à côté des mots ajoutés dans ce navigateur (audit v4 : la page restait vide pour un nouveau poste).
+ */
+function WatchAlerts({ watches }: { watches: WatchRow[] | null }) {
+  const i = useI18n()
+  const ar = i.lang === 'ar'
+  if (!watches) return null
+  return (
+    <section className="alerts-watches">
+      <h3>{ar ? 'تنبيهات الرصد المبرمج (مشتركة مع الفريق)' : 'Watch alerts (shared with the team)'}</h3>
+      {watches.length === 0 ? (
+        <p className="news-status">
+          {ar ? 'لا يوجد رصد مفعّل. أنشئ رصداً لتصلك التنبيهات بالبريد أو Telegram.' : 'No active watch. Create one to receive alerts by email or Telegram.'}{' '}
+          <a href="/?view=watch">{ar ? 'إنشاء رصد ←' : 'Create a watch →'}</a>
+        </p>
+      ) : (
+        watches.map((w) => (
+          <article key={w.id} className="news-card alerts-watch">
+            <header>
+              <b dir="auto">{w.name}</b>
+              <small>
+                {(w.rules || []).join(' · ') || w.query} · {ar ? `${w.matchCount} نتيجة` : `${w.matchCount} results`}
+                {w.lastRun && ` · ${ar ? 'آخر فحص' : 'last check'} ${i.dateTime(w.lastRun)}`}
+              </small>
+              <a className="news-btn news-btn--ghost" href={`/?watch=${encodeURIComponent(w.id)}`}>
+                {ar ? 'كل النتائج' : 'All results'}
+              </a>
+            </header>
+            <ul>
+              {(w.matches || []).slice(0, 5).map((m) => (
+                <li key={m.id}>
+                  <span dir="auto">{m.title}</span> <small>· {m.origin} · {i.dateTime(m.date)}</small>
+                </li>
+              ))}
+              {!w.matches?.length && <li className="news-status">{ar ? 'لا نتائج بعد.' : 'No results yet.'}</li>}
+            </ul>
+          </article>
+        ))
+      )}
+    </section>
   )
 }
 

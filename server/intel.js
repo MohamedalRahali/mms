@@ -60,7 +60,8 @@ export function countList(items, key, limit = 15) {
 // Dimensions surveillées : le filtre de la liste d'actualités qui ouvre le pic, et les valeurs de chaque fiche
 const SPIKE_DIMS = [
   { dim: 'categories', filter: 'category', values: (it) => [it.category] },
-  { dim: 'sources', filter: 'source', values: (it) => [it.origin] },
+  // Un média qui publie plus que d'habitude n'est pas un acteur : pas de pic « نشاط غير معتاد » (audit v4)
+  { dim: 'sources', filter: 'source', values: (it) => [it.origin], notActor: true },
   { dim: 'people', filter: 'entity', values: (it) => it.people || [] },
   { dim: 'orgs', filter: 'entity', values: (it) => it.orgs || [] },
   { dim: 'places', filter: 'entity', values: (it) => it.places || [] },
@@ -80,11 +81,16 @@ export function findSpikes(items, now = Date.now()) {
   }
   if (!recent.length) return []
   const spikes = []
+  // Noms des médias et comptes (sources) : une « personne » ou « organisation » qui porte le nom d'un média
+  // (Libyan Express repéré comme organisation) n'est pas un acteur
+  const mediaNames = new Set([...recent, ...before].map((it) => mediaKey(it.origin)).filter(Boolean))
   for (const d of SPIKE_DIMS) {
+    if (d.notActor) continue
     const cur = new Map()
     const old = new Map()
-    for (const it of recent) for (const v of d.values(it)) if (v) cur.set(v, (cur.get(v) || 0) + 1)
-    for (const it of before) for (const v of d.values(it)) if (v) old.set(v, (old.get(v) || 0) + 1)
+    const keep = (v) => v && (d.dim === 'categories' || !mediaNames.has(mediaKey(v)))
+    for (const it of recent) for (const v of d.values(it)) if (keep(v)) cur.set(v, (cur.get(v) || 0) + 1)
+    for (const it of before) for (const v of d.values(it)) if (keep(v)) old.set(v, (old.get(v) || 0) + 1)
     for (const [name, count] of cur) {
       const avg = (old.get(name) || 0) / 7
       if (count >= 4 && count >= 3 * avg + 1) spikes.push({ dim: d.dim, filter: d.filter, name, count, avg: Math.round(avg * 10) / 10 })
@@ -94,6 +100,13 @@ export function findSpikes(items, now = Date.now()) {
   const score = (s) => (s.count / (s.avg + 1)) * Math.log2(s.count + 1)
   return spikes.sort((a, b) => score(b) - score(a)).slice(0, 6)
 }
+
+/** Nom de média comparable (« Libyan Express », « libyanexpress », « ليبيان إكسبريس » non rapprochés : même écriture seulement) */
+export const mediaKey = (s) =>
+  String(s || '')
+    .toLowerCase()
+    .replace(/^(the|al|ال)\s*/i, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '')
 
 /** Fiches des dernières 24 heures qui portent la valeur du pic */
 export function spikeItems(items, dim, name, now = Date.now()) {

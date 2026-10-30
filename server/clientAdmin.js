@@ -14,7 +14,7 @@ import { setSourcePolicy, sourcePolicy } from './sourcePolicy.js'
 import { getItems, refreshSourcePolicy } from './store.js'
 import { entityAIState, runEntityAI, setDecision } from './entityAI.js'
 import { listTickets, setSupportConf, setTicketStatus, supportConf } from './support.js'
-import { aiEnabled, aiProvider, runEconomy } from './ai.js'
+import { aiEnabled, economyProvider, runEconomy } from './ai.js'
 import { reviewOption, setReviewOption } from './alertFlow.js'
 
 /**
@@ -120,7 +120,7 @@ export function mountClientAdmin(sa, { audit }) {
   })
 
   /* Correction des acteurs par l'IA : décisions, passage à la demande, correction ou annulation d'une décision */
-  sa.get('/entity-ai', (_req, res) => res.json({ ...entityAIState(), ai: aiEnabled(), provider: process.env.GEMINI_API_KEY ? 'gemini' : aiProvider() }))
+  sa.get('/entity-ai', (_req, res) => res.json({ ...entityAIState(), ai: aiEnabled(), provider: economyProvider() }))
   sa.post('/entity-ai/run', async (req, res) => {
     if (!aiEnabled()) return fail(res, 400, 'NO_AI')
     try {

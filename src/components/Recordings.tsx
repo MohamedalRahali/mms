@@ -67,8 +67,13 @@ type Data = {
     fixed: { spent: number; cap: number } | null;
     month: { spent: number; cap: number } | null;
     known: boolean;
+    totalSet?: number | null;
+    target?: { hours: number; costPerDay: number; costPerMonth: number };
+    hoursPerDay?: number | null;
+    maxTotal?: number;
   };
   veille: { maj: string | null };
+  admin?: boolean;
 };
 type Transcript = {
   nom: string;
@@ -126,7 +131,7 @@ const TEXT = {
       "الرصد لم يرسل ميزانيته بعد: التقدير على أساس الحصة الافتراضية.",
     split: "توزيع ميزانية التفريغ اليومية",
     splitHint: (t: string) =>
-      `السقف الإجمالي ≈ ${t} $ يومياً (65 $ شهرياً)، يتقاسمه التسجيل الثابت المسائي والتسجيلات حسب الطلب.`,
+      `السقف الإجمالي ≈ ${t} $ يومياً (≈ ${Math.round(Number(t) * 31)} $ شهرياً)، يتقاسمه التسجيل الثابت المسائي والتسجيلات حسب الطلب.`,
     part: "حصة التسجيلات حسب الطلب ($ يومياً)",
     fixedShare: (f: string, s: string) =>
       `الحصة المتبقية للفترات الثابتة: ${f} $ يومياً (استُهلك اليوم ${s} $)`,
@@ -205,6 +210,8 @@ const TEXT = {
       WAIT_SLOT: "في انتظار مكان: عدد التسجيلات الجارية بلغ الحد الأقصى.",
       RETRY: "انقطع البث، جارٍ إعادة الاتصال…",
       STREAM_CUT: "انقطع البث أثناء التسجيل: النص يغطي الجزء المسجَّل فقط.",
+      TECHNICAL: "تعذّر التسجيل بسبب خلل تقني في مصدر البث. فريق الدعم مُبلَّغ تلقائياً.",
+      TIMEOUT: "مصدر البث لم يستجب في الوقت المحدد.",
     },
   },
   en: {
@@ -256,7 +263,7 @@ const TEXT = {
       "The monitoring has not sent its budget yet: estimate based on the default share.",
     split: "Daily transcription budget split",
     splitHint: (t: string) =>
-      `Total cap ≈ $${t} per day ($65 per month), shared between the fixed evening slots and on-demand recordings.`,
+      `Total cap ≈ $${t} per day (≈ $${Math.round(Number(t) * 31)} per month), shared between the fixed evening slots and on-demand recordings.`,
     part: "On-demand share ($ per day)",
     fixedShare: (f: string, s: string) =>
       `Left for the fixed slots: $${f} per day ($${s} used today)`,
@@ -341,6 +348,8 @@ const TEXT = {
       RETRY: "Stream interrupted, reconnecting…",
       STREAM_CUT:
         "The stream was cut during the recording: the text covers the recorded part only.",
+      TECHNICAL: "Recording failed because of a technical problem with the stream. Support has been notified automatically.",
+      TIMEOUT: "The stream did not answer in time.",
     },
   },
 };
@@ -361,17 +370,26 @@ function veilleMessage(t: (typeof TEXT)["ar"], raw?: string) {
     return { text: t.veille.STREAM_DOWN(n), detail: rest.join("|") };
   }
   if (typeof known === "string") return { text: known, detail: rest.join("|") };
-  return { text: raw, detail: "" };
+  if (code === "YOUTUBE_BLOCKED") return { text: t.errors.YOUTUBE_BLOCKED, detail: "" };
+  // Message brut d'un outil (yt-dlp, ffmpeg…) : phrase claire, le détail reste réservé aux administrateurs
+  return { text: t.veille.TECHNICAL, detail: raw };
 }
+
+/** Administrateurs (action « diffusion ») : détail technique et coûts en dollars ; les autres voient un message clair */
+const useIsAdmin = () => {
+  const auth = useAuth();
+  return auth?.user?.role === "admin" || canDo(auth?.user, "diffusion");
+};
 
 function VeilleNote({ raw, className }: { raw?: string; className: string }) {
   const t = useText();
+  const admin = useIsAdmin();
   const m = veilleMessage(t, raw);
   if (!m) return null;
   return (
     <p className={className}>
       {m.text}
-      {m.detail && (
+      {admin && m.detail && (
         <small className="rec-row__detail" dir="ltr">
           {m.detail}
         </small>
@@ -568,6 +586,7 @@ function RecRow({
   const i = useI18n();
   const t = useText();
   const [msg, setMsg] = useState("");
+  const admin = useIsAdmin();
   const minutes = Math.round(
     (Date.parse(r.fin) - Date.parse(r.debut)) / 60_000,
   );
@@ -652,9 +671,11 @@ function RecRow({
               : t.cancel}
           </button>
         )}
-        <small className="rec-row__cost">
-          {t.estimate} ≈ {(r.cout || r.estimate).toFixed(3)} $
-        </small>
+        {admin && (
+          <small className="rec-row__cost">
+            {t.estimate} ≈ {(r.cout || r.estimate).toFixed(3)} $
+          </small>
+        )}
       </div>
       {msg && <p className="news-status news-status--error">{msg}</p>}
     </li>
@@ -670,10 +691,24 @@ function BudgetSplit({
   onSaved: () => void;
 }) {
   const t = useText();
+  const ar = useI18n().lang === "ar";
   const [part, setPart] = useState(String(budget.cap));
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const total = budget.total ?? 65 / 31;
+  const total = budget.totalSet ?? budget.total ?? 65 / 31;
   const fixed = Math.max(0, total - (Number(part) || 0));
+  // Plafond total du jour exprimé en heures d'audio (0,003 $ la minute) : cible d'au moins 24 h (audit v4)
+  const perHour = 60 * 0.003;
+  const [hours, setHours] = useState(String(Math.round((total / perHour) * 10) / 10));
+  const h = Number(hours) || 0;
+  async function saveTotal() {
+    const res = await fetch("/api/recordings/budget", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ total: Math.round(h * perHour * 1000) / 1000 }),
+    });
+    setMsg(res.ok ? { ok: true, text: t.savedSplit } : { ok: false, text: ar ? `الحد الأقصى ${budget.maxTotal ?? 15} $ يومياً.` : `Maximum $${budget.maxTotal ?? 15} per day.` });
+    if (res.ok) onSaved();
+  }
   async function save(e: FormEvent) {
     e.preventDefault();
     const res = await fetch("/api/recordings/budget", {
@@ -692,6 +727,21 @@ function BudgetSplit({
   return (
     <details className="rec-card rec-split-box">
       <summary>{t.split}</summary>
+      <div className="rec-split rec-total">
+        <label>
+          <span>{ar ? "ساعات الصوت المفرَّغة يومياً (كل القنوات)" : "Hours of audio transcribed per day (all channels)"}</span>
+          <input type="number" min={0} max={Math.floor(((budget.maxTotal ?? 15) / perHour) * 10) / 10} step={1} value={hours} onChange={(e) => setHours(e.target.value)} dir="ltr" />
+        </label>
+        <p className="ld-hint">
+          {ar
+            ? `≈ ${(h * perHour).toFixed(2)} $ يومياً · ≈ ${(h * perHour * 31).toFixed(0)} $ شهرياً (0,003 $ للدقيقة). الهدف: ${budget.target?.hours ?? 24} ساعة على الأقل ≈ ${budget.target?.costPerDay ?? 4.32} $ يومياً (${budget.target?.costPerMonth ?? 134} $ شهرياً).`
+            : `≈ $${(h * perHour).toFixed(2)} per day · ≈ $${(h * perHour * 31).toFixed(0)} per month ($0.003 a minute). Target: at least ${budget.target?.hours ?? 24} h ≈ $${budget.target?.costPerDay ?? 4.32} per day ($${budget.target?.costPerMonth ?? 134} per month).`}
+          {h < (budget.target?.hours ?? 24) && <b>{ar ? " — أقل من الهدف." : " — below target."}</b>}
+        </p>
+        <button type="button" className="news-btn news-btn--ghost" onClick={saveTotal}>
+          {t.save}
+        </button>
+      </div>
       <form className="rec-split" onSubmit={save}>
         <p className="ld-hint">{t.splitHint(total.toFixed(2))}</p>
         <div className="rec-split__row">
@@ -1168,12 +1218,17 @@ export function Recordings({ channel }: { channel?: string }) {
           )}
           <p className="rec-form__est">
             <b>{t.fromTo(hhmm(start), hhmm(end))}</b> · {t.duration} :{" "}
-            <b>{t.min(minutes)}</b> · {t.estimate} :{" "}
-            <b>≈ {cost.toFixed(3)} $</b> ·{" "}
-            {t.remaining(
-              data.budget.remaining.toFixed(2),
-              data.budget.cap.toFixed(2),
-              String(data.budget.hours),
+            <b>{t.min(minutes)}</b>
+            {data.admin !== false && (
+              <>
+                {" "}
+                · {t.estimate} : <b>≈ {cost.toFixed(3)} $</b> ·{" "}
+                {t.remaining(
+                  data.budget.remaining.toFixed(2),
+                  data.budget.cap.toFixed(2),
+                  String(data.budget.hours),
+                )}
+              </>
             )}
             {!data.budget.known && <small> — {t.unknownBudget}</small>}
           </p>

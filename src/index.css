@@ -4274,6 +4274,10 @@ img.mms-user__avatar--img {
   background: rgba(230, 145, 56, 0.16);
   color: light-dark(#a35b0c, #f0b26b);
 }
+.news-rel--medium {
+  background: color-mix(in srgb, var(--ink-soft) 12%, transparent);
+  color: var(--ink-soft);
+}
 .news-mini .news-rel__label {
   display: none;
 }
@@ -4554,4 +4558,174 @@ img.mms-user__avatar--img {
   background: var(--surface-2);
   color: var(--ink);
   font: inherit;
+}
+
+/* Alertes des veilles sur la page التنبيهات (audit v4) */
+.alerts-watches {
+  display: grid;
+  gap: 0.75rem;
+  margin-block-start: 1.25rem;
+}
+.alerts-watches h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.alerts-watch header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.8rem;
+}
+.alerts-watch header small {
+  flex: 1 1 14rem;
+  color: var(--ink-soft);
+}
+.alerts-watch ul {
+  margin: 0.5rem 0 0;
+  padding-inline-start: 1.1rem;
+  font-size: 0.9rem;
+}
+
+/* سجل التدقيق (AuditTrail.tsx) */
+.audit-filters {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.audit-table {
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 0.86rem;
+}
+.audit-row {
+  display: grid;
+  grid-template-columns: 9.5rem minmax(9rem, 1.2fr) 8rem minmax(12rem, 2fr) 5rem 7.5rem;
+  gap: 0.6rem;
+  padding: 0.45rem 0.7rem;
+  border-block-start: 1px solid var(--line);
+  align-items: baseline;
+  overflow-wrap: anywhere;
+}
+.audit-row--head {
+  border-block-start: 0;
+  background: var(--bg);
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.audit-row.is-ko {
+  background: rgba(230, 145, 56, 0.08);
+}
+.audit-row small {
+  color: var(--ink-soft);
+}
+@media (max-width: 760px) {
+  .audit-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .audit-row--head {
+    display: none;
+  }
+}
+
+/* الصحفيون ووسائل الإعلام (Journalists.tsx) */
+.jr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.75rem;
+}
+.jr-card {
+  display: grid;
+  gap: 0.25rem;
+  text-align: start;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.jr-card small {
+  color: var(--ink-soft);
+}
+.jr-list {
+  margin: 0;
+  padding-inline-start: 1.1rem;
+  display: grid;
+  gap: 0.35rem;
+}
+.jr-list small {
+  color: var(--ink-soft);
+}
+.jr-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+  block-size: 8rem;
+  padding-block-end: 1.2rem;
+}
+.jr-bars div {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  block-size: 100%;
+}
+.jr-bars i {
+  flex: 1;
+  min-block-size: 1px;
+  border-radius: 3px 3px 0 0;
+  background: var(--green);
+}
+.jr-bars i.is-cited {
+  background: var(--ink-soft);
+  opacity: 0.55;
+}
+.jr-bars small {
+  position: absolute;
+  inset-block-end: -1.2rem;
+  inset-inline: 0;
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+}
+
+/* ملاحظة الأمان ومركز المساعدة */
+.sec-note,
+.help-center {
+  display: grid;
+  gap: 0.9rem;
+}
+.sec-note section,
+.help-center section {
+  padding: 0.9rem 1.1rem;
+}
+.sec-note h3,
+.help-center h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.02rem;
+}
+.sec-note ul,
+.help-center ul {
+  margin: 0;
+  padding-inline-start: 1.2rem;
+  display: grid;
+  gap: 0.3rem;
+}
+.help-center details {
+  border-block-start: 1px solid var(--line);
+  padding-block: 0.45rem;
+}
+.help-center summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.help-search {
+  inline-size: 100%;
+  max-inline-size: 30rem;
+}
+
+.help-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
 }

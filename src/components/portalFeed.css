@@ -647,3 +647,73 @@
 .pf-savebar.is-on > span {
   color: var(--green-deep);
 }
+
+/* Publication manuelle : bandeau, éditeur de texte réécrit, journal des publications */
+.pf-manual {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.6rem;
+  margin: 0;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--green);
+  border-radius: 10px;
+  background: var(--green-soft);
+  color: var(--green-deep);
+}
+.pf-manual small {
+  color: var(--ink-soft);
+}
+.pf-editor {
+  display: grid;
+  gap: 0.6rem;
+  margin-block-start: 0.6rem;
+  padding: 0.75rem;
+  border: 1px dashed var(--green);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.pf-editor input,
+.pf-editor textarea {
+  inline-size: 100%;
+  box-sizing: border-box;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-solid);
+  color: var(--ink);
+  font: inherit;
+}
+.pf-editor details summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+.pf-editor__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.pf-pub {
+  font-weight: 700;
+  color: var(--green-deep);
+}
+.pf-log h3 {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+.pf-log ul {
+  margin: 0;
+  padding-inline-start: 1rem;
+  max-block-size: 320px;
+  overflow: auto;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+.pf-log li {
+  margin-block-end: 0.3rem;
+}

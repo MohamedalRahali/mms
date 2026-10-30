@@ -251,7 +251,12 @@ function loadLibye(dir, track) {
         // Audio de l'extrait (tranche enregistrée), quand la veille le publie : lecteur et passages cliquables
         clipUrl: webUrl(n.clip_url),
         transcription: clean(n.transcription),
-        author: clean(n.auteur),
+        // Créneau audio de la fiche TV/radio (conservation 90 jours si elle déclenche une alerte : server/retention.js)
+        audioWindow: clean(n.fenetre) || undefined,
+        // Reprise d'historique (12 mois, sans résumé IA) : marquée pour l'affichage
+        archive: n.archive === true || undefined,
+        // Billets de blog sans signature dans le flux : auteur déduit du lien (medium.com/@nom, nom.substack.com)
+        author: clean(n.auteur) || authorFromUrl(n.url, mediaOf(n.media, channel)),
         parent: n.parent && typeof n.parent === 'object' ? { id: clean(n.parent.id), url: webUrl(n.parent.url), title: clean(n.parent.titre) } : undefined,
         thread: threadOf(n.fil),
       })
@@ -378,4 +383,16 @@ export function getItems() {
     demo,
   }
   return cache
+}
+
+/** Auteur d'un billet déduit de son adresse (Medium, Substack, /author/nom) ; '' sinon */
+export function authorFromUrl(url, media = '') {
+  if (media !== 'blog') return ''
+  const m = String(url || '').match(/medium\.com\/@([\w.-]+)|https?:\/\/([\w-]+)\.substack\.com|\/author\/([\w-]+)/i)
+  const raw = m && (m[1] || m[2] || m[3])
+  if (!raw) return ''
+  return raw
+    .replace(/[-_.]+/g, ' ')
+    .trim()
+    .replace(/\b\p{L}/gu, (c) => c.toUpperCase())
 }

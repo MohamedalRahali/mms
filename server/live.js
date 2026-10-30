@@ -87,7 +87,8 @@ export function liveSources() {
   const pending = new Map((readJson(path.join(dataDir, 'libye-diffusion.json'), { sources: [] }).sources || []).map((s) => [s.id, s]))
   const list = (status.chaines || []).map((c) => ({ ...c, ...(pending.get(c.id) || {}) }))
   for (const s of pending.values()) if (s.ajout && !list.some((c) => c.id === s.id)) list.push(s)
-  for (const s of LIVE_ONLY) if (!list.some((c) => c.id === s.id)) list.push({ ...s, ...(pending.get(s.id) || {}), liveOnly: true })
+  // Une chaîne déjà enregistrée par la veille (même identifiant ou même flux) n'apparaît pas une seconde fois
+  for (const s of LIVE_ONLY) if (!list.some((c) => c.id === s.id || (s.flux && c.flux === s.flux))) list.push({ ...s, ...(pending.get(s.id) || {}), liveOnly: true })
   return list.filter((c) => c.actif !== false)
 }
 

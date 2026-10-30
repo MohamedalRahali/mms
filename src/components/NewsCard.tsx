@@ -14,14 +14,15 @@ import { EditItemButton } from './ItemEdit'
 import { TranslateButton } from './Translate'
 import { isNetwork } from '../lib/listing'
 
-/** Fiabilité de la source : seules « موثوق » et « غير مؤكد » sont signalées, le niveau moyen reste discret */
+/** Fiabilité de la source, sur toutes les fiches (presse comprise, audit v4) : élevée, moyenne ou non confirmée */
 function ReliabilityMark({ level }: { level?: NewsItem['reliability'] }) {
   const ar = useI18n().lang === 'ar'
-  if (level !== 'high' && level !== 'low') return null
-  const label = level === 'high' ? (ar ? 'مصدر موثوق' : 'Reliable source') : ar ? 'مصدر غير مؤكد' : 'Unverified source'
+  if (level !== 'high' && level !== 'low' && level !== 'medium') return null
+  const label =
+    level === 'high' ? (ar ? 'موثوقية عالية' : 'High reliability') : level === 'medium' ? (ar ? 'موثوقية متوسطة' : 'Medium reliability') : ar ? 'مصدر غير مؤكد' : 'Unverified source'
   return (
     <span className={`news-rel news-rel--${level}`} title={label}>
-      {level === 'high' ? '✓' : '?'} <span className="news-rel__label">{label}</span>
+      {level === 'high' ? '✓' : level === 'medium' ? '◐' : '?'} <span className="news-rel__label">{label}</span>
     </span>
   )
 }

@@ -62,6 +62,7 @@ const TEXT = {
     bulletin: 'نشرة معتادة',
     use: 'إضافة',
     estimate: (m: number, c: string) => `≈ ${m} دقيقة يومياً · ≈ ${c} $ يومياً`,
+    minutesOnly: (m: number) => `≈ ${m} دقيقة تفريغ يومياً`,
     total: (c: string, p: string) => `مجموع الرصد المبرمج في أثقل يوم ≈ ${c} $ من حصة ${p} $ يومياً`,
     over: 'يتجاوز حصة التسجيلات اليومية: قلِّل القنوات أو الفترات أو الأيام، أو ارفع الحصة.',
     warn: 'قريب من حصة التسجيلات اليومية (أكثر من 80 %).',
@@ -155,6 +156,7 @@ const TEXT = {
     bulletin: 'usual bulletin',
     use: 'Add',
     estimate: (m: number, c: string) => `≈ ${m} min per day · ≈ $${c} per day`,
+    minutesOnly: (m: number) => `≈ ${m} min of transcription per day`,
     total: (c: string, p: string) => `All scheduled watches on the busiest day ≈ $${c} out of the $${p} daily share`,
     over: 'Exceeds the daily recording share: reduce channels, slots or days, or raise the share.',
     warn: 'Close to the daily recording share (over 80%).',
@@ -230,6 +232,9 @@ const toBody = (d: Draft) => ({ ...d, keywords: d.keywords, synonyms: d.synonyms
 
 function WatchEditor({ initial, channels, onDone }: { initial: Draft; channels: RecChannel[]; onDone: (saved: boolean) => void }) {
   const t = useText()
+  const auth = useAuth()
+  // Coûts en dollars : administrateurs seulement (audit v4) ; les autres voient les minutes
+  const admin = auth?.user?.role === 'admin' || canDo(auth?.user, 'diffusion')
   const [d, setD] = useState<Draft>(initial)
   const [cost, setCost] = useState<Cost | null>(null)
   const [next, setNext] = useState<{ start: string; channel: string } | null | undefined>(undefined)
@@ -378,7 +383,7 @@ function WatchEditor({ initial, channels, onDone }: { initial: Draft; channels: 
       )}
       {cost && (
         <p className={`rasd-cost is-${cost.level}`}>
-          {t.estimate(cost.minutesPerDay, cost.costPerDay.toFixed(3))} · {t.total(cost.totalCostPerDay.toFixed(3), cost.part.toFixed(2))}
+          {admin ? `${t.estimate(cost.minutesPerDay, cost.costPerDay.toFixed(3))} · ${t.total(cost.totalCostPerDay.toFixed(3), cost.part.toFixed(2))}` : t.minutesOnly(cost.minutesPerDay)}
           {cost.level !== 'ok' && <b> — {cost.level === 'over' ? t.over : t.warn}</b>}
         </p>
       )}

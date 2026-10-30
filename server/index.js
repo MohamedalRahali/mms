@@ -20,11 +20,18 @@ import { buildBriefing, comparePeriods, engagementTotals, interactions, retrieve
 import { briefingConf, briefingKey, briefingWithSummary, sendBriefing, setBriefingConf, startBriefing } from './briefing.js'
 import { imageRoute, initImages, withImages } from './images.js'
 import { mountSuperAdmin } from './superadmin.js'
+import { auditMiddleware, initAuditTrail, mountAuditTrail } from './auditTrail.js'
+import { startAccountPolicy } from './accountPolicy.js'
+import { mountJournalists } from './journalists.js'
+import { backupStatus, startBackups } from './backups.js'
+import { currentCuts, startStreamAlerts } from './streamAlerts.js'
+import { startRetention } from './retention.js'
+import { listWatches } from './watches.js'
 import { mountDiffusion } from './diffusion.js'
 import { mountMedia } from './media.js'
 import { mountReports } from './reports.js'
 import { AGENTS, ANALYSES, ASK_SPEC, agentFacts, agentItems, agentStats, askPrompt, itemLines, sourceCard, specFor } from './around.js'
-import { emergingTopics, historyOf, sentimentBarometer, validDay, smartAlerts, startRadarAlerts, storyClusters, storyIndex } from './radar.js'
+import { dedupeStories, emergingTopics, historyOf, sentimentBarometer, validDay, smartAlerts, startRadarAlerts, storyClusters, storyIndex } from './radar.js'
 import { startRadarWorker } from './radarWorker.js'
 import { sendSupportMail } from './watches.js'
 import { createWatch, deleteWatch, enabledWatches, guardWatch, itemsForWatch, mergeWatches, sendMail, setWatchAccess, similarWatches, watchesFor, watchIdsFor, sendTelegram, setEnabled, setMailBlockedListener, setWatchAlert, setWatchAlertListener, setWatchTools, startWatches, telegramReady } from './watches.js'
@@ -78,6 +85,9 @@ function toDay(iso) {
   return d
 }
 
+/** Thème fin : « دولي » découpé par zone (international.europe, international.maghreb…), les autres inchangés */
+const fineCategory = (it) => (it.category === 'international' ? `international.${it.intl || 'other'}` : it.category)
+
 function counts(items, key) {
   const map = new Map()
   for (const it of items) map.set(it[key], (map.get(it[key]) || 0) + 1)
@@ -104,7 +114,8 @@ function applyFilters(items, q) {
   return items.filter(
     (it) =>
       (!q.flux || it.flux === q.flux) &&
-      (!q.category || it.category === q.category) &&
+      // « international.europe » : thème fin (audit v4, « دولي » trop large découpé par zone ; « .other » = zone inconnue)
+      (!q.category || it.category === q.category || fineCategory(it) === q.category) &&
       (!q.intl || it.intl === q.intl) &&
       (!q.channel || it.channel === q.channel) &&
       (!q.media || it.media === q.media) &&
@@ -172,6 +183,10 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store')
   next()
 })
+
+// سجل التدقيق : qui a fait quoi (connexions, enregistrements, portail, veilles, exports, comptes), avant toute route
+initAuditTrail(path.join(root, 'data'))
+app.use(auditMiddleware)
 
 // Permissions détaillées par profil (modules et boutons), réglées dans la console Super Admin
 initPermissions(path.join(root, 'data', 'superadmin'))
@@ -563,6 +578,8 @@ app.get('/api/news/facets', (_req, res) => {
   const body = {
     flux: counts(items, 'flux'),
     media: [...counts(items, 'media'), ...(comments.length ? [{ name: 'comment', count: comments.length }] : [])],
+    // Dernière fiche de chaque type (audit v4 : la section Podcasts se masque quand les émissions ne publient plus)
+    mediaLast: items.reduce((m, it) => ((it.media || 'article') in m && m[it.media || 'article'] >= it.date ? m : { ...m, [it.media || 'article']: it.date }), {}),
     subTypes: counts(
       items.filter((it) => it.media === 'broadcast' && it.subType),
       'subType',
@@ -721,7 +738,10 @@ function statsData(q) {
     broadcasts: found.reduce((n, it) => n + it.broadcasts, 0),
     perDay,
     flux: counts(found, 'flux'),
-    categories: counts(found, 'category'),
+    categories: counts(
+      found.map((it) => ({ fine: fineCategory(it) })),
+      'fine',
+    ),
     sources: counts(found, 'origin').slice(0, 10),
     channels: counts(found, 'channel'),
     media: counts(found, 'media').filter((m) => m.name),
@@ -753,7 +773,9 @@ app.get('/api/report', (req, res) => {
   const available = [...new Set(scoped.map((it) => toDay(it.date)))].sort().reverse()
   const day = available.includes(String(req.query.day)) ? String(req.query.day) : available[0] || null
   const dayItems = scoped.filter((it) => toDay(it.date) === day).sort((a, b) => a.date.localeCompare(b.date))
-  res.json({ day, available, items: dayItems, demo })
+  // Revue de presse : un même fait repris par plusieurs médias n'apparaît qu'une fois (« also » : les autres sources)
+  const unique = dedupeStories(dayItems)
+  res.json({ day, available, items: unique, total: dayItems.length, merged: dayItems.length - unique.length, demo })
 })
 
 // Analyse intelligente : GET lit le résultat en mémoire, POST le génère avec Claude
@@ -1104,6 +1126,24 @@ mountMailingLists(app, {
   audit: (req, action, target, detail) => logAudit(req.user.email, String(req.ip || '').replace(/^::ffff:/, ''), action, target, detail),
 })
 mountRasd(app, { getItems, telegramReady, sendTelegram, logDispatch })
+// Journal d'audit consultable par l'administrateur du client ; compte partagé désactivé dès qu'un admin nominatif marche
+mountAuditTrail(app)
+// قاعدة الصحفيين ووسائل الإعلام : journalistes et médias libyens, historique des publications et citations
+mountJournalists(app, { getItems })
+// Sauvegarde quotidienne des données (data/backups, 14 jours) ; état exposé aux administrateurs (note de sécurité)
+startBackups(path.join(root, 'data'))
+// Coupures des flux TV/radio : alerte Telegram / e-mail du support à la coupure et au retour (audit v4)
+startStreamAlerts(path.join(root, 'data'), {
+  sendTelegram,
+  telegramReady,
+  logDispatch,
+  sendMail: async (mail) => (supportConf().email ? (await sendSupportMail(supportConf().email, mail), true) : false),
+})
+// Audio lié à une alerte gardé 90 jours (liste lue par la veille avant chaque purge)
+startRetention(path.join(root, 'data'), { getItems, listWatches })
+app.get('/api/diffusion/cuts', (_req, res) => res.json({ cuts: currentCuts() }))
+app.get('/api/security/status', (req, res) => res.json({ backups: req.user?.role === 'admin' ? backupStatus() : { count: backupStatus().count } }))
+startAccountPolicy(path.join(root, 'data', 'superadmin'))
 // الإعدادات الشخصية : photo de profil, nom, préférences, mot de passe
 initProfile(path.join(root, 'data'))
 mountProfile(app)

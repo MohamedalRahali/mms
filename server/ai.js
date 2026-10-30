@@ -1,12 +1,24 @@
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import dotenv from 'dotenv'
 
 /**
- * Analyse intelligente (التحليل الذكي) : Claude lit les actualités de la période
- * et rend une synthèse en arabe. Le résultat est gardé en mémoire tant que les données ne changent pas.
- * Sans clé Claude, l'analyse passe provisoirement par Gemini (GEMINI_API_KEY, version gratuite),
- * puis par OpenAI (OPENAI_API_KEY) si Gemini est absent, saturé ou en erreur.
+ * Moteurs d'IA de MMS (analyse, Around, rapport exécutif, correction des acteurs).
+ *
+ * Audit produit v4 (30/10/2026) : les données des clients ne doivent pas servir à entraîner un modèle. Moteurs pris en
+ * charge, tous réglés par .env (voir .env.example) :
+ *   - claude : API Anthropic (ANTHROPIC_API_KEY) — données non réutilisées pour l'entraînement ;
+ *   - vertex : Gemini sur Google Cloud Vertex AI (MMS_VERTEX_PROJECT + compte de service GOOGLE_APPLICATION_CREDENTIALS,
+ *     ou VERTEX_API_KEY) — offre payante, données non réutilisées ;
+ *   - gemini : clé de l'API Gemini (GEMINI_API_KEY). Données non réutilisées SEULEMENT si la facturation est activée
+ *     sur le projet : le déclarer avec MMS_GEMINI_TIER=paid. Sans cette déclaration, ou si Google répond par un quota
+ *     « free_tier », la clé est traitée comme gratuite (données pouvant être réutilisées par Google) et signalée ;
+ *   - openai : API OpenAI (OPENAI_API_KEY) — données non réutilisées par défaut ;
+ *   - local : modèle hébergé compatible OpenAI (Ollama, vLLM…) : MMS_LLM_BASE_URL, MMS_LLM_MODEL, MMS_LLM_API_KEY.
+ * MMS_AI_PROVIDER force le moteur principal, MMS_AI_ECONOMY_PROVIDER celui des tâches de fond ; sinon le premier moteur
+ * configuré « sans réutilisation » est pris, et la clé Gemini gratuite seulement en dernier recours
+ * (ou en premier pour les tâches de fond si MMS_AI_ALLOW_FREE=1). L'état est montré au Super Admin (aiStatus).
  */
 
 const MODEL = process.env.CLAUDE_MODEL || 'claude-opus-5-5'
@@ -25,7 +37,10 @@ const PRICES = [
   [/sonnet/, 2, 10],
   [/haiku/, 0.1, 0.5],
   [/gpt-4o-mini/, 0.15, 0.6],
-  [/gemini/, 0, 0], // version gratuite
+  [/^gemini-free/, 0, 0], // version gratuite
+  [/gemini.*pro/, 1.25, 10],
+  [/gemini/, 0.3, 2.5], // Gemini « flash » payant (Vertex AI ou clé facturée)
+  [/^local/, 0, 0], // modèle hébergé : pas de coût à l'appel
 ]
 const price = (model) => PRICES.find(([re]) => re.test(model)) || [null, 4, 20]
 
@@ -92,9 +107,83 @@ export function loadKey(root) {
 
 export const cached = (key) => cache.get(key) || null
 
-/** 'claude', 'gemini', 'openai' ou '' si aucune clé */
-export const aiProvider = () => (process.env.ANTHROPIC_API_KEY ? 'claude' : process.env.GEMINI_API_KEY ? 'gemini' : process.env.OPENAI_API_KEY ? 'openai' : '')
+/* ---------------------------------------------------------------- choix du moteur */
+
+const ENGINES = ['claude', 'vertex', 'local', 'gemini', 'openai']
+// Clé Gemini vue en offre gratuite (réponse 429 « free_tier ») : gardé jusqu'au redémarrage
+let geminiFreeSeen = ''
+
+/** Moteur configuré (clé ou adresse présente) */
+export function engineConfigured(id) {
+  const e = process.env
+  if (id === 'claude') return Boolean(e.ANTHROPIC_API_KEY)
+  if (id === 'vertex') return Boolean(e.MMS_VERTEX_PROJECT && (e.VERTEX_API_KEY || e.GOOGLE_APPLICATION_CREDENTIALS)) || Boolean(e.VERTEX_API_KEY)
+  if (id === 'local') return /^https?:\/\//i.test(e.MMS_LLM_BASE_URL || '')
+  if (id === 'gemini') return Boolean(e.GEMINI_API_KEY)
+  if (id === 'openai') return Boolean(e.OPENAI_API_KEY)
+  return false
+}
+
+/** Offre de la clé Gemini : 'paid' (déclarée payante et jamais vue gratuite), 'free' (vue gratuite) ou 'unknown' */
+export function geminiTier() {
+  if (geminiFreeSeen) return 'free'
+  return String(process.env.MMS_GEMINI_TIER || '').toLowerCase() === 'paid' ? 'paid' : 'unknown'
+}
+
+/** Le moteur garantit-il que les données envoyées ne servent pas à l'entraînement ? */
+export const noReuse = (id) => (id === 'gemini' ? geminiTier() === 'paid' : ENGINES.includes(id))
+
+function pick(forced, order) {
+  const f = String(forced || '').toLowerCase()
+  if (ENGINES.includes(f) && engineConfigured(f)) return f
+  return order.find((id) => engineConfigured(id) && noReuse(id)) || (engineConfigured('gemini') ? 'gemini' : '')
+}
+
+/** Moteur principal : 'claude', 'vertex', 'local', 'gemini', 'openai' ou '' si aucun */
+export const aiProvider = () => pick(process.env.MMS_AI_PROVIDER, ['claude', 'vertex', 'local', 'gemini', 'openai'])
 export const aiEnabled = () => Boolean(aiProvider())
+
+/** Moteur des tâches de fond (correction des acteurs, analyses Around rapides) : le moins cher sans réutilisation */
+export function economyProvider() {
+  if (process.env.MMS_AI_ALLOW_FREE === '1' && engineConfigured('gemini') && !process.env.MMS_AI_ECONOMY_PROVIDER) return 'gemini'
+  return pick(process.env.MMS_AI_ECONOMY_PROVIDER, ['local', 'vertex', 'gemini', 'claude', 'openai'])
+}
+
+const ENGINE_LABEL = { claude: 'Claude (Anthropic API)', vertex: 'Gemini — Google Cloud Vertex AI', local: 'Modèle hébergé (compatible OpenAI)', gemini: 'Gemini — clé API Google AI Studio', openai: 'OpenAI API' }
+
+/** État des moteurs pour le Super Admin : configurés, réutilisation des données, moteurs retenus, alertes */
+export function aiStatus() {
+  const main = aiProvider()
+  const economy = economyProvider()
+  const engines = ENGINES.map((id) => ({
+    id,
+    label: ENGINE_LABEL[id],
+    configured: engineConfigured(id),
+    noReuse: noReuse(id),
+    tier: id === 'gemini' ? geminiTier() : 'paid',
+    model: modelOf(id),
+  }))
+  const warnings = []
+  const used = [...new Set([main, economy].filter(Boolean))]
+  for (const id of used)
+    if (!noReuse(id))
+      warnings.push(
+        geminiTier() === 'free'
+          ? 'GEMINI_FREE_DETECTED' // Google a répondu par un quota « free_tier » : la clé est en offre gratuite
+          : 'GEMINI_TIER_UNKNOWN', // clé Gemini non déclarée payante (MMS_GEMINI_TIER=paid)
+      )
+  if (!main) warnings.push('NO_ENGINE')
+  return { main, economy, engines, warnings: [...new Set(warnings)], freeSeen: geminiFreeSeen }
+}
+
+function modelOf(id) {
+  if (id === 'claude') return MODEL
+  if (id === 'vertex') return process.env.MMS_VERTEX_MODEL || geminiActive
+  if (id === 'local') return process.env.MMS_LLM_MODEL || 'llama3.1'
+  if (id === 'gemini') return geminiActive
+  if (id === 'openai') return OPENAI_MODEL
+  return ''
+}
 
 const SCHEMA = {
   type: 'object',
@@ -228,8 +317,10 @@ function parseJson(text) {
   }
 }
 
-async function run(provider, prompt, spec = DEFAULT_SPEC) {
-  if (provider === 'claude') return withClaude(prompt, spec)
+async function run(provider, prompt, spec = DEFAULT_SPEC, opts = {}) {
+  if (provider === 'claude') return withClaude(prompt, spec, opts)
+  if (provider === 'vertex') return withGemini(prompt, spec, 'vertex')
+  if (provider === 'local') return withOpenAI(prompt, spec, 'local')
   if (provider === 'gemini') {
     try {
       return await withGemini(prompt, spec)
@@ -242,7 +333,9 @@ async function run(provider, prompt, spec = DEFAULT_SPEC) {
   return withOpenAI(prompt, spec)
 }
 
-async function withClaude(prompt, spec) {
+async function withClaude(prompt, spec, { economy = false } = {}) {
+  // Tâches de fond : modèle économique (Haiku) pour que la correction des acteurs coûte quelques centimes
+  const model = economy ? process.env.MMS_CLAUDE_ECONOMY_MODEL || 'claude-haiku-5-5' : MODEL
   let Anthropic
   try {
     Anthropic = (await import('@anthropic-ai/sdk')).default
@@ -252,43 +345,52 @@ async function withClaude(prompt, spec) {
   const client = new Anthropic()
   const msg = await client.beta.messages
     .stream({
-      model: MODEL,
+      model,
       max_tokens: 16000,
       system: spec.system,
       messages: [{ role: 'user', content: prompt }],
-      thinking: { type: 'adaptive' },
-      output_config: { effort: 'medium', format: { type: 'json_schema', schema: spec.schema } },
+      ...(economy ? {} : { thinking: { type: 'adaptive' } }),
+      output_config: { ...(economy ? {} : { effort: 'medium' }), format: { type: 'json_schema', schema: spec.schema } },
       // En cas de refus du modèle, le serveur relance sur un modèle de repli.
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
     })
     .finalMessage()
-  record('claude', msg.model || MODEL, msg.usage?.input_tokens || 0, msg.usage?.output_tokens || 0)
+  record('claude', msg.model || model, msg.usage?.input_tokens || 0, msg.usage?.output_tokens || 0)
   if (msg.stop_reason === 'refusal') throw new AIError('REFUSED', 'Le modèle a refusé la demande.')
   if (msg.stop_reason === 'max_tokens') throw new AIError('TRUNCATED', 'Réponse tronquée.')
   return parseJson(msg.content.map((b) => (b.type === 'text' ? b.text : '')).join(''))
 }
 
-// Environ 25 000 jetons en entrée et 1 500 en sortie : moins d'un centime par analyse avec gpt-4o-mini
-async function withOpenAI(prompt, spec) {
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      max_tokens: 4000,
-      temperature: 0.3,
-      messages: [
-        { role: 'system', content: spec.system },
-        { role: 'user', content: prompt },
-      ],
-      response_format: { type: 'json_schema', json_schema: { name: spec.name, strict: true, schema: spec.schema } },
-    }),
-    signal: AbortSignal.timeout(120_000),
-  })
+// Environ 25 000 jetons en entrée et 1 500 en sortie : moins d'un centime par analyse avec gpt-4o-mini.
+// kind 'local' : même protocole vers un modèle hébergé compatible OpenAI (Ollama, vLLM, LM Studio…)
+async function withOpenAI(prompt, spec, kind = 'openai') {
+  const local = kind === 'local'
+  const base = local ? String(process.env.MMS_LLM_BASE_URL).replace(/\/+$/, '') : 'https://api.openai.com/v1'
+  const key = local ? process.env.MMS_LLM_API_KEY : process.env.OPENAI_API_KEY
+  const model = local ? process.env.MMS_LLM_MODEL || 'llama3.1' : OPENAI_MODEL
+  const call = (format) =>
+    fetch(`${base}/chat/completions`, {
+      method: 'POST',
+      headers: { ...(key ? { authorization: `Bearer ${key}` } : {}), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        max_tokens: local ? 8000 : 4000,
+        temperature: 0.3,
+        messages: [
+          { role: 'system', content: local ? `${spec.system}\n${spec.format || FORMAT}` : spec.system },
+          { role: 'user', content: prompt },
+        ],
+        response_format: format,
+      }),
+      signal: AbortSignal.timeout(local ? 300_000 : 120_000),
+    })
+  let res = await call({ type: 'json_schema', json_schema: { name: spec.name, strict: true, schema: spec.schema } })
+  // Certains serveurs locaux ne connaissent que le mode JSON simple
+  if (local && res.status === 400) res = await call({ type: 'json_object' })
   const body = await res.json().catch(() => ({}))
-  if (!res.ok) throw httpError('OpenAI', res.status, body.error?.message)
-  record('openai', body.model || OPENAI_MODEL, body.usage?.prompt_tokens || 0, body.usage?.completion_tokens || 0)
+  if (!res.ok) throw httpError(local ? 'Modèle local' : 'OpenAI', res.status, body.error?.message)
+  record(kind, local ? `local-${model}` : body.model || OPENAI_MODEL, body.usage?.prompt_tokens || 0, body.usage?.completion_tokens || 0)
   const choice = body.choices?.[0]
   if (choice?.message?.refusal) throw new AIError('REFUSED', 'Le modèle a refusé la demande.')
   if (choice?.finish_reason === 'length') throw new AIError('TRUNCATED', 'Réponse tronquée.')
@@ -320,11 +422,48 @@ async function nextGeminiModel(failed) {
   return names[0] || ''
 }
 
-async function geminiCall(model, prompt, spec) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`
+/* Vertex AI : jeton OAuth du compte de service (JWT signé RS256), gardé jusqu'à 5 minutes avant son expiration */
+let vertexToken = { value: '', exp: 0 }
+async function vertexAuth() {
+  if (process.env.VERTEX_API_KEY) return { 'x-goog-api-key': process.env.VERTEX_API_KEY }
+  if (vertexToken.value && vertexToken.exp > Date.now() + 300_000) return { authorization: `Bearer ${vertexToken.value}` }
+  let sa
+  try {
+    sa = JSON.parse(fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8'))
+  } catch {
+    throw new AIError('KEY', 'Vertex AI : fichier du compte de service illisible (GOOGLE_APPLICATION_CREDENTIALS).')
+  }
+  const now = Math.floor(Date.now() / 1000)
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url')
+  const unsigned = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({ iss: sa.client_email, scope: 'https://www.googleapis.com/auth/cloud-platform', aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600 })}`
+  const signature = crypto.createSign('RSA-SHA256').update(unsigned).sign(sa.private_key).toString('base64url')
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: `${unsigned}.${signature}` }),
+    signal: AbortSignal.timeout(20_000),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok || !body.access_token) throw new AIError('KEY', `Vertex AI : jeton refusé (${body.error_description || body.error || res.status}).`)
+  vertexToken = { value: body.access_token, exp: Date.now() + (Number(body.expires_in) || 3600) * 1000 }
+  return { authorization: `Bearer ${vertexToken.value}` }
+}
+
+function vertexUrl(model) {
+  const loc = process.env.MMS_VERTEX_LOCATION || 'global'
+  const host = loc === 'global' ? 'aiplatform.googleapis.com' : `${loc}-aiplatform.googleapis.com`
+  const m = encodeURIComponent(model)
+  // Mode express (clé Vertex sans projet) ou projet Google Cloud
+  if (!process.env.MMS_VERTEX_PROJECT) return `https://${host}/v1/publishers/google/models/${m}:generateContent`
+  return `https://${host}/v1/projects/${encodeURIComponent(process.env.MMS_VERTEX_PROJECT)}/locations/${loc}/publishers/google/models/${m}:generateContent`
+}
+
+async function geminiCall(model, prompt, spec, kind = 'gemini') {
+  const url = kind === 'vertex' ? vertexUrl(model) : `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`
+  const auth = kind === 'vertex' ? await vertexAuth() : { 'x-goog-api-key': process.env.GEMINI_API_KEY }
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY, 'content-type': 'application/json' },
+    headers: { ...auth, 'content-type': 'application/json' },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: `${spec.system}\n${spec.format}` }] },
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -334,12 +473,22 @@ async function geminiCall(model, prompt, spec) {
     signal: AbortSignal.timeout(150_000),
   })
   const body = await res.json().catch(() => ({}))
-  if (!res.ok) throw httpError('Gemini', res.status, body.error?.message)
+  if (!res.ok) {
+    // Quota « free_tier » : la clé AI Studio est en offre gratuite (données pouvant être réutilisées par Google)
+    if (kind === 'gemini' && res.status === 429 && /free_tier|free tier/i.test(JSON.stringify(body.error || ''))) geminiFreeSeen = new Date().toISOString()
+    throw httpError(kind === 'vertex' ? 'Vertex AI' : 'Gemini', res.status, body.error?.message)
+  }
   return body
 }
 
-async function withGemini(prompt, spec) {
+async function withGemini(prompt, spec, kind = 'gemini') {
   let body
+  if (kind === 'vertex') {
+    const model = process.env.MMS_VERTEX_MODEL || geminiActive
+    body = await geminiCall(model, prompt, spec, 'vertex')
+    record('vertex', model, body.usageMetadata?.promptTokenCount || 0, (body.usageMetadata?.candidatesTokenCount || 0) + (body.usageMetadata?.thoughtsTokenCount || 0))
+    return geminiResult(body, spec)
+  }
   try {
     body = await geminiCall(geminiActive, prompt, spec)
   } catch (err) {
@@ -353,10 +502,14 @@ async function withGemini(prompt, spec) {
   }
   record(
     'gemini',
-    geminiActive,
+    noReuse('gemini') ? geminiActive : `gemini-free:${geminiActive}`,
     body.usageMetadata?.promptTokenCount || 0,
     (body.usageMetadata?.candidatesTokenCount || 0) + (body.usageMetadata?.thoughtsTokenCount || 0),
   )
+  return geminiResult(body, spec)
+}
+
+function geminiResult(body, spec) {
   const cand = body.candidates?.[0]
   if (!cand && body.promptFeedback?.blockReason) throw new AIError('REFUSED', `Gemini : demande bloquée (${body.promptFeedback.blockReason}).`)
   if (cand?.finishReason === 'MAX_TOKENS') throw new AIError('TRUNCATED', 'Réponse tronquée.')
@@ -439,18 +592,18 @@ export async function briefingSummary({ key, facts, items }) {
 /* ---------------------------------------------------------------- tâches de fond économiques */
 
 /**
- * Moteur économique pour les tâches de fond (correction des acteurs) : Gemini (version gratuite) en priorité, sinon
- * le moteur configuré. Comptée dans la consommation de l'IA comme le reste.
+ * Moteur économique pour les tâches de fond (correction des acteurs, analyses rapides) : economyProvider(), sans
+ * réutilisation des données sauf si rien d'autre n'est configuré. En panne, le moteur principal prend le relais.
+ * Comptée dans la consommation de l'IA comme le reste.
  */
 export async function runEconomy(prompt, spec) {
-  if (!process.env.GEMINI_API_KEY) return run(aiProvider(), prompt, spec)
+  const first = economyProvider()
   try {
-    return await withGemini(prompt, spec)
+    return await run(first, prompt, spec, { economy: true })
   } catch (err) {
-    // Gemini en panne : le moteur principal (Claude ou OpenAI) prend le relais s'il est configuré
-    const other = process.env.ANTHROPIC_API_KEY ? 'claude' : process.env.OPENAI_API_KEY ? 'openai' : ''
-    if (!other) throw err
-    console.error(`Gemini indisponible, repli sur ${other} :`, err.message)
+    const other = aiProvider()
+    if (!other || other === first) throw err
+    console.error(`IA ${first} indisponible, repli sur ${other} :`, err.message)
     return run(other, prompt, spec)
   }
 }
@@ -460,7 +613,7 @@ export async function runEconomy(prompt, spec) {
 /** Lance une consigne d'Around sur le moteur disponible ; même cache que le reste de l'IA */
 export async function aroundRun(key, prompt, spec, { economy = false } = {}) {
   if (cache.has(key)) return cache.get(key)
-  // Types d'analyse : moteur économique (Gemini gratuit en priorité), même cache
+  // Types d'analyse : moteur économique (sans réutilisation des données), même cache
   const data = economy ? await runEconomy(prompt, spec) : await run(aiProvider(), prompt, spec)
   const result = { ...data, at: new Date().toISOString() }
   cache.set(key, result)

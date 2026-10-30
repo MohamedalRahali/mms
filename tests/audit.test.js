@@ -492,17 +492,15 @@ test('corrections et ajouts : tonalité et thème corrigés, article manuel vali
   assert.ok(changed >= 4, 'la liste est relue après chaque modification')
 })
 
-test('vitrine publique : seulement les fiches approuvées, seulement les champs publics', async () => {
+test('vitrine publique : une approbation « public » seule ne publie plus ; seulement les champs publics', async () => {
   const { portalNews, portalItem } = await import('../server/portal.js')
   const it = (id, pub, extra = {}) => ({ id, public: pub, title: `خبر ${id}`, summary: 'ملخص', origin: 'وال', date: '2026-10-29T08:00:00Z', url: 'https://x.test/' + id, image: 'javascript:alert(1)', category: 'politique', lang: 'ar', tone: 'negative', people: ['س'], transcription: 'سري', createdBy: 'a@b', ...extra })
   const items = [it('a', true), it('b', false), it('c', true, { category: 'sport', date: '2026-10-20T08:00:00Z' }), it('d', undefined)]
-  const all = portalNews(items, {})
-  assert.deepEqual(all.items.map((x) => x.id), ['a', 'c'])
-  assert.deepEqual(Object.keys(all.items[0]).sort(), ['category', 'date', 'id', 'image', 'lang', 'pinned', 'source', 'summary', 'title', 'type', 'url'])
-  assert.equal(all.items[0].image, '', 'adresse d’image non http écartée')
-  assert.equal(portalNews(items, { category: 'sport' }).total, 1)
-  assert.equal(portalNews(items, { from: '2026-10-25' }).total, 1)
-  assert.equal(portalNews(items, { q: 'خبر c' }).total, 1)
-  assert.deepEqual(all.facets.categories.map((c) => c.name).sort(), ['politique', 'sport'])
-  assert.equal(portalItem(it('e', true, { summary: 'س'.repeat(900) })).summary.length, 600)
+  // Audit v4 : publication manuelle avec réécriture obligatoire, l'ancienne approbation ne suffit plus
+  assert.equal(portalNews(items, {}).total, 0)
+  const one = portalItem(it('e', true, { summary: 'س'.repeat(900) }))
+  assert.deepEqual(Object.keys(one).sort(), ['category', 'date', 'id', 'image', 'lang', 'pinned', 'publishedAt', 'source', 'summary', 'title', 'type', 'url'])
+  assert.equal(one.image, '', 'adresse d’image non http écartée')
+  assert.equal(one.summary.length, 600)
+  assert.equal(one.transcription, undefined)
 })

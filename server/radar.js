@@ -4,6 +4,7 @@ import { normalize } from './watches.js'
 import { findSpikes, spikeItems } from './intel.js'
 import { libyaRelevant, lookup } from './entities.js'
 import { collectionStartDay } from './history.js'
+import { countryOf } from './sourceMeta.js'
 
 /**
  * « Radar intelligent » de MMS : ce que la veille fait remonter sans qu'on ait à le chercher.
@@ -35,10 +36,18 @@ const STOP = new Set(
     'يوم اليوم امس غدا الان سنه العام عام شهر الشهر الماضي المقبل الجاري جديد جديده اول الاول ' +
     'قال قالت اكد اكدت اعلن اعلنت افاد افادت اضاف اضافت وفق حسب بحسب نحو اكثر اقل عده عدد ' +
     'تم يتم تمت سيتم وذلك وهذا وهذه وكان وكانت لكن ولكن وفيما فيما بينما وسط اطار ضمن جانب ' +
+    // Jours, mois et verbes de reportage (audit v4 : « الخميس » remontait comme sujet émergent)
+    'السبت سبت الاحد احد الاثنين اثنين الثلاثاء ثلاثاء الاربعاء اربعاء الخميس خميس الجمعه جمعه ' +
+    'يناير فبراير مارس ابريل مايو يونيو يوليو اغسطس سبتمبر اكتوبر نوفمبر ديسمبر صباح مساء ليله الليله ساعه ساعات ' +
+    'يقول تقول قالوا اشار اشارت اوضح اوضحت ذكر ذكرت كشف كشفت دعا دعت طالب طالبت التقي التقت استقبل استقبلت ' +
+    'شارك شاركت اجري اجرت يجري تجري تابع تابعت اعتبر اعتبرت عقد عقدت بحث بحثت نفي نفت شدد شددت لفت لفتت ' +
+    'اصدر اصدرت نشر نشرت يشهد تشهد شهد شهدت جاء جاءت يأتي تأتي اعرب اعربت ابدي ابدت ' +
     // français
     'le la les un une des du de d l et ou en au aux a à ce cet cette ces se sa son ses sur dans par pour avec ' +
     'sans sous qui que quoi dont est sont été être a ont avait plus moins pas ne il elle ils elles on nous vous ' +
     'leur leurs lors après avant selon entre comme mais aussi tout tous très deux trois jour hier aujourd ' +
+    'lundi mardi mercredi jeudi vendredi samedi dimanche janvier février mars avril mai juin juillet août septembre octobre novembre décembre ' +
+    'monday tuesday wednesday thursday friday saturday sunday january february march april june july august september october november december ' +
     // anglais
     'the a an of to in on at for by with from and or is are was were be been has have had it its this that ' +
     'these those as not but after before over under about into than new says said will would can could'
@@ -225,22 +234,43 @@ export function emergingTopics(items, { hours = 24, now = Date.now(), limit = 15
     })
   }
   found.sort((a, b) => b.score - a.score)
-  // Un mot ou une expression dont les fiches sont presque toutes déjà couvertes par un sujet retenu
-  // (« الشرارة النفطي », « حالة القوة » sous « حقل الشرارة ») est un doublon ; les entités restent
+  // Doublons (audit v4 : « مسعد بولس » 3e et 5e, « السودان » 9e et 12e) :
+  //  - même libellé une fois normalisé (article « ال », espaces, hamza) : l'entité et le mot ne font qu'un sujet ;
+  //  - un mot ou une expression dont les fiches sont presque toutes couvertes par un sujet retenu, entité comprise
+  //    (« الشرارة النفطي », « حالة القوة » sous « حقل الشرارة » ; « بولس » sous « مسعد بولس »).
+  const labelKey = (s) =>
+    normalize(String(s || ''))
+      .split(/\s+/)
+      .map((w) => (w.startsWith('ال') && w.length > 4 ? w.slice(2) : w))
+      .join('')
   const kept = []
   for (const f of found) {
-    const dup =
-      f.kind !== 'entity' &&
-      kept.some((k) => {
-        if (k.kind === 'entity') return false
-        let inter = 0
-        for (const d of f.docs) if (k.docs.has(d)) inter++
-        return inter >= f.docs.size * 0.7
-      })
+    const lk = labelKey(f.label)
+    const dup = kept.some((k) => {
+      if (labelKey(k.label) === lk) return true
+      if (f.kind === 'entity' && k.kind === 'entity') return false
+      // Une entité n'est jamais absorbée par un simple mot ; un mot ou une expression peut l'être par une entité
+      if (f.kind === 'entity') return false
+      let inter = 0
+      for (const d of f.docs) if (k.docs.has(d)) inter++
+      return inter >= f.docs.size * 0.7
+    })
     if (!dup) kept.push(f)
-    if (kept.length >= limit) break
+    if (kept.length >= limit * 3) break
   }
-  return kept.map(({ score, docs, ...f }) => ({ ...f, score: Math.round(score * 10) / 10 }))
+  // Une expression retenue avant l'entité qui la couvre (« السودان تطورات » puis « السودان ») : l'entité l'emporte
+  const covered = (f) =>
+    f.kind !== 'entity' &&
+    kept.some((k) => {
+      if (k.kind !== 'entity' || !labelKey(f.label).includes(labelKey(k.label))) return false
+      let inter = 0
+      for (const d of f.docs) if (k.docs.has(d)) inter++
+      return inter >= f.docs.size * 0.7
+    })
+  return kept
+    .filter((f) => !covered(f))
+    .slice(0, limit)
+    .map(({ score, docs, ...f }) => ({ ...f, score: Math.round(score * 10) / 10 }))
 }
 
 /* ---------------------------------------------------------------- histoires */
@@ -272,9 +302,25 @@ function windowPool(items, hours, now, cap) {
     .sort((a, b) => a.date.localeCompare(b.date))
 }
 
+/**
+ * Mots trop fréquents dans la fenêtre (« ليبيا », « طرابلس », « الحكومة ») : présents dans plus de 4 % des fiches
+ * (au moins 25). Ils ne relient pas deux fiches : sans ce filtre, un message X de deux mots se retrouvait en tête
+ * d'une « histoire » de 1 500 publications (audit v4).
+ */
+function commonWords(pool) {
+  const df = new Map()
+  for (const it of pool) for (const w of titleSet(it)) df.set(w, (df.get(w) || 0) + 1)
+  const limit = Math.max(25, pool.length * 0.04)
+  return new Set([...df.entries()].filter(([, n]) => n > limit).map(([w]) => w))
+}
+
+// Taille maximale d'une histoire : au-delà, le regroupement est presque sûrement trop large
+const MAX_STORY = 200
+
 /** Regroupement des fiches (triées de la plus ancienne à la plus récente) qui parlent du même événement */
 function clusterPool(pool) {
   const clusters = []
+  const common = commonWords(pool)
   const byWord = new Map() // racine → histoires dont le cœur ou la première fiche la contient
   const index = (c, words) => {
     for (const w of words) {
@@ -284,13 +330,19 @@ function clusterPool(pool) {
     }
   }
   for (const it of pool) {
-    const set = titleSet(it)
-    if (set.size < 2) continue
+    const set = new Set([...titleSet(it)].filter((w) => !common.has(w)))
+    // Trop peu de mots distinctifs (message court) : la fiche reste seule plutôt que d'être rattachée au hasard
+    if (set.size < 3) continue
     let best = null
     let bestSim = 0
     const candidates = new Set()
     for (const w of set) for (const c of byWord.get(w) ?? []) candidates.add(c)
     for (const c of [...candidates].sort((a, b) => a.n - b.n)) {
+      if (c.items.length >= MAX_STORY) continue
+      // Au moins 3 mots distinctifs en commun, et la moitié des mots de la plus courte
+      let inter = 0
+      for (const x of set) if (c.seed.has(x) || c.core.has(x)) inter++
+      if (inter < 3) continue
       const sim = Math.max(similarity(set, c.core), similarity(set, c.seed))
       if (sim > bestSim) {
         bestSim = sim
@@ -302,8 +354,8 @@ function clusterPool(pool) {
       for (const s of set) best.freq.set(s, (best.freq.get(s) || 0) + 1)
       // Le cœur de l'histoire : les mots présents dans au moins la moitié de ses fiches
       const half = best.items.length / 2
-      const core = new Set([...best.freq.entries()].filter(([, n]) => n >= half).map(([s]) => s))
-      if (core.size >= 2) {
+      const core = new Set([...best.freq.entries()].filter(([s, n]) => n >= half && !common.has(s)).map(([s]) => s))
+      if (core.size >= 3) {
         best.core = core
         index(best, core)
       }
@@ -335,7 +387,8 @@ export function storyIndex(items, { hours = 168, now = Date.now() } = {}) {
  */
 export function storyClusters(items, { hours = 48, now = Date.now(), limit = 20 } = {}) {
   return clusterPool(windowPool(items, hours, now, 4000))
-    .filter((c) => c.items.length >= 2)
+    .map((c) => ({ ...c, items: c.items.filter(onTopic) }))
+    .filter((c) => c.items.length >= 2 && new Set(c.items.map((it) => it.origin)).size >= 1)
     .map((c) => {
       const first = c.items[0]
       const last = c.items[c.items.length - 1]
@@ -365,6 +418,61 @@ export function storyClusters(items, { hours = 48, now = Date.now(), limit = 20 
     })
     .sort((a, b) => b.sources.length - a.sources.length || b.size - a.size || b.lastDate.localeCompare(a.lastDate))
     .slice(0, limit)
+}
+
+/**
+ * Fiche dans le sujet de la veille (Libye) : récits multi-sources sans les sources hors sujet (Grimline History,
+ * Kigali News, RUSTAM… : audit v4). Pertinence calculée par la veille et entities.js (it.ly), sinon pays de la source.
+ */
+function onTopic(it) {
+  if (it.ly === true || it.ly === undefined) return true
+  return countryOf(it) === 'LY'
+}
+
+/**
+ * Revue de presse sans doublons (audit v4 : 4 articles Mitsotakis, Libyan Express Brega en double) : les fiches qui
+ * racontent le même fait (même adresse, même titre, ou même histoire au sens de clusterPool) n'en font qu'une, la plus
+ * complète ; les autres sources qui l'ont reprise sont listées dans `also` ({ origin, url, id }).
+ */
+export function dedupeStories(items) {
+  const pool = [...items].filter((it) => it.media !== 'comment').sort((a, b) => a.date.localeCompare(b.date))
+  const lead = new Map() // id → fiche retenue
+  const groups = new Map() // id retenu → autres fiches
+  // 1) même adresse ou même titre normalisé
+  const byKey = new Map()
+  const tkey = (t) => normalize(String(t || '')).replace(/[^\p{L}\p{N}]+/gu, '').slice(0, 90)
+  for (const it of pool) {
+    const keys = [it.url && `u:${String(it.url).replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase()}`, tkey(it.title).length >= 12 && `t:${tkey(it.title)}`].filter(Boolean)
+    const known = keys.map((k) => byKey.get(k)).find(Boolean)
+    if (known) lead.set(it.id, known)
+    for (const k of keys) if (!byKey.has(k)) byKey.set(k, known || it)
+  }
+  // 2) même histoire (mots distinctifs du titre en commun)
+  for (const c of clusterPool(pool.filter((it) => !lead.has(it.id)))) {
+    if (c.items.length < 2) continue
+    const best = [...c.items].sort((a, b) => (b.importance || 1) - (a.importance || 1) || String(b.summary || '').length - String(a.summary || '').length)[0]
+    for (const it of c.items) if (it !== best) lead.set(it.id, best)
+  }
+  const out = []
+  for (const it of items) {
+    const l = lead.get(it.id)
+    if (l && l.id !== it.id) {
+      let root = l
+      while (lead.get(root.id) && lead.get(root.id).id !== root.id) root = lead.get(root.id)
+      if (!groups.has(root.id)) groups.set(root.id, [])
+      groups.get(root.id).push(it)
+      continue
+    }
+    out.push(it)
+  }
+  return out.map((it) => {
+    const others = groups.get(it.id)
+    if (!others?.length) return it
+    const seen = new Set([it.origin])
+    const also = []
+    for (const o of others) if (!seen.has(o.origin) || o.url !== it.url) (seen.add(o.origin), also.push({ id: o.id, origin: o.origin, url: o.url }))
+    return { ...it, also: also.slice(0, 20), dupes: others.length }
+  })
 }
 
 /* ---------------------------------------------------------------- baromètre */
@@ -614,7 +722,7 @@ export function startRadarAlerts(dataDir, getItems, { sendTelegram, telegramRead
           html: `<div dir="rtl" style="font-family:Arial,sans-serif">${text.replace(/\n/g, '<br>')}</div>`,
         })
       for (const a of fresh) sent[a.id] = now
-      onSent({ count: fresh.length, channels: [...(telegramReady() ? ['telegram'] : []), ...(to.length ? ['email'] : [])], recipients: to.length, names: fresh.map((a) => a.label) })
+      onSent({ count: fresh.length, channels: [...(telegramReady() ? ['telegram'] : []), ...(to.length ? ['email'] : [])], recipients: to.length + (telegramReady() ? String(process.env.TELEGRAM_CHAT_ID || '').split(',').filter((c) => c.trim()).length : 0), names: fresh.map((a) => a.label) })
       fs.mkdirSync(dataDir, { recursive: true })
       fs.writeFileSync(file, JSON.stringify(sent))
     } catch (err) {

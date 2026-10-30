@@ -77,8 +77,18 @@ export function foldStories(list, index) {
     } else if (lead.similar.length < 50) lead.similar.push(it)
     else lead.similarMore = (lead.similarMore || 0) + 1
   }
-  return out
+  // Tête de l'histoire : la fiche la plus représentative (article de presse important et complet), pas un message
+  // de réseau social de quelques mots arrivé en premier (audit v4) ; elle garde la place de la première dans la liste
+  const rank = (x) => (SOCIAL.has(x.channel) || x.media === 'social' ? 0 : 10) + (Number(x.importance) || 1) * 2 + Math.min(String(x.summary || '').length / 200, 2)
+  return out.map((row) => {
+    if (!row.story || !row.similar?.length) return row
+    const { story, similar, similarMore, ...base } = row
+    const best = similar.reduce((b, x) => (rank(x) > rank(b) ? x : b), base)
+    if (best === base) return row
+    return { ...best, story, similar: [base, ...similar.filter((x) => x !== best)], ...(similarMore ? { similarMore } : {}) }
+  })
 }
+const SOCIAL = new Set(['x', 'twitter', 'bluesky', 'facebook', 'instagram', 'telegram', 'tiktok', 'reddit', 'mastodon', 'youtube', 'linkedin', 'threads'])
 
 /** Nombre de fiches représentées par une ligne (elle-même et ses similaires) */
 const weight = (it) => 1 + (it.similar?.length || 0) + (it.similarMore || 0)

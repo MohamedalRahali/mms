@@ -3,6 +3,7 @@ import { sourceSplit, uniqueItems } from './dedupe.js'
 import { collectionStart } from './history.js'
 import { normalize } from './watches.js'
 import { countList, findSpikes } from './intel.js'
+import { dedupeStories } from './radar.js'
 
 /**
  * Analyses de niveau Meltwater : part de voix entre acteurs, comparaison de deux périodes,
@@ -10,6 +11,7 @@ import { countList, findSpikes } from './intel.js'
  */
 
 const DAY_MS = 86_400_000
+const MAX_TOP_PER_SOURCE = 2
 const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tripoli', year: 'numeric', month: '2-digit', day: '2-digit' })
 export const toDay = (iso) => dayKey.format(new Date(iso))
 
@@ -169,9 +171,17 @@ export function buildBriefing(items, days) {
   const cmp = comparePeriods(items, days)
   const now = Date.now()
   const cur = uniqueItems(items.filter((it) => Date.parse(it.date) >= now - days * DAY_MS))
-  // Les plus marquantes : importance, puis reprises et interactions
-  const top = [...cur]
-    .sort((a, b) => (b.importance || 1) - (a.importance || 1) || interactions(b) - interactions(a) || b.date.localeCompare(a.date))
+  // Les plus marquantes : importance, puis reprises et interactions ; un même fait une seule fois et au plus
+  // 2 articles par source (audit v4 : le rapport exécutif alignait plusieurs articles d'un même média)
+  const perSource = new Map()
+  const top = dedupeStories(cur)
+    .sort((a, b) => (b.importance || 1) - (a.importance || 1) || (b.dupes || 0) - (a.dupes || 0) || interactions(b) - interactions(a) || b.date.localeCompare(a.date))
+    .filter((it) => {
+      const n = perSource.get(it.origin) || 0
+      if (n >= MAX_TOP_PER_SOURCE) return false
+      perSource.set(it.origin, n + 1)
+      return true
+    })
     .slice(0, 12)
   return {
     days,
