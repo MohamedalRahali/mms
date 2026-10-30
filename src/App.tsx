@@ -7,7 +7,7 @@ import { NewsList } from './components/NewsList'
 import { StatsView } from './components/StatsView'
 import { DailyReport } from './components/DailyReport'
 import { Toolbar } from './components/Toolbar'
-import { AiAnalysis, Alerts, Favorites, Help, PageHead, Presentation, Survey, UpdateToast } from './components/Extras'
+import { AiAnalysis, Alerts, Favorites, Help, Presentation, Survey, UpdateToast } from './components/Extras'
 import { type Filters, type Flux, type NewsResponse, DrillContext, RefreshContext, ReloadContext, useFetch } from './lib/news'
 import { SpikeBanner } from './components/Intel'
 import { CommandHero } from './components/Hero'
@@ -47,7 +47,6 @@ type View =
   | 'dashboard'
   | 'news'
   | 'watch'
-  | 'search'
   | 'stats'
   | 'ai'
   | 'report'
@@ -68,7 +67,6 @@ const VIEWS: View[] = [
   'dashboard',
   'news',
   'watch',
-  'search',
   'stats',
   'ai',
   'report',
@@ -90,7 +88,7 @@ const VIEWS: View[] = [
 /** Module de permissions dont dépend chaque page (null : toujours ouverte) */
 function moduleOf(v: View): ModuleKey | null {
   if (v === 'help') return null
-  if (v === 'search' || v === 'pool') return 'news'
+  if (v === 'pool') return 'news'
   if (v.startsWith('media-')) return 'media'
   return v as ModuleKey
 }
@@ -129,7 +127,6 @@ const ICONS: Record<string, string> = {
   news: 'M4 5h16v2H4zm0 4h10v2H4zm0 4h16v2H4zm0 4h10v2H4z',
   stats: 'M5 9h3v11H5zm5.5-5h3v16h-3zM16 13h3v7h-3z',
   ai: 'M12 2l1.8 4.7L18.5 8.5l-4.7 1.8L12 15l-1.8-4.7L5.5 8.5l4.7-1.8L12 2zm6 11l.9 2.4 2.4.9-2.4.9L18 20.6l-.9-2.4-2.4-.9 2.4-.9L18 13zM6 14l.7 1.8 1.8.7-1.8.7L6 19l-.7-1.8-1.8-.7 1.8-.7L6 14z',
-  search: 'M10 3a7 7 0 0 1 5.6 11.2l5.1 5.1-1.4 1.4-5.1-5.1A7 7 0 1 1 10 3zm0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10z',
   watch:
     'M12 4.5C7 4.5 2.7 7.6 1 12c1.7 4.4 6 7.5 11 7.5s9.3-3.1 11-7.5c-1.7-4.4-6-7.5-11-7.5zm0 12.5a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
   report: 'M6 2h9l5 5v15H6V2zm8 1.5V8h4.5L14 3.5zM8 12h8v1.6H8zm0 3.5h8v1.6H8z',
@@ -352,7 +349,6 @@ export default function App() {
           { key: 'compare', label: pro.navCompare },
           { key: 'geo', label: lang === 'ar' ? 'الحضور في إجابات النموذج الداخلي' : 'Presence in internal-model answers' },
           { key: 'pool', label: lang === 'ar' ? 'مجمع البحث' : 'Search pool' },
-          { key: 'search', label: t.sideSearch },
         ],
       },
       {
@@ -624,12 +620,6 @@ export default function App() {
                             setView('news')
                           }}
                         />
-                      )}
-                      {shown === 'search' && (
-                        <>
-                          <PageHead title={t.searchTitle} />
-                          <NewsList flux={flux} />
-                        </>
                       )}
                       {shown === 'stats' && <StatsView flux={flux} />}
                       {shown === 'ai' && <AiAnalysis flux={flux} />}
