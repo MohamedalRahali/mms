@@ -102,9 +102,12 @@ export function auditMiddleware(req, res, next) {
   // Identifiant tapé à la connexion (jamais le mot de passe)
   const typed = typeof req.body?.login === 'string' ? req.body.login : ''
   res.on('finish', () => {
-    const actor = req.user?.email || (req.sa ? `superadmin:${req.sa.u}` : '') || (category === 'login' && typeof req.body?.login === 'string' ? req.body.login : typed) || ''
-    const action =
-      category === 'login'
+    const superLogin = p.startsWith('/api/superadmin/')
+    const typedLogin = category === 'login' && typeof req.body?.login === 'string' ? req.body.login : typed
+    const actor = req.auditActor || req.user?.email || (req.sa ? `superadmin:${req.sa.u}` : '') || (typedLogin ? (superLogin ? `superadmin:${typedLogin}` : typedLogin) : '') || ''
+    const action = req.auditAction
+      ? req.auditAction
+      : category === 'login'
         ? p.endsWith('logout')
           ? 'logout'
           : res.statusCode < 300

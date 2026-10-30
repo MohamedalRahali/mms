@@ -42,6 +42,8 @@ const STOP = new Set(
     'يقول تقول قالوا اشار اشارت اوضح اوضحت ذكر ذكرت كشف كشفت دعا دعت طالب طالبت التقي التقت استقبل استقبلت ' +
     'شارك شاركت اجري اجرت يجري تجري تابع تابعت اعتبر اعتبرت عقد عقدت بحث بحثت نفي نفت شدد شددت لفت لفتت ' +
     'اصدر اصدرت نشر نشرت يشهد تشهد شهد شهدت جاء جاءت يأتي تأتي اعرب اعربت ابدي ابدت ' +
+    // Mots outils relevés en production le 30/10 (« بشكل »، « خطر »، « باطل »، « بمقر »، « رقمين وطنيين »)
+    'بشكل شكل خطر باطل مقر بمقر رقم رقمين ارقام وطني وطنيه وطنيين حال حاله امر بسبب نتيجه عدم مدي ظل اثر اثناء لاحق سابق ' +
     // français
     'le la les un une des du de d l et ou en au aux a à ce cet cette ces se sa son ses sur dans par pour avec ' +
     'sans sous qui que quoi dont est sont été être a ont avait plus moins pas ne il elle ils elles on nous vous ' +
@@ -253,7 +255,9 @@ export function emergingTopics(items, { hours = 24, now = Date.now(), limit = 15
       if (f.kind === 'entity') return false
       let inter = 0
       for (const d of f.docs) if (k.docs.has(d)) inter++
-      return inter >= f.docs.size * 0.7
+      // Un mot seul (« باطل », « والاستثماري ») tiré d'un sujet déjà retenu est plus vite écarté qu'une expression
+      // (« الوزراء اليوناني » sous « كيرياكوس ميتسوتاكيس », production du 30/10)
+      return inter >= f.docs.size * (f.kind === 'word' ? 0.5 : 0.6)
     })
     if (!dup) kept.push(f)
     if (kept.length >= limit * 3) break

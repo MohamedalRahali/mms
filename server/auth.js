@@ -183,6 +183,8 @@ const TICKET_MS = 5 * 60_000
 
 /** Ouvre la session (cookie) après mot de passe, et code si la double authentification est active */
 function openSession(req, res, user, remember, ip, ua, detail = '') {
+  // Journal d'audit : compte connu même à l'étape du code (la requête ne porte pas l'identifiant)
+  req.auditActor = user.email
   const token = crypto.randomBytes(32).toString('base64url')
   const ttl = remember ? LONG_MS : SHORT_MS
   sessions.set(token, { email: user.email, expires: Date.now() + ttl, at: Date.now(), ip, ua })
@@ -234,6 +236,8 @@ export function loginRoute(req, res) {
     const ticket = crypto.randomBytes(24).toString('base64url')
     tickets.set(ticket, { email: user.email, remember: Boolean(remember), ip, ua, at: Date.now(), tries: 0 })
     onAuthEvent('mfa_asked', { ip, ua, login: user.email })
+    req.auditActor = user.email
+    req.auditAction = 'mfa_asked'
     return res.json({ mfa: 'code', ticket })
   }
   openSession(req, res, user, remember, ip, ua)

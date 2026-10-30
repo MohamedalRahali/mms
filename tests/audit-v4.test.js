@@ -282,3 +282,33 @@ test('IA : la facturation Gemini confirmée par le Super Admin vaut déclaration
     process.env = keep
   }
 })
+
+test("journal d'audit : l'étape du code à 6 chiffres porte le compte", async () => {
+  const at = await import('../server/auditTrail.js')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mms-mfa-'))
+  at.initAuditTrail(dir)
+  const { EventEmitter } = await import('node:events')
+  const run = (req) => {
+    const res = Object.assign(new EventEmitter(), { statusCode: 200 })
+    at.auditMiddleware(req, res, () => {})
+    return res
+  }
+  // Étape 1 : mot de passe correct, code demandé ; étape 2 : code (sans identifiant dans la requête)
+  const r1 = { method: 'POST', path: '/api/auth/login', body: { login: 'a@b.ly' }, ip: '1.1.1.1' }
+  const res1 = run(r1)
+  r1.auditActor = 'a@b.ly'
+  r1.auditAction = 'mfa_asked'
+  res1.emit('finish')
+  const r2 = { method: 'POST', path: '/api/auth/mfa', body: { ticket: 't', code: '123456' }, ip: '1.1.1.1' }
+  const res2 = run(r2)
+  r2.auditActor = 'a@b.ly'
+  res2.emit('finish')
+  assert.deepEqual(at.auditQuery({}).map((r) => [r.actor, r.action]), [['a@b.ly', 'login_ok'], ['a@b.ly', 'mfa_asked']])
+})
+
+test('YouTube : chaînes d’information gardées, vlogs et chaînes religieuses écartés (noms relevés en production)', async () => {
+  const sp = await import('../server/sourcePolicy.js')
+  const x = (origin) => sp.excludedBySource({ origin, channel: 'youtube', title: 'نشرة' })
+  for (const ok of ['Libya Al-Ahrar', 'قناة ليبيا الحدث - Libya Alhadath TV', 'فرانس 24 / FRANCE 24 Arabic', 'AlArabiya العربية', 'أثر الإخبارية - Athar News']) assert.equal(x(ok), false, ok)
+  for (const ko of ['Naya Quran TV', 'Jason Veiga', 'Guns For Hire Podcast', 'Béton & Capital', 'History From Orbit']) assert.equal(x(ko), true, ko)
+})

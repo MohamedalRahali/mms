@@ -23,18 +23,23 @@ const BOT_PATTERNS = [/^r\/\w*auto$/i, /^r\/auto\w*newspaper/i, /porn/i, /nsfw/i
 
 // YouTube : chaînes hors sujet pour une veille d'actualité (récitation, religion, divertissement, musique), d'après le
 // nom de la chaîne seulement : un titre d'actualité qui parle d'un concours de Coran ou d'un « مسلسل » reste gardé
-const YOUTUBE_OFFTOPIC = /قرآن|القران|تلاوة|تلاوات|ترتيل|تجويد|رقية|الرقيه|أناشيد|اناشيد|نشيد|أدعية|ادعية|خطبة الجمعة|كرتون|رسوم متحركة|أغاني|اغاني|أغنية|اغنية|مسلسل|كليب|quran|koran|recitation|ruqya|nasheed|cartoon|kids|lyrics|official music|music video|gaming|vlog/i
+const YOUTUBE_OFFTOPIC = /قرآن|القران|تلاوة|تلاوات|ترتيل|تجويد|رقية|الرقيه|أناشيد|اناشيد|نشيد|أدعية|ادعية|خطبة الجمعة|كرتون|رسوم متحركة|أغاني|اغاني|أغنية|اغنية|مسلسل|كليب|\bquran\b|\bkoran\b|recitation|\bruqya|nasheed|cartoon|\bkids\b|lyrics|official music|music video|\bgaming\b|\bvlog/i
 
 let file = ''
-let policy = { blocked: [], forumAllow: [] }
+// Audit v4 (vérification en production du 30/10) : liste blanche des chaînes YouTube. Une vidéo n'est gardée que si
+// sa chaîne est une chaîne d'information connue (ci-dessous) ou listée par le Super Admin (« youtubeAllow »).
+// Les recherches YouTube remontaient des vlogs, podcasts et chaînes de divertissement sans rapport.
+export const YOUTUBE_NEWS =
+  /ليبي|libya|libye|الأحرار|ahrar|218|الوسط|wasat|الحدث|hadath|الوطنية|wataniya|المسار|masar|الرسمية|rasmia|النبأ|nabaa|التناصح|tanasuh|سلام|الجزيرة|jazeera|العربية|arabiya|سكاي نيوز|sky ?news|france ?24|فرانس ?24|bbc|بي بي سي|\bdw\b|دويتشه|\brt\b|روسيا اليوم|trt|cnn|الشرق|asharq|العربي|alaraby|الميادين|mayadeen|euronews|يورونيوز|reuters|رويترز|associated press|\bap\b|afp|al ?ghad|الغد|القاهرة الإخبارية|wion|haber|الإخبارية|الاخبارية|إخبارية|اخبارية|أخبار|اخبار|\bnews\b|\bnachrichten\b|\binfo\b/i
+let policy = { blocked: [], forumAllow: [], youtubeAllow: [] }
 
 export function initSourcePolicy(dir) {
   file = path.join(dir, 'source-policy.json')
   try {
     const saved = JSON.parse(fs.readFileSync(file, 'utf8'))
-    policy = { blocked: list(saved.blocked), forumAllow: list(saved.forumAllow) }
+    policy = { blocked: list(saved.blocked), forumAllow: list(saved.forumAllow), youtubeAllow: list(saved.youtubeAllow) }
   } catch {
-    policy = { blocked: [], forumAllow: [] }
+    policy = { blocked: [], forumAllow: [], youtubeAllow: [] }
   }
 }
 
@@ -47,7 +52,7 @@ const list = (v) =>
 export const sourcePolicy = () => ({ ...policy, defaults: DEFAULT_BLOCKED })
 
 export function setSourcePolicy(body) {
-  policy = { blocked: list(body?.blocked), forumAllow: list(body?.forumAllow) }
+  policy = { blocked: list(body?.blocked), forumAllow: list(body?.forumAllow), youtubeAllow: list(body?.youtubeAllow) }
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(file, JSON.stringify(policy, null, 2))
   return sourcePolicy()
@@ -73,6 +78,7 @@ export function excludedBySource(it) {
   const social = it.channel === 'reddit' || it.media === 'forum' || it.media === 'social'
   if (social && BOT_PATTERNS.some((re) => re.test(o))) return true
   if (it.channel === 'youtube' && (YOUTUBE_OFFTOPIC.test(o) || YOUTUBE_OFFTOPIC_TITLE.test(String(it.title || '')))) return true
+  if (it.channel === 'youtube' && !YOUTUBE_NEWS.test(o) && !policy.youtubeAllow.some((y) => lower(y) === lo)) return true
   if (RELIGIOUS_SOURCE.test(o) && it.channel !== 'site') return true
   // Reddit : forums de la liste blanche seulement (défaut + ajouts du Super Admin)
   if (it.channel === 'reddit' && lo.startsWith('r/') && ![...REDDIT_ALLOW, ...policy.forumAllow].some((f) => lower(canonicalOrigin(f)) === lo)) return true

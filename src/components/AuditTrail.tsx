@@ -32,7 +32,7 @@ const TEXT = {
     ko: 'رُفضت',
     empty: 'لا توجد عمليات مطابقة.',
     denied: 'هذه الصفحة خاصة بمديري المنصة.',
-    actions: { login_ok: 'تسجيل دخول', login_failed: 'محاولة دخول فاشلة', login_disabled: 'دخول بحساب معطّل', logout: 'خروج', shared_account_disabled: 'تعطيل الحساب المشترك', shared_account_kept: 'الإبقاء على الحساب المشترك', stream_cut: 'انقطاع بث', stream_back: 'عودة البث' } as Record<string, string>,
+    actions: { login_ok: 'تسجيل دخول', login_failed: 'محاولة دخول فاشلة', login_disabled: 'دخول بحساب معطّل', logout: 'خروج', shared_account_disabled: 'تعطيل الحساب المشترك', shared_account_kept: 'الإبقاء على الحساب المشترك', mfa_asked: 'كلمة مرور صحيحة، بانتظار الرمز', stream_cut: 'انقطاع بث', stream_back: 'عودة البث' } as Record<string, string>,
   },
   en: {
     title: 'Audit log',
@@ -52,7 +52,7 @@ const TEXT = {
     ko: 'Refused',
     empty: 'No matching action.',
     denied: 'This page is for platform administrators.',
-    actions: { login_ok: 'Sign-in', login_failed: 'Failed sign-in', login_disabled: 'Sign-in on disabled account', logout: 'Sign-out', shared_account_disabled: 'Shared account disabled', shared_account_kept: 'Shared account kept', stream_cut: 'Stream cut', stream_back: 'Stream back' } as Record<string, string>,
+    actions: { login_ok: 'Sign-in', login_failed: 'Failed sign-in', login_disabled: 'Sign-in on disabled account', logout: 'Sign-out', shared_account_disabled: 'Shared account disabled', shared_account_kept: 'Shared account kept', mfa_asked: 'Password OK, waiting for code', stream_cut: 'Stream cut', stream_back: 'Stream back' } as Record<string, string>,
   },
 }
 

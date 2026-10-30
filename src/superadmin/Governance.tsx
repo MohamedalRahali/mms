@@ -91,17 +91,20 @@ export function MailPolicyCard({ onMsg }: { onMsg: (m: string) => void }) {
 /* ---------------------------------------------------------------- سياسة مصادر التواصل والمنتديات */
 
 export function SourcePolicyCard({ onMsg }: { onMsg: (m: string) => void }) {
-  const { data, reload } = useList<{ policy: { blocked: string[]; forumAllow: string[]; defaults: string[] } }>('/source-policy')
+  const { data, reload } = useList<{ policy: { blocked: string[]; forumAllow: string[]; youtubeAllow?: string[]; defaults: string[] } }>('/source-policy')
   const [blocked, setBlocked] = useState<string | null>(null)
   const [allow, setAllow] = useState<string | null>(null)
+  const [yt, setYt] = useState<string | null>(null)
   if (!data) return null
   const b = blocked ?? data.policy.blocked.join(', ')
   const a = allow ?? data.policy.forumAllow.join(', ')
+  const y = yt ?? (data.policy.youtubeAllow ?? []).join('\n')
   async function save() {
     try {
-      await api('/source-policy', 'PUT', { blocked: b, forumAllow: a })
+      await api('/source-policy', 'PUT', { blocked: b, forumAllow: a, youtubeAllow: y })
       setBlocked(null)
       setAllow(null)
+      setYt(null)
       onMsg('تم حفظ سياسة المصادر. تُطبَّق على كل الصفحات خلال دقيقة.')
       reload()
     } catch (e) {
@@ -124,6 +127,10 @@ export function SourcePolicyCard({ onMsg }: { onMsg: (m: string) => void }) {
         <label className="sa-field">
           <span>القائمة البيضاء للمنتديات (فارغة = كل المنتديات ما عدا المستبعدة)</span>
           <textarea className="sa-input" rows={5} value={a} onChange={(e) => setAllow(e.target.value)} dir="ltr" placeholder="r/libya" />
+        </label>
+        <label className="sa-field">
+          <span>قنوات YouTube مسموح بها إضافةً إلى القنوات الإخبارية المعروفة (اسم القناة كما يظهر، سطر لكل قناة)</span>
+          <textarea className="sa-input" rows={5} value={y} onChange={(e) => setYt(e.target.value)} dir="auto" placeholder="Qnews" />
         </label>
       </div>
       <button type="button" className="sa-btn" onClick={save}>
