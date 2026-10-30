@@ -11,7 +11,10 @@ import dotenv from 'dotenv'
 
 const MODEL = process.env.CLAUDE_MODEL || 'claude-opus-5-5'
 const OPENAI_MODEL = process.env.MMS_OPENAI_MODEL || 'gpt-4o-mini'
-const GEMINI_MODEL = process.env.MMS_GEMINI_MODEL || 'gemini-2.5-flash'
+// gemini-2.5-flash a été retiré par Google (404 « no longer available », 29/10/2026) : si le modèle demandé
+// disparaît à son tour, withGemini en choisit un autre dans la liste des modèles du compte
+const GEMINI_MODEL = process.env.MMS_GEMINI_MODEL || 'gemini-3.8-flash'
+let geminiActive = GEMINI_MODEL
 const cache = new Map()
 
 // Prix en dollars par million de jetons (entrée, sortie), pour estimer la dépense de MMS
@@ -179,6 +182,52 @@ const DEFAULT_SPEC = {
   name: 'analyse',
 }
 
+/**
+ * Erreur du moteur d'IA avec une cause lisible pour l'interface :
+ * KEY (clé refusée), QUOTA (quota ou crédit épuisé), MODEL (modèle introuvable), TIMEOUT, TRUNCATED, REFUSED, PARSE, PROVIDER
+ */
+export class AIError extends Error {
+  constructor(reason, message) {
+    super(message)
+    this.reason = reason
+  }
+}
+
+function httpError(provider, status, message) {
+  const m = String(message || 'erreur')
+  const reason =
+    status === 429 || /quota|exhausted|billing|credit/i.test(m)
+      ? 'QUOTA'
+      : status === 401 || status === 403 || /api key|api_key/i.test(m)
+        ? 'KEY'
+        : status === 404 || /no longer available|not found|is not supported/i.test(m)
+          ? 'MODEL'
+          : 'PROVIDER'
+  return new AIError(reason, `${provider} ${status} : ${m}`)
+}
+
+/** Cause d'une erreur quelconque (réseau, délai, JSON…) */
+export function aiReason(err) {
+  if (err instanceof AIError) return err.reason
+  if (err?.name === 'TimeoutError' || err?.name === 'AbortError') return 'TIMEOUT'
+  if (err instanceof SyntaxError) return 'PARSE'
+  if (err?.status) return httpError('', err.status, err.message).reason
+  return 'PROVIDER'
+}
+
+/** JSON d'une réponse de modèle, même entouré de ``` ou de texte */
+function parseJson(text) {
+  const raw = String(text || '').replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, '')
+  try {
+    return JSON.parse(raw)
+  } catch {
+    const a = raw.indexOf('{')
+    const b = raw.lastIndexOf('}')
+    if (a >= 0 && b > a) return JSON.parse(raw.slice(a, b + 1))
+    throw new SyntaxError('Réponse illisible (JSON attendu).')
+  }
+}
+
 async function run(provider, prompt, spec = DEFAULT_SPEC) {
   if (provider === 'claude') return withClaude(prompt, spec)
   if (provider === 'gemini') {
@@ -215,9 +264,9 @@ async function withClaude(prompt, spec) {
     })
     .finalMessage()
   record('claude', msg.model || MODEL, msg.usage?.input_tokens || 0, msg.usage?.output_tokens || 0)
-  if (msg.stop_reason === 'refusal') throw new Error('Le modèle a refusé la demande.')
-  if (msg.stop_reason === 'max_tokens') throw new Error('Réponse tronquée.')
-  return JSON.parse(msg.content.map((b) => (b.type === 'text' ? b.text : '')).join(''))
+  if (msg.stop_reason === 'refusal') throw new AIError('REFUSED', 'Le modèle a refusé la demande.')
+  if (msg.stop_reason === 'max_tokens') throw new AIError('TRUNCATED', 'Réponse tronquée.')
+  return parseJson(msg.content.map((b) => (b.type === 'text' ? b.text : '')).join(''))
 }
 
 // Environ 25 000 jetons en entrée et 1 500 en sortie : moins d'un centime par analyse avec gpt-4o-mini
@@ -238,44 +287,88 @@ async function withOpenAI(prompt, spec) {
     signal: AbortSignal.timeout(120_000),
   })
   const body = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(`OpenAI ${res.status} : ${body.error?.message || 'erreur'}`)
+  if (!res.ok) throw httpError('OpenAI', res.status, body.error?.message)
   record('openai', body.model || OPENAI_MODEL, body.usage?.prompt_tokens || 0, body.usage?.completion_tokens || 0)
   const choice = body.choices?.[0]
-  if (choice?.message?.refusal) throw new Error('Le modèle a refusé la demande.')
-  if (choice?.finish_reason === 'length') throw new Error('Réponse tronquée.')
-  return JSON.parse(choice?.message?.content || '')
+  if (choice?.message?.refusal) throw new AIError('REFUSED', 'Le modèle a refusé la demande.')
+  if (choice?.finish_reason === 'length') throw new AIError('TRUNCATED', 'Réponse tronquée.')
+  return parseJson(choice?.message?.content || '')
 }
 
 const FORMAT = `Réponds uniquement par un objet JSON de la forme
 {"synthese": "...", "themes": [{"titre": "...", "points": ["...", "..."]}], "a_surveiller": ["...", "..."]}`
 
-async function withGemini(prompt, spec) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`
+/** Rang d'un modèle Gemini pour le repli : version la plus récente, « flash » stable avant les préversions */
+function geminiRank(name) {
+  const v = Number((name.match(/gemini-(\d+(?:\.\d+)?)/) || [])[1] || 0)
+  return v * 10 + (/preview|exp/.test(name) ? 0 : 5) - (/lite/.test(name) ? 2 : 0)
+}
+
+/** Modèle Gemini de repli : le meilleur « flash » texte du compte qui accepte generateContent */
+async function nextGeminiModel(failed) {
+  const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', {
+    headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY },
+    signal: AbortSignal.timeout(20_000),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw httpError('Gemini', res.status, body.error?.message)
+  const names = (body.models || [])
+    .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+    .map((m) => String(m.name || '').replace(/^models\//, ''))
+    .filter((n) => /^gemini-[\d.]+-flash/.test(n) && !/image|tts|audio|live|embedding/.test(n) && n !== failed)
+    .sort((x, y) => geminiRank(y) - geminiRank(x))
+  return names[0] || ''
+}
+
+async function geminiCall(model, prompt, spec) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY, 'content-type': 'application/json' },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: `${spec.system}\n${spec.format}` }] },
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens: 8000 },
+      // Les modèles récents réfléchissent avant de répondre : la marge évite les réponses tronquées
+      generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens: 32000 },
     }),
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(150_000),
   })
   const body = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(`Gemini ${res.status} : ${body.error?.message || 'erreur'}`)
+  if (!res.ok) throw httpError('Gemini', res.status, body.error?.message)
+  return body
+}
+
+async function withGemini(prompt, spec) {
+  let body
+  try {
+    body = await geminiCall(geminiActive, prompt, spec)
+  } catch (err) {
+    if (aiReason(err) !== 'MODEL') throw err
+    // Modèle retiré ou inconnu : on prend le meilleur modèle disponible et on le garde pour la suite
+    const next = await nextGeminiModel(geminiActive)
+    if (!next) throw err
+    console.error(`Gemini : modèle ${geminiActive} indisponible, passage à ${next}`)
+    geminiActive = next
+    body = await geminiCall(geminiActive, prompt, spec)
+  }
   record(
     'gemini',
-    GEMINI_MODEL,
+    geminiActive,
     body.usageMetadata?.promptTokenCount || 0,
     (body.usageMetadata?.candidatesTokenCount || 0) + (body.usageMetadata?.thoughtsTokenCount || 0),
   )
   const cand = body.candidates?.[0]
-  if (cand?.finishReason === 'MAX_TOKENS') throw new Error('Réponse tronquée.')
-  const text = (cand?.content?.parts || []).map((p) => p.text || '').join('')
-  const data = JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, ''))
-  if (!spec.valid(data)) throw new Error('Réponse Gemini incomplète.')
+  if (!cand && body.promptFeedback?.blockReason) throw new AIError('REFUSED', `Gemini : demande bloquée (${body.promptFeedback.blockReason}).`)
+  if (cand?.finishReason === 'MAX_TOKENS') throw new AIError('TRUNCATED', 'Réponse tronquée.')
+  if (cand?.finishReason === 'SAFETY' || cand?.finishReason === 'PROHIBITED_CONTENT') throw new AIError('REFUSED', 'Gemini a bloqué la réponse.')
+  const text = (cand?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('')
+  const data = parseJson(text)
+  if (!spec.valid(data)) throw new AIError('PARSE', 'Réponse Gemini incomplète.')
   return data
 }
+
+/** Modèle Gemini réellement utilisé (pour la console) */
+export const geminiModel = () => geminiActive
 
 /* ---------------------------------------------------------------- assistant de requête booléenne */
 
@@ -350,8 +443,16 @@ export async function briefingSummary({ key, facts, items }) {
  * le moteur configuré. Comptée dans la consommation de l'IA comme le reste.
  */
 export async function runEconomy(prompt, spec) {
-  if (process.env.GEMINI_API_KEY) return withGemini(prompt, spec)
-  return run(aiProvider(), prompt, spec)
+  if (!process.env.GEMINI_API_KEY) return run(aiProvider(), prompt, spec)
+  try {
+    return await withGemini(prompt, spec)
+  } catch (err) {
+    // Gemini en panne : le moteur principal (Claude ou OpenAI) prend le relais s'il est configuré
+    const other = process.env.ANTHROPIC_API_KEY ? 'claude' : process.env.OPENAI_API_KEY ? 'openai' : ''
+    if (!other) throw err
+    console.error(`Gemini indisponible, repli sur ${other} :`, err.message)
+    return run(other, prompt, spec)
+  }
 }
 
 /* ---------------------------------------------------------------- Around (réponses et agents) */

@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { type Flux, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { useAuth } from '../lib/auth'
@@ -21,6 +22,7 @@ import {
 import { type Block, parseInline, parseMd } from '../lib/aroundMd'
 import { downloadPptx, kpiRows, openReport, turnText, turnTitle } from '../lib/aroundExport'
 import { useBrand } from '../lib/brand'
+import { useSelection } from '../lib/reportSelection'
 
 /**
  * Around, l'assistant IA de MMS, sur le modèle de Meltwater Mira Studio :
@@ -61,6 +63,7 @@ const ICONS: Record<string, string> = {
   chevron: 'M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z',
   arrowDown: 'M11 4h2v12.2l5.6-5.6L20 12l-8 8-8-8 1.4-1.4 5.6 5.6z',
   check: 'M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z',
+  stack: 'M4 5h16v2H4zm0 4h16v2H4zm0 4h10v2H4zm13 0 3 3-3 3-1.4-1.4 1.6-1.6-1.6-1.6z',
 }
 
 function Icon({ name, size = 18, flip = false }: { name: string; size?: number; flip?: boolean }) {
@@ -83,9 +86,18 @@ function Logo({ size = 28 }: { size?: number }) {
 }
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  let res: Response
+  try {
+    res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  } catch {
+    throw Object.assign(new Error('NETWORK'), { code: 'NETWORK' })
+  }
   const json = await res.json().catch(() => ({}))
-  if (!res.ok) throw Object.assign(new Error(json.error || String(res.status)), { code: json.error || String(res.status) })
+  if (!res.ok) {
+    // 401/403 : session expirée ou droit retiré ; sinon la cause donnée par le serveur (clé, quota, modèle…)
+    const code = res.status === 401 || res.status === 403 ? 'AUTH' : json.error || String(res.status)
+    throw Object.assign(new Error(code), { code, reason: json.reason || '' })
+  }
   return json as T
 }
 
@@ -126,6 +138,9 @@ type ComposerProps = {
   watch: string
   setWatch: (id: string) => void
   watches: { id: string; name: string }[]
+  selCount: number
+  useSel: boolean
+  setUseSel: (v: boolean) => void
   busy: boolean
   onSend: () => void
   inputRef: React.RefObject<HTMLTextAreaElement | null>
@@ -134,109 +149,137 @@ type ComposerProps = {
 
 function Composer(p: ComposerProps) {
   const a = useAround()
+  const i = useI18n()
   const watchName = p.watches.find((w) => w.id === p.watch)?.name
   const agentDef = a.agentDefs.find((x) => x.id === p.agent)
+  const sel = p.useSel && p.selCount > 0 && !p.agent
+  const ready = !p.busy && (Boolean(p.draft.trim()) || Boolean(p.agent))
+  // La zone grandit avec le texte (jusqu'à 8 lignes environ)
+  useEffect(() => {
+    const el = p.inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 220)}px`
+  }, [p.draft, p.inputRef])
   return (
     <form
-      className={`around-composer ${p.compact ? 'around-composer--compact' : ''}`}
+      className={`around-composer ${p.compact ? 'around-composer--compact' : ''} ${p.busy ? 'is-busy' : ''}`}
       onSubmit={(e) => {
         e.preventDefault()
         p.onSend()
       }}
     >
-      <div className="around-composer__head">
-        <Menu
-          label={
-            <>
-              <Icon name="folder" />
-              <span>{watchName || a.connect}</span>
-              <Icon name="caret" />
-            </>
-          }
-        >
-          {(close) => (
-            <>
-              <button
-                type="button"
-                className={!p.watch ? 'is-on' : ''}
-                onClick={() => {
-                  p.setWatch('')
-                  close()
-                }}
-              >
-                {a.allMms}
-              </button>
-              {p.watches.length > 0 && <p className="around-menu__title">{a.watches}</p>}
-              {p.watches.map((w) => (
-                <button
-                  key={w.id}
-                  type="button"
-                  className={p.watch === w.id ? 'is-on' : ''}
-                  onClick={() => {
-                    p.setWatch(w.id)
-                    close()
-                  }}
-                  dir="auto"
-                >
-                  {w.name}
-                </button>
-              ))}
-            </>
-          )}
-        </Menu>
-        {agentDef && (
+      {agentDef && (
+        <div className="around-composer__head">
           <span className="around-agent-chip">
             <Icon name={agentDef.id} size={15} />
             {agentDef.title}
-            <button type="button" aria-label={a.remove} onClick={() => p.setAgent(null)}>
+            <button type="button" aria-label={a.remove} title={a.remove} onClick={() => p.setAgent(null)}>
               <Icon name="close" size={14} />
             </button>
           </span>
-        )}
-      </div>
+        </div>
+      )}
       <textarea
         ref={p.inputRef}
         value={p.draft}
         onChange={(e) => p.setDraft(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
+          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault()
             p.onSend()
           }
         }}
-        placeholder={agentDef ? `${a.agentPlaceholder(agentDef.subject)} (${agentDef.example})` : a.placeholder}
-        rows={p.compact ? 1 : 3}
+        placeholder={agentDef ? `${a.agentPlaceholder(agentDef.subject)} (${agentDef.example})` : sel ? a.selPlaceholder : a.placeholder}
+        rows={p.compact ? 1 : 2}
         maxLength={800}
         dir="auto"
+        aria-label={a.placeholder}
       />
       <div className="around-composer__foot">
-        <Menu
-          className="around-menu--up"
-          label={
-            <>
-              <Icon name="calendar" size={16} />
-              <span>{a.periods[p.days]}</span>
-            </>
-          }
-        >
-          {(close) =>
-            PERIODS.map((d) => (
-              <button
-                key={d}
-                type="button"
-                className={p.days === d ? 'is-on' : ''}
-                onClick={() => {
-                  p.setDays(d)
-                  close()
-                }}
-              >
-                {a.periods[d]}
-              </button>
-            ))
-          }
-        </Menu>
-        <button type="submit" className="around-send" disabled={p.busy || (!p.draft.trim() && !p.agent)} aria-label={a.send} title={a.send}>
-          <Icon name="send" size={20} />
+        <div className="around-composer__chips">
+          <Menu
+            className={sel ? 'is-off' : ''}
+            label={
+              <>
+                <Icon name="folder" size={16} />
+                <span>{watchName || a.connect}</span>
+                <Icon name="caret" size={16} />
+              </>
+            }
+          >
+            {(close) => (
+              <>
+                <button
+                  type="button"
+                  className={!p.watch ? 'is-on' : ''}
+                  onClick={() => {
+                    p.setWatch('')
+                    close()
+                  }}
+                >
+                  {a.allMms}
+                </button>
+                {p.watches.length > 0 && <p className="around-menu__title">{a.watches}</p>}
+                {p.watches.map((w) => (
+                  <button
+                    key={w.id}
+                    type="button"
+                    className={p.watch === w.id ? 'is-on' : ''}
+                    onClick={() => {
+                      p.setWatch(w.id)
+                      close()
+                    }}
+                    dir="auto"
+                  >
+                    {w.name}
+                  </button>
+                ))}
+                {!p.watches.length && <p className="around-menu__note">{a.noWatches}</p>}
+              </>
+            )}
+          </Menu>
+          <Menu
+            className={`around-menu--up ${sel ? 'is-off' : ''}`}
+            label={
+              <>
+                <Icon name="calendar" size={16} />
+                <span>{a.periods[p.days]}</span>
+                <Icon name="caret" size={16} />
+              </>
+            }
+          >
+            {(close) =>
+              PERIODS.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  className={p.days === d ? 'is-on' : ''}
+                  onClick={() => {
+                    p.setDays(d)
+                    close()
+                  }}
+                >
+                  {a.periods[d]}
+                </button>
+              ))
+            }
+          </Menu>
+          {p.selCount > 0 && !p.agent && (
+            <button
+              type="button"
+              className={`around-selchip ${p.useSel ? 'is-on' : ''}`}
+              aria-pressed={p.useSel}
+              title={a.selHint}
+              onClick={() => p.setUseSel(!p.useSel)}
+            >
+              <Icon name={p.useSel ? 'check' : 'stack'} size={15} />
+              {a.selChip(i.num(p.selCount))}
+            </button>
+          )}
+        </div>
+        <button type="submit" className={`around-send ${ready ? 'is-ready' : ''}`} disabled={!ready} aria-label={a.send} title={a.send}>
+          {p.busy ? <span className="around-send__spin" aria-hidden /> : <Icon name="send" size={20} />}
         </button>
       </div>
     </form>
@@ -581,13 +624,25 @@ function AgentSteps() {
 
 function Thinking() {
   const a = useAround()
+  const [step, setStep] = useState(0)
+  useEffect(() => {
+    const id = window.setInterval(() => setStep((s) => Math.min(s + 1, a.thinkingSteps.length - 1)), 2400)
+    return () => window.clearInterval(id)
+  }, [a.thinkingSteps.length])
   return (
-    <p className="around-thinking">
-      <i />
-      <i />
-      <i />
-      {a.thinking}
-    </p>
+    <div className="around-thinking" role="status" aria-live="polite">
+      <p>
+        <i />
+        <i />
+        <i />
+        <span key={step}>{a.thinkingSteps[step]}</span>
+      </p>
+      <div className="around-skeleton" aria-hidden>
+        <span />
+        <span />
+        <span />
+      </div>
+    </div>
   )
 }
 
@@ -805,14 +860,22 @@ function TurnView({ t, last, act, compact }: { t: Turn; last: boolean; act: Acti
   const a = useAround()
   return (
     <div className="around-turn">
-      <p className="around-q" dir="auto">
-        {t.agent && (
+      <div className="around-q" dir="auto">
+        {(t.agent || !!t.ids?.length) && (
           <span className="around-q__agent">
-            <Icon name={t.agent} size={14} /> {a.agentTitle[t.agent]}
+            {t.agent ? (
+              <>
+                <Icon name={t.agent} size={14} /> {a.agentTitle[t.agent]}
+              </>
+            ) : (
+              <>
+                <Icon name="stack" size={14} /> {a.selChip(String(t.ids?.length))}
+              </>
+            )}
           </span>
         )}
-        {t.q}
-      </p>
+        <p>{t.q}</p>
+      </div>
       <div className="around-a">
         <p className="around-a__who">
           <Logo size={26} /> Around
@@ -826,14 +889,15 @@ function TurnView({ t, last, act, compact }: { t: Turn; last: boolean; act: Acti
             <Thinking />
           )
         ) : t.status === 'error' ? (
-          <div className="around-error">
+          <div className="around-error" role="alert">
+            <Icon name="info" size={20} />
             <p>{t.error || a.aiError}</p>
             <button type="button" className="around-btn around-btn--sm" onClick={() => act.onRetry(t)}>
               <Icon name="refresh" size={15} /> {a.regenerate}
             </button>
           </div>
         ) : t.empty ? (
-          <p className="around-muted">{a.empty}</p>
+          <p className="around-muted">{t.ids?.length ? a.selEmpty : a.empty}</p>
         ) : compact ? (
           <button type="button" className="around-mini" onClick={() => act.onCanvas(t)}>
             <Icon name={t.agent || 'sparkle'} size={16} />
@@ -988,13 +1052,19 @@ function HistoryPanel({ email, currentId, onOpen, onClose }: { email: string; cu
   const a = useAround()
   const i = useI18n()
   const [list, setList] = useState(() => readHistory(email))
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
   const today = new Date().toISOString().slice(0, 10)
   const groups: [string, Conversation[]][] = [
     [a.today, list.filter((c) => c.at.slice(0, 10) === today)],
     [a.earlier, list.filter((c) => c.at.slice(0, 10) !== today)],
   ]
-  return (
-    <div className="around-drawer" role="dialog" aria-label={a.history}>
+  // Portail vers <body> : un ancêtre animé (transform) enfermerait sinon le tiroir dans la zone de contenu
+  return createPortal(
+    <div className="around around-drawer" role="dialog" aria-modal="true" aria-label={a.history} dir={i.dir}>
       <button type="button" className="around-drawer__shade" aria-label={a.back} onClick={onClose} />
       <aside className="around-drawer__panel">
         <header>
@@ -1039,7 +1109,8 @@ function HistoryPanel({ email, currentId, onOpen, onClose }: { email: string; cu
             ),
         )}
       </aside>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -1067,6 +1138,9 @@ export function Around({ flux }: { flux: Flux | '' }) {
   const [tab, setTab] = useState<'agents' | 'favorites'>('agents')
   const [favs, setFavs] = useState(readFavorites)
   const [historyOpen, setHistoryOpen] = useState(false)
+  // Publications cochées dans MMS : Around peut répondre seulement à partir d'elles
+  const picked = useSelection()
+  const [useSel, setUseSel] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const end = useRef<HTMLDivElement>(null)
   const convRef = useRef(conv)
@@ -1075,6 +1149,18 @@ export function Around({ flux }: { flux: Flux | '' }) {
   const busy = conv.turns.some((t) => t.status === 'running')
   const inChat = conv.turns.length > 0
   const watchName = watches.find((w) => w.id === watch)?.name || ''
+
+  // Hauteur de l'en-tête fixe de MMS : la barre de la conversation se colle juste dessous
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const head = document.querySelector<HTMLElement>('.mms-head')
+    if (!head || !root.current) return
+    const set = () => root.current?.style.setProperty('--mms-head-h', `${getComputedStyle(head).position === 'sticky' || getComputedStyle(head).position === 'fixed' ? head.offsetHeight : 0}px`)
+    set()
+    const ro = new ResizeObserver(set)
+    ro.observe(head)
+    return () => ro.disconnect()
+  }, [])
 
   // Accolades obligatoires : scrollIntoView peut renvoyer une promesse, que React prendrait pour un nettoyage
   useEffect(() => {
@@ -1094,8 +1180,11 @@ export function Around({ flux }: { flux: Flux | '' }) {
     })
 
   const errorOf = (err: unknown) => {
-    const code = (err as { code?: string }).code
-    return code === 'NO_KEY' ? a.aiOff : code === 'BUSY' ? a.busy : a.aiError
+    const { code = '', reason = '' } = err as { code?: string; reason?: string }
+    if (code === 'NO_KEY') return a.aiOff
+    if (code === 'BUSY') return a.busy
+    if (code === 'NETWORK' || code === 'AUTH') return a.errors[code]
+    return a.errors[reason] || (code.startsWith('5') ? a.errors.PROVIDER : a.aiError)
   }
 
   async function runAsk(t: Turn, regen = false) {
@@ -1103,15 +1192,17 @@ export function Around({ flux }: { flux: Flux | '' }) {
       .filter((x) => x.id !== t.id && x.status === 'done')
       .map((x) => ({ q: x.q, a: x.kind === 'ask' ? x.answer || '' : `${x.summary || ''}` }))
     try {
-      const r = await postJson<{ title: string; answer: string; sources: Source[]; followups: string[]; considered: number }>('/api/ai/ask', {
+      const r = await postJson<{ title: string; answer: string; sources: Source[]; followups: string[]; considered: number; empty?: boolean }>('/api/ai/ask', {
         question: t.q,
+        ids: t.ids,
         history,
         days: t.days,
         watch: t.watch,
         flux,
         regen,
       })
-      patch(t.id, { status: 'done', title: r.title, answer: r.answer, sources: r.sources, followups: r.followups, considered: r.considered, at: new Date().toISOString() })
+      if (r.empty) patch(t.id, { status: 'done', empty: true, at: new Date().toISOString() })
+      else patch(t.id, { status: 'done', title: r.title, answer: r.answer, sources: r.sources, followups: r.followups, considered: r.considered, at: new Date().toISOString() })
     } catch (err) {
       patch(t.id, { status: 'error', error: errorOf(err) })
     }
@@ -1152,7 +1243,8 @@ export function Around({ flux }: { flux: Flux | '' }) {
       setAgent(null)
       return
     }
-    const t: Turn = { ...base, kind: 'ask', q, status: 'running' }
+    const ids = useSel && picked.length ? picked.slice(0, 60).map((x) => x.id) : undefined
+    const t: Turn = { ...base, kind: 'ask', q, ids, status: 'running' }
     setConv((c) => ({ ...c, turns: [...c.turns, t] }))
     runAsk(t)
   }
@@ -1248,6 +1340,9 @@ export function Around({ flux }: { flux: Flux | '' }) {
       watch={watch}
       setWatch={setWatch}
       watches={watches}
+      selCount={picked.length}
+      useSel={useSel}
+      setUseSel={setUseSel}
       busy={busy}
       onSend={() => send()}
       inputRef={inputRef}
@@ -1285,6 +1380,15 @@ export function Around({ flux }: { flux: Flux | '' }) {
           </h2>
         </div>
         {composer()}
+        <div className="around-suggest">
+          <span>{a.suggestTitle}</span>
+          {a.suggestions.map((sq) => (
+            <button key={sq} type="button" onClick={() => send(sq)} dir="auto">
+              <Icon name="sparkle" size={14} />
+              {sq}
+            </button>
+          ))}
+        </div>
         <div className="around-home__tabs">
           <div className="around-tabs" role="tablist">
             <button type="button" role="tab" aria-selected={tab === 'agents'} className={tab === 'agents' ? 'is-on' : ''} onClick={() => setTab('agents')}>
@@ -1370,7 +1474,7 @@ export function Around({ flux }: { flux: Flux | '' }) {
   }
 
   return (
-    <div className="around" dir={i.dir}>
+    <div className="around" dir={i.dir} ref={root}>
       {body}
       {historyOpen && (
         <HistoryPanel

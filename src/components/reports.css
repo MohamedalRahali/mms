@@ -863,3 +863,25 @@
   max-height: 80px;
   object-fit: contain;
 }
+
+/* Petits écrans : barre de sélection sur une ligne défilante, au-dessus des boutons « الدعم الفني » et « استطلاع » */
+@media (max-width: 640px) {
+  .rpt-tray {
+    bottom: 76px;
+    width: calc(100% - 20px);
+  }
+  .rpt-tray__bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 0.75rem;
+    padding: 0.5rem 0.6rem;
+    scrollbar-width: none;
+  }
+  .rpt-tray__bar > * {
+    flex: none;
+    white-space: nowrap;
+  }
+  .rpt-tray__go {
+    padding-inline: 0.8rem;
+  }
+}

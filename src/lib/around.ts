@@ -68,6 +68,8 @@ export type Turn = {
   considered?: number
   error?: string
   rating?: 1 | -1
+  /** Publications cochées sur lesquelles porte la question */
+  ids?: string[]
 }
 
 export type Conversation = { id: string; title: string; at: string; turns: Turn[] }
@@ -112,6 +114,14 @@ const AR = {
   search: 'ابحث في المطالبات…',
   about: 'حول هذه المطالبة',
   thinking: 'يبحث Around في الأخبار…',
+  suggestTitle: 'جرّب أن تسأل',
+  selChip: (n: string) => `${n} منشورات محددة`,
+  selHint: 'عند التفعيل، يجيب Around من المنشورات المحددة فقط (بدل كل أخبار الفترة).',
+  selPlaceholder: 'اسأل عن المنشورات المحددة: لخّصها، قارن بينها، استخرج أبرز ما فيها…',
+  selEmpty: 'لم أعد أجد المنشورات المحددة في قاعدة MMS (ربما حُذفت أو خرجت من فترة الحفظ). حدّد منشورات أخرى ثم أعد السؤال.',
+  noWatches: 'لا يوجد رصد مبرمج بعد. أنشئ رصداً من صفحة «الرصد المبرمج».',
+  suggestions: ['ما أبرز أخبار اليوم في ليبيا؟', 'ما المواضيع الأكثر تناولاً هذا الأسبوع؟', 'هل توجد مؤشرات أزمة في التغطية الأخيرة؟', 'ما وسائل الإعلام الأكثر نشاطاً هذا الشهر؟'],
+  thinkingSteps: ['يبحث في أخبار MMS…', 'يختار الأخبار الأكثر صلة…', 'يكتب الإجابة ويوثّق المصادر…'],
   confirmIntro: 'قبل أن أبدأ، يرجى تأكيد معايير التقرير:',
   confirmOutro: 'اضغط «تأكيد» للمتابعة، أو «تعديل» لتغيير أي معيار.',
   confirm: 'تأكيد',
@@ -141,6 +151,18 @@ const AR = {
   disclaimer: 'قد يخطئ Around. استخدم 👍 أو 👎 لتخبرنا بجودة الإجابة.',
   aiOff: 'Around غير مفعّل: لم تُضبط بعد مفاتيح الذكاء الاصطناعي على الخادم.',
   aiError: 'تعذّر الحصول على إجابة. حاول مرة أخرى بعد قليل.',
+  errors: {
+    KEY: 'مفتاح الذكاء الاصطناعي على الخادم مرفوض أو منتهي الصلاحية. يجب على المشرف تحديثه.',
+    QUOTA: 'بلغ محرك الذكاء الاصطناعي حدّ الاستخدام المسموح حالياً. أعد المحاولة بعد دقائق، أو اطلب من المشرف رفع الحد.',
+    MODEL: 'نموذج الذكاء الاصطناعي المضبوط لم يعد متاحاً لدى المزوّد ولم يُعثر على بديل. أبلغ المشرف.',
+    TIMEOUT: 'استغرق محرك الذكاء الاصطناعي وقتاً أطول من المسموح. جرّب فترة أقصر أو سؤالاً أدق.',
+    TRUNCATED: 'كانت الإجابة أطول من الحد المسموح فقُطعت. جرّب سؤالاً أضيق أو فترة أقصر.',
+    REFUSED: 'رفض محرك الذكاء الاصطناعي هذا الطلب. أعد صياغة السؤال.',
+    PARSE: 'وصلت إجابة غير مكتملة من محرك الذكاء الاصطناعي. اضغط «إعادة التوليد».',
+    PROVIDER: 'محرك الذكاء الاصطناعي لا يستجيب حالياً (خطأ لدى المزوّد). حاول مرة أخرى بعد قليل.',
+    NETWORK: 'تعذّر الاتصال بخادم MMS. تحقّق من اتصالك بالإنترنت ثم أعد المحاولة.',
+    AUTH: 'انتهت جلستك أو لا تملك صلاحية استعمال Around. أعد تسجيل الدخول أو تواصل مع المشرف.',
+  } as Record<string, string>,
   busy: 'Around مشغول بطلبات أخرى، أعد المحاولة بعد لحظات.',
   empty: 'لم أجد أخباراً عن هذا الموضوع في الفترة والرصد المحددين. جرّب فترة أطول أو صياغة أخرى.',
   noHistory: 'لا توجد محادثات سابقة بعد.',
@@ -254,6 +276,14 @@ const EN: typeof AR = {
   search: 'Search prompts…',
   about: 'About this prompt',
   thinking: 'Around is searching the news…',
+  suggestTitle: 'Try asking',
+  selChip: (n: string) => `${n} selected posts`,
+  selHint: 'When on, Around answers from the selected posts only (instead of all news in the period).',
+  selPlaceholder: 'Ask about the selected posts: summarise, compare, pull out the key points…',
+  selEmpty: 'The selected posts are no longer in the MMS database (deleted or past the retention period). Select other posts and ask again.',
+  noWatches: 'No scheduled watch yet. Create one from the “Scheduled watches” page.',
+  suggestions: ['What are the top news in Libya today?', 'Which topics were most covered this week?', 'Are there signs of a crisis in recent coverage?', 'Which media outlets were most active this month?'],
+  thinkingSteps: ['Searching MMS news…', 'Picking the most relevant stories…', 'Writing the answer and citing sources…'],
   confirmIntro: 'Before I proceed, please confirm the report parameters:',
   confirmOutro: 'Click “Confirm” to proceed, or “Edit” to change any parameter.',
   confirm: 'Confirm',
@@ -283,6 +313,18 @@ const EN: typeof AR = {
   disclaimer: 'Around can make mistakes. Use 👍 or 👎 to let us know how it did.',
   aiOff: 'Around is off: the AI keys are not set on the server yet.',
   aiError: 'Could not get an answer. Please try again in a moment.',
+  errors: {
+    KEY: 'The AI key on the server was rejected or has expired. An administrator must update it.',
+    QUOTA: 'The AI engine has reached its usage limit for now. Try again in a few minutes, or ask an administrator to raise the limit.',
+    MODEL: 'The configured AI model is no longer offered by the provider and no replacement was found. Please tell an administrator.',
+    TIMEOUT: 'The AI engine took too long to answer. Try a shorter period or a more precise question.',
+    TRUNCATED: 'The answer was longer than allowed and got cut off. Try a narrower question or a shorter period.',
+    REFUSED: 'The AI engine declined this request. Please rephrase your question.',
+    PARSE: 'The AI engine returned an incomplete answer. Click “Regenerate”.',
+    PROVIDER: 'The AI engine is not responding right now (provider error). Please try again in a moment.',
+    NETWORK: 'Could not reach the MMS server. Check your internet connection and try again.',
+    AUTH: 'Your session has expired or you are not allowed to use Around. Sign in again or contact your administrator.',
+  },
   busy: 'Around is busy with other requests, try again in a few seconds.',
   empty: 'I found no news on this subject for the selected watch and period. Try a longer period or other wording.',
   noHistory: 'No previous conversations yet.',

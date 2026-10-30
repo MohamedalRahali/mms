@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import express from 'express'
 import { getItems, reactionsOf } from './store.js'
-import { aiEnabled, aiProvider, aiUsage, analyse, aroundRun, cached, explainSpike, initUsage, loadKey, runEconomy, writeQuery } from './ai.js'
+import { aiEnabled, aiProvider, aiReason, aiUsage, analyse, aroundRun, cached, explainSpike, initUsage, loadKey, runEconomy, writeQuery } from './ai.js'
 import { initEntityAI, startEntityAI } from './entityAI.js'
 import { allTags, countList, entitiesOf, findSpikes, initTags, itemKey, setTags, spikeItems, tagsOf, toCsv } from './intel.js'
 import { keyStatus } from './keys.js'
@@ -857,12 +857,16 @@ app.post('/api/ai/ask', express.json({ limit: '40kb' }), async (req, res) => {
     .slice(-4)
     .map((h) => ({ q: String(h?.q || '').slice(0, 800), a: String(h?.a || '').slice(0, 3000) }))
   const { pool, days, lastUpdate, watch, label } = aroundScope(req.body)
-  const scoped = applyFilters(pool, { days })
-  const picked = retrieve(scoped, question, 60)
+  // Publications cochées par l'utilisateur (barre de sélection) : la réponse ne porte que sur elles, quelle que soit la période
+  const ids = new Set((Array.isArray(req.body?.ids) ? req.body.ids : []).slice(0, 60).map(String))
+  const chosen = ids.size ? getItems().items.filter((it) => ids.has(it.id)).slice(0, 60) : []
+  if (ids.size && !chosen.length) return res.json({ title: '', answer: '', sources: [], followups: [], considered: 0, empty: true })
+  const picked = chosen.length ? chosen : retrieve(applyFilters(pool, { days }), question, 60)
+  const scope = chosen.length ? `${chosen.length} publications choisies par l'utilisateur` : label
   askRunning++
   try {
-    const key = `around|${req.body?.regen ? Date.now() : ''}|${days}|${watch?.id || ''}|${req.body?.flux || ''}|${lastUpdate}|${JSON.stringify(history)}|${question}`
-    const r = await aroundRun(key, askPrompt({ question, items: picked, history, scope: label }), ASK_SPEC)
+    const key = `around|${req.body?.regen ? Date.now() : ''}|${days}|${watch?.id || ''}|${req.body?.flux || ''}|${lastUpdate}|${[...ids].join(',')}|${JSON.stringify(history)}|${question}`
+    const r = await aroundRun(key, askPrompt({ question, items: picked, history, scope }), ASK_SPEC)
     const used = [...new Set(r.sources)].filter((n) => n >= 1 && n <= picked.length)
     const cards = await withImages(used.map((n) => picked[n - 1]))
     res.json({
@@ -874,7 +878,8 @@ app.post('/api/ai/ask', express.json({ limit: '40kb' }), async (req, res) => {
     })
   } catch (err) {
     console.error('Around :', err.message)
-    res.status(500).json({ error: 'FAILED' })
+    // Cause précise (clé, quota, modèle, délai…) pour un message clair dans l'interface
+    res.status(500).json({ error: 'FAILED', reason: aiReason(err) })
   } finally {
     askRunning--
   }
@@ -915,7 +920,8 @@ app.post('/api/ai/agent', express.json({ limit: '8kb' }), async (req, res) => {
     })
   } catch (err) {
     console.error('Around (agent) :', err.message)
-    res.status(500).json({ error: 'FAILED' })
+    // Cause précise (clé, quota, modèle, délai…) pour un message clair dans l'interface
+    res.status(500).json({ error: 'FAILED', reason: aiReason(err) })
   } finally {
     askRunning--
   }

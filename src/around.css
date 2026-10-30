@@ -141,29 +141,37 @@
 
 /* ---------------------------------------------------------------- zone de question */
 .around-composer {
-  border: 1px solid var(--a-ring);
-  border-radius: 14px;
-  background: var(--a-card);
-  box-shadow: 0 0 0 4px var(--a-soft);
-  overflow: visible;
+  position: relative;
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-solid, var(--a-card));
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    0 10px 30px -12px rgba(0, 0, 0, 0.28);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 .around-composer:focus-within {
-  border-color: var(--green);
+  border-color: var(--a-ring);
+  box-shadow:
+    0 0 0 4px var(--a-soft),
+    0 10px 30px -12px rgba(0, 0, 0, 0.28);
 }
 .around-composer__head {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.6rem;
-  padding: 0.55rem 0.9rem;
-  border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--green) 5%, transparent);
-  border-radius: 14px 14px 0 0;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem 0;
 }
 .around-composer textarea {
   display: block;
   width: 100%;
-  padding: 0.85rem 1rem 0.3rem;
+  min-height: 3.4em;
+  max-height: 220px;
+  padding: 0.95rem 1.1rem 0.4rem;
   border: 0;
   outline: 0;
   resize: none;
@@ -173,55 +181,157 @@
   font-size: 1rem;
   line-height: 1.7;
   box-shadow: none;
+  overflow-y: auto;
 }
 .around-composer textarea::placeholder {
   color: var(--ink-soft);
+  opacity: 0.85;
 }
 .around-composer__foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
-  padding: 0.35rem 0.8rem 0.7rem;
+  padding: 0.35rem 0.6rem 0.6rem 0.75rem;
+}
+[dir='rtl'] .around-composer__foot {
+  padding: 0.35rem 0.75rem 0.6rem 0.6rem;
+}
+.around-composer__chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.around-composer__chips .around-menu.is-off {
+  opacity: 0.45;
 }
 .around-send {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  flex: none;
+  width: 40px;
+  height: 40px;
   border: 0;
-  border-radius: 50%;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ink-soft) 14%, transparent);
+  color: var(--ink-soft);
+  cursor: default;
+  transition:
+    background 0.15s,
+    transform 0.15s,
+    color 0.15s;
+}
+.around-send.is-ready {
   background: var(--green);
   color: var(--on-green, #fff);
   cursor: pointer;
+  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--green) 70%, transparent);
 }
-.around-send:disabled {
-  background: color-mix(in srgb, var(--ink-soft) 25%, transparent);
-  color: var(--ink-soft);
-  cursor: default;
+.around-send.is-ready:hover {
+  transform: translateY(-1px);
+  background: var(--green-deep, var(--green));
 }
-.around-agent-chip {
+.around-send:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.around-send__spin {
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+  animation: around-spin 0.8s linear infinite;
+}
+@keyframes around-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.around-agent-chip,
+.around-selchip {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.2rem 0.3rem 0.2rem 0.6rem;
+  height: 32px;
+  padding: 0 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--gold) 35%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--gold) 16%, transparent);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
   color: var(--gold);
+  font: inherit;
   font-size: 0.82rem;
   font-weight: 700;
+  white-space: nowrap;
 }
-[dir='rtl'] .around-agent-chip {
-  padding: 0.2rem 0.6rem 0.2rem 0.3rem;
+.around-agent-chip {
+  padding-inline-end: 0.3rem;
 }
 .around-agent-chip button {
   display: grid;
   place-items: center;
+  width: 22px;
+  height: 22px;
   border: 0;
+  border-radius: 50%;
   background: none;
   color: inherit;
   cursor: pointer;
-  padding: 2px;
+}
+.around-agent-chip button:hover {
+  background: color-mix(in srgb, var(--gold) 20%, transparent);
+}
+.around-selchip {
+  cursor: pointer;
+  border-style: dashed;
+  background: transparent;
+}
+.around-selchip.is-on {
+  border-style: solid;
+  border-color: var(--green);
+  background: var(--a-soft);
+  color: var(--green);
+}
+
+/* questions suggérées (accueil) */
+.around-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.around-suggest > span {
+  flex-basis: 100%;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.around-suggest button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--a-card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.around-suggest button svg {
+  color: var(--gold);
+}
+.around-suggest button:hover {
+  border-color: var(--a-ring);
+  background: var(--a-soft);
 }
 
 /* menus déroulants (veille, période) */
@@ -231,24 +341,46 @@
 .around-menu__btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 0.55rem;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: none;
+  gap: 0.35rem;
+  max-width: 260px;
+  height: 32px;
+  padding: 0 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--a-card);
   color: var(--ink);
   font: inherit;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
+  white-space: nowrap;
   cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
-.around-composer__foot .around-menu__btn {
-  border-color: var(--line);
-  font-weight: 500;
-  font-size: 0.85rem;
+.around-menu__btn > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.around-menu__btn:hover {
+.around-menu__btn > svg:first-child {
+  color: var(--green);
+  flex: none;
+}
+.around-menu__btn > svg:last-child {
+  color: var(--ink-soft);
+  flex: none;
+}
+.around-menu__btn:hover,
+.around-menu__btn[aria-expanded='true'] {
   border-color: var(--a-ring);
+  background: var(--a-soft);
+}
+.around-menu__note {
+  margin: 0.3rem 0.7rem 0.4rem;
+  max-width: 240px;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  line-height: 1.6;
 }
 .around-menu__list {
   position: absolute;
@@ -488,32 +620,40 @@
 }
 .around-bar--chat {
   position: sticky;
-  top: 0;
+  /* sous l'en-tête fixe de MMS (hauteur mesurée par Around.tsx) */
+  top: var(--mms-head-h, 68px);
   z-index: 12;
   flex-wrap: wrap;
-  padding-top: 0.3rem;
-  background: var(--bg);
+  gap: 0.5rem 0.7rem;
+  padding-block: 0.5rem 0.7rem;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+}
+.around-bar--chat h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
 }
 .around-seg {
   display: inline-flex;
+  gap: 2px;
+  padding: 3px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  overflow: hidden;
+  border-radius: 10px;
+  background: var(--a-card);
 }
 .around-seg button {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.4rem 0.85rem;
+  padding: 0.35rem 0.8rem;
   border: 0;
-  background: var(--a-card);
-  color: var(--ink);
+  border-radius: 7px;
+  background: none;
+  color: var(--ink-soft);
   font: inherit;
+  font-size: 0.86rem;
   font-weight: 600;
   cursor: pointer;
-}
-.around-seg button + button {
-  border-inline-start: 1px solid var(--line);
 }
 .around-seg button.is-on {
   background: var(--a-soft);
@@ -521,7 +661,7 @@
   box-shadow: inset 0 0 0 1px var(--a-ring);
 }
 .around-seg button:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: default;
 }
 .around-chat__body {
@@ -536,13 +676,13 @@
 .around-chat__thread {
   display: flex;
   flex-direction: column;
-  width: min(100%, 940px);
+  width: min(100%, 880px);
   margin-inline: auto;
 }
 .around-chat--canvas .around-chat__thread {
   position: sticky;
-  top: 64px;
-  max-height: calc(100dvh - 150px);
+  top: calc(var(--mms-head-h, 68px) + 64px);
+  max-height: calc(100dvh - var(--mms-head-h, 68px) - 80px);
   width: 100%;
 }
 .around-chat--canvas .around-log {
@@ -552,66 +692,103 @@
   flex: 1;
   display: grid;
   align-content: start;
-  gap: 1.6rem;
-  padding-block: 1.2rem;
+  gap: 2rem;
+  padding-block: 1.4rem 1rem;
 }
 .around-chat__input {
   position: sticky;
-  bottom: 0.6rem;
-  padding-top: 0.4rem;
-  background: linear-gradient(transparent, var(--bg) 30%);
+  bottom: 0;
+  z-index: 5;
+  padding-block: 0.8rem 0.7rem;
+  background: linear-gradient(transparent, var(--bg) 26%);
+}
+/* Barre « منشور محدد » (fixe en bas de l'écran) : la zone de question remonte au-dessus */
+body:has(.rpt-tray) .around-chat__input {
+  padding-bottom: 88px;
+}
+body:has(.rpt-tray) .around-home {
+  padding-bottom: 96px;
 }
 .around-disclaimer {
-  margin: 0.4rem 0 0;
+  margin: 0.5rem 0 0;
   text-align: center;
   color: var(--ink-soft);
-  font-size: 0.75rem;
+  font-size: 0.74rem;
 }
 .around-turn {
   display: grid;
-  gap: 0.9rem;
+  gap: 1rem;
   animation: fx-rise 0.4s var(--ease, ease) both;
 }
+/* question de l'utilisateur : bulle alignée en fin de ligne, comme une messagerie */
 .around-q {
-  justify-self: stretch;
+  justify-self: end;
+  display: grid;
+  gap: 0.35rem;
+  max-width: min(78%, 620px);
+  padding: 0.7rem 1rem;
+  border-radius: 18px;
+  border-end-end-radius: 6px;
+  background: var(--green);
+  color: var(--on-green, #fff);
+  box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--green) 80%, transparent);
+}
+.around-q p {
   margin: 0;
-  padding: 0.6rem 1rem;
-  border: 1px solid var(--a-ring);
-  border-radius: 10px;
-  background: var(--a-soft);
   font-weight: 500;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .around-q__agent {
+  justify-self: start;
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  margin-inline-end: 0.5rem;
-  padding: 0.05rem 0.5rem;
+  padding: 0.1rem 0.55rem;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--gold) 16%, transparent);
-  color: var(--gold);
-  font-size: 0.78rem;
+  background: rgba(255, 255, 255, 0.18);
+  color: inherit;
+  font-size: 0.74rem;
   font-weight: 700;
-  vertical-align: 1px;
 }
+/* réponse d'Around : carte avec en-tête (logo + nom) */
 .around-a {
   display: grid;
-  gap: 0.9rem;
+  gap: 1rem;
+  min-width: 0;
+  padding: 1rem 1.2rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  border-start-start-radius: 6px;
+  background: var(--a-card);
+}
+.around-chat--canvas .around-a {
+  padding: 0.7rem 0.8rem;
 }
 .around-a__who {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.55rem;
   margin: 0;
-  color: var(--ink-soft);
+  color: var(--ink);
+  font-size: 0.9rem;
   font-weight: 700;
 }
 .around-thinking {
+  display: grid;
+  gap: 0.8rem;
+}
+.around-thinking p {
   display: flex;
   align-items: center;
   gap: 0.3rem;
   margin: 0;
   color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+.around-thinking p span {
+  animation: fx-rise 0.35s var(--ease, ease) both;
 }
 .around-thinking i {
   width: 7px;
@@ -625,17 +802,42 @@
 }
 .around-thinking i:nth-child(3) {
   animation-delay: 0.3s;
-  margin-inline-end: 0.4rem;
+  margin-inline-end: 0.5rem;
+}
+.around-skeleton {
+  display: grid;
+  gap: 0.55rem;
+}
+.around-skeleton span {
+  height: 11px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--line) 0%, color-mix(in srgb, var(--line) 40%, transparent) 50%, var(--line) 100%);
+  background-size: 200% 100%;
+  animation: around-shimmer 1.4s linear infinite;
+}
+.around-skeleton span:nth-child(2) {
+  width: 86%;
+}
+.around-skeleton span:nth-child(3) {
+  width: 62%;
+}
+@keyframes around-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .around-skeleton span,
+  .around-send__spin {
+    animation: none;
+  }
 }
 .around-steps {
   display: grid;
   gap: 0.55rem;
   margin: 0;
-  padding: 1rem 1.1rem;
+  padding: 0.2rem 0;
   list-style: none;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--a-card);
 }
 .around-steps li {
   display: flex;
@@ -690,13 +892,24 @@
 }
 .around-error {
   display: flex;
-  align-items: center;
-  gap: 0.8rem;
+  align-items: flex-start;
+  gap: 0.7rem;
   flex-wrap: wrap;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--coral) 40%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--coral) 9%, transparent);
+  color: var(--ink);
+}
+.around-error > svg {
+  flex: none;
+  margin-top: 2px;
   color: var(--coral);
 }
 .around-error p {
+  flex: 1 1 260px;
   margin: 0;
+  line-height: 1.7;
 }
 
 /* carte de titre de la réponse */
@@ -1353,19 +1566,18 @@
   border-color: var(--green);
   outline: 0;
 }
-.around-composer--compact .around-composer__head {
-  padding-block: 0.35rem;
-}
 .around-composer--compact textarea {
-  padding-block: 0.55rem 0;
+  min-height: 2.6em;
+  padding-block: 0.75rem 0.2rem;
   font-size: 0.95rem;
 }
 .around-composer--compact .around-composer__foot {
   padding-block: 0.2rem 0.5rem;
 }
 .around-composer--compact .around-send {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
 }
 @media (max-width: 640px) {
   .around-bar--chat h2 {
@@ -1374,7 +1586,40 @@
   .around-bar--chat .around-seg {
     margin-inline-start: auto;
   }
-  .around-composer--compact .around-composer__head {
+  .around-q {
+    max-width: 90%;
+  }
+  .around-a {
+    padding: 0.85rem 0.9rem;
+  }
+  .around-menu__btn {
+    max-width: 150px;
+  }
+  /* zone de question compacte : pastilles resserrées, sans la mention en dessous */
+  .around-composer--compact .around-menu__btn > svg:last-child {
     display: none;
   }
+  .around-composer--compact .around-menu__btn,
+  .around-composer--compact .around-selchip {
+    height: 30px;
+    padding-inline: 0.55rem;
+  }
+  .around-chat__input .around-disclaimer {
+    display: none;
+  }
+  body:has(.rpt-tray) .around-chat__input {
+    padding-bottom: 150px;
+  }
+  body:has(.rpt-tray) .around-home {
+    padding-bottom: 160px;
+  }
+}
+
+/* Dans la carte de réponse, le titre n'est pas une carte de plus */
+.around-a > .around-titlecard {
+  padding: 0 0 0.9rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
 }
