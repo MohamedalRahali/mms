@@ -344,3 +344,14 @@ test('alertes intelligentes : une seule alerte par sujet (titres relevés en pro
   assert.deepEqual(out.map((x) => x.kind), ['negative', 'spike', 'story', 'story'])
   assert.equal(out[2].detail.related, 3)
 })
+
+test('sujets émergents : « الوزراء اليوناني » et « وزراء اليونان » ne font qu’un sujet', async () => {
+  const { emergingTopics } = await import('../server/radar.js')
+  let n = 0
+  const mk = (hoursAgo, title) => ({ id: `y${++n}`, title, summary: '', origin: `s${n % 7}`, channel: 'site', date: new Date(NOW - hoursAgo * H).toISOString() })
+  const items = []
+  for (let k = 0; k < 5; k++) items.push(mk(2 + k, `رئيس الوزراء اليوناني يتحدث في أثينا عن الهجرة ${k}`))
+  for (let k = 0; k < 5; k++) items.push(mk(3 + k, `اجتماع وزراء اليونان حول الطاقة في البحر المتوسط ${k}`))
+  const labels = emergingTopics(items, { now: NOW }).map((t) => t.label)
+  assert.ok(labels.filter((l) => /وزراء|الوزراء/.test(l) && /يونان/.test(l)).length <= 1, labels.join(' | '))
+})

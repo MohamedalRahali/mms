@@ -264,7 +264,9 @@ export function emergingTopics(items, { hours = 24, now = Date.now(), limit = 15
       // Mêmes racines (« الوزراء اليوناني » / « وزراء اليونان ») : un seul sujet, quelles que soient les fiches
       const fr = roots(f.label)
       const kr = roots(k.label)
-      if (f.kind !== 'entity' && fr.length && fr.length === kr.length && fr.every((x) => kr.includes(x))) return true
+      // Racine « proche » : l'une commence par l'autre (« يون » / « يونان » : le pluriel « ان » retiré d'un seul côté)
+      const near = (x, y) => x === y || (Math.min(x.length, y.length) >= 3 && (x.startsWith(y) || y.startsWith(x)))
+      if (f.kind !== 'entity' && fr.length && fr.length === kr.length && fr.every((x) => kr.some((y) => near(x, y)))) return true
       if (f.kind === 'entity' && k.kind === 'entity') return false
       // Une entité n'est jamais absorbée par un simple mot ; un mot ou une expression peut l'être par une entité
       if (f.kind === 'entity') return false
