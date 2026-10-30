@@ -23,6 +23,7 @@ import { mountSuperAdmin } from './superadmin.js'
 import { auditMiddleware, initAuditTrail, mountAuditTrail } from './auditTrail.js'
 import { startAccountPolicy } from './accountPolicy.js'
 import { mountJournalists } from './journalists.js'
+import { initReviewValidation, mountReviewValidation } from './reviewValidation.js'
 import { backupStatus, startBackups } from './backups.js'
 import { currentCuts, startStreamAlerts } from './streamAlerts.js'
 import { startRetention } from './retention.js'
@@ -1130,6 +1131,9 @@ mountRasd(app, { getItems, telegramReady, sendTelegram, logDispatch })
 mountAuditTrail(app)
 // قاعدة الصحفيين ووسائل الإعلام : journalistes et médias libyens, historique des publications et citations
 mountJournalists(app, { getItems })
+// Revue de presse validée par un analyste, avec heure limite de livraison (audit v4, P2)
+initReviewValidation(path.join(root, 'data'))
+mountReviewValidation(app)
 // Sauvegarde quotidienne des données (data/backups, 14 jours) ; état exposé aux administrateurs (note de sécurité)
 startBackups(path.join(root, 'data'))
 // Coupures des flux TV/radio : alerte Telegram / e-mail du support à la coupure et au retour (audit v4)

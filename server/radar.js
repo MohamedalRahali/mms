@@ -470,7 +470,8 @@ export function dedupeStories(items) {
     if (!others?.length) return it
     const seen = new Set([it.origin])
     const also = []
-    for (const o of others) if (!seen.has(o.origin) || o.url !== it.url) (seen.add(o.origin), also.push({ id: o.id, origin: o.origin, url: o.url }))
+    // Autres médias seulement (une republication par le même média compte dans « dupes », pas dans « also »)
+    for (const o of others) if (!seen.has(o.origin)) (seen.add(o.origin), also.push({ id: o.id, origin: o.origin, url: o.url }))
     return { ...it, also: also.slice(0, 20), dupes: others.length }
   })
 }

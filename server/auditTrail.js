@@ -36,7 +36,7 @@ export function categoryOf(method, p) {
   if (/^\/api\/recordings/.test(p)) return 'recording'
   if (/^\/api\/portal-feed|^\/api\/items\/[^/]+\/public$/.test(p)) return 'portal'
   if (/^\/api\/(watches|rasd)/.test(p)) return 'watch'
-  if (/^\/api\/(reports|briefing|shares|mailing-lists)/.test(p)) return 'export'
+  if (/^\/api\/(reports|briefing|shares|mailing-lists|report\/validation)/.test(p)) return 'export'
   if (/^\/api\/superadmin\/(users|permissions|face)|^\/api\/profile\/password$|^\/api\/auth\/mfa\//.test(p)) return 'users'
   if (/^\/api\/diffusion/.test(p)) return 'sources'
   if (/^\/api\/superadmin\//.test(p)) return 'settings'

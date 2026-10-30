@@ -246,3 +246,18 @@ test('budget de transcription réglable : coût de la cible de 24 h par jour', a
   assert.equal(rec.dailyCostFor(24), 4.32)
   assert.equal(rec.TARGET_HOURS, 24)
 })
+
+test('revue validée par un analyste : heure limite de livraison le lendemain', async () => {
+  const rv = await import('../server/reviewValidation.js')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mms-rv-'))
+  rv.initReviewValidation(dir)
+  // Revue du 29/10 due le 30/10 à 08:00 (Tripoli, UTC+2)
+  assert.equal(rv.dueAt('2026-10-29'), '2026-10-30T06:00:00.000Z')
+  assert.equal(rv.reviewStatus('2026-10-29', Date.parse('2026-10-30T05:00:00Z')).status, 'pending')
+  assert.equal(rv.reviewStatus('2026-10-29', Date.parse('2026-10-30T07:00:00Z')).status, 'overdue')
+  assert.equal(rv.validateReview('2026-10-29', 'w.farhat@npdc.gov.ly', {}, new Date('2026-10-30T05:30:00Z')).status, 'validated_on_time')
+  assert.equal(rv.validateReview('2026-10-28', 'w.farhat@npdc.gov.ly', {}, new Date('2026-10-30T05:30:00Z')).status, 'validated_late')
+  assert.throws(() => rv.setDeadline('25:00'), /BAD_DEADLINE/)
+  rv.setDeadline('09:30')
+  assert.equal(rv.dueAt('2026-10-29'), '2026-10-30T07:30:00.000Z')
+})

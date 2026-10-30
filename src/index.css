@@ -4729,3 +4729,33 @@ img.mms-user__avatar--img {
   gap: 0.5rem;
   margin: 0;
 }
+
+/* Revue validée par un analyste (DailyReport.tsx) */
+.mms-review {
+  display: grid;
+  gap: 0.25rem;
+  margin-block-start: 0.6rem;
+  padding: 0.5rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+.mms-review small {
+  color: var(--ink-soft);
+}
+.mms-review--validated_on_time {
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+.mms-review--validated_late,
+.mms-review--overdue {
+  border-color: rgba(230, 145, 56, 0.6);
+  background: rgba(230, 145, 56, 0.1);
+}
+.mms-review__act {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.mms-review__act input {
+  flex: 1 1 14rem;
+}
