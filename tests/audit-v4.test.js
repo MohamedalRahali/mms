@@ -355,3 +355,10 @@ test('sujets émergents : « الوزراء اليوناني » et « وزراء
   const labels = emergingTopics(items, { now: NOW }).map((t) => t.label)
   assert.ok(labels.filter((l) => /وزراء|الوزراء/.test(l) && /يونان/.test(l)).length <= 1, labels.join(' | '))
 })
+
+test('sujets émergents : libellés relevés en production le 30/10 reconnus comme un même sujet', async () => {
+  const { sameRoots } = await import('../server/radar.js')
+  assert.equal(sameRoots('الوزراء اليوناني', 'وزراء اليونان'), true)
+  assert.equal(sameRoots('البحر الأسود', 'جهاز الردع'), false)
+  assert.equal(sameRoots('محمد الشحاتي', 'محفظة ليبيا أفريقيا للاستثمار'), false)
+})

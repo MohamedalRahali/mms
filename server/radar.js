@@ -246,11 +246,7 @@ export function emergingTopics(items, { hours = 24, now = Date.now(), limit = 15
       .map((w) => (w.startsWith('ال') && w.length > 4 ? w.slice(2) : w))
       .join('')
   // Racines des mots d'un libellé (« وزراء اليونان » et « الوزراء اليوناني » partagent وزراء et يونان)
-  const roots = (s) =>
-    normalize(String(s || ''))
-      .split(/\s+/)
-      .map((w) => stem(w.replace(/^(و|ب|ل|لل)(?=ال)/, '')).replace(/ي$/, ''))
-      .filter((w) => w.length >= 3 && !STOP.has(w))
+  const roots = labelRootList
   const shareRoot = (a, b) => {
     const ra = roots(a)
     const rb = roots(b)
@@ -265,8 +261,7 @@ export function emergingTopics(items, { hours = 24, now = Date.now(), limit = 15
       const fr = roots(f.label)
       const kr = roots(k.label)
       // Racine « proche » : l'une commence par l'autre (« يون » / « يونان » : le pluriel « ان » retiré d'un seul côté)
-      const near = (x, y) => x === y || (Math.min(x.length, y.length) >= 3 && (x.startsWith(y) || y.startsWith(x)))
-      if (f.kind !== 'entity' && fr.length && fr.length === kr.length && fr.every((x) => kr.some((y) => near(x, y)))) return true
+      if (f.kind !== 'entity' && sameRoots(fr, kr)) return true
       if (f.kind === 'entity' && k.kind === 'entity') return false
       // Une entité n'est jamais absorbée par un simple mot ; un mot ou une expression peut l'être par une entité
       if (f.kind === 'entity') return false
@@ -700,6 +695,22 @@ export function smartAlerts(items, { now = Date.now(), history = historyOf(items
     })
   }
   return dedupeAlerts(alerts.sort((a, b) => b.level - a.level || (b.detail.sources || 0) - (a.detail.sources || 0))).slice(0, 14)
+}
+
+/** Racines d'un libellé de sujet, dans l'ordre (article, « و » et pluriels retirés, « ي » final retiré) */
+export const labelRootList = (s) =>
+  normalize(String(s || ''))
+    .split(/\s+/)
+    .map((w) => stem(w.replace(/^(و|ب|ل|لل)(?=ال)/, '')).replace(/ي$/, ''))
+    .filter((w) => w.length >= 3 && !STOP.has(w))
+
+// Racines « proches » : l'une contient l'autre au début ou à la fin (« يون » / « يونان », « زراء » / « وزراء »)
+const nearRoot = (x, y) => x === y || (Math.min(x.length, y.length) >= 3 && (x.startsWith(y) || y.startsWith(x) || x.endsWith(y) || y.endsWith(x)))
+/** Deux libellés de sujets émergents désignent-ils la même chose ? (« الوزراء اليوناني » / « وزراء اليونان ») */
+export function sameRoots(a, b) {
+  const x = Array.isArray(a) ? a : labelRootList(a)
+  const y = Array.isArray(b) ? b : labelRootList(b)
+  return x.length > 0 && x.length === y.length && x.every((r) => y.some((s) => nearRoot(r, s)))
 }
 
 /** Racines des mots d'un libellé ou d'un titre (sans article, préfixes, pluriels ni « ي » final) */
