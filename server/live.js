@@ -124,6 +124,8 @@ export function captureChannels(now = Date.now()) {
     state: captureState(c, now),
     last: c.dernier_enregistrement || c.dernier_succes || '',
     via: c.flux ? 'stream' : c.youtube ? 'youtube' : '',
+    // Production réelle écrite par la veille (audit v5) : extraits sur 24 h, état et cause sans extrait
+    ...(typeof c.extraits_24h === 'number' ? { extracts24: c.extraits_24h, extracts7: c.extraits_7j ?? null, production: c.etat_production || '' } : {}),
   }))
 }
 

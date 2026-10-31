@@ -71,7 +71,26 @@ export function canonicalOrigin(origin) {
 const lower = (s) => String(s || '').toLowerCase()
 
 /** Vrai si la fiche vient d'une source écartée : défauts, liste du Super Admin, comptes Reddit personnels, forums hors liste blanche */
+/**
+ * Bruit hors veille (audit v5, constat 8) : courses hippiques et paris, publicités et annonces commerciales (laboratoires
+ * d'analyses, offres, numéros à appeler), dans le fil comme dans les transcriptions radio. Une actualité sur le secteur
+ * de la santé ou un laboratoire national reste : il faut un vocabulaire de publicité (offre, خصم، اتصل…) ou de pari.
+ */
+const HORSE_RACING = /سباق (الخيل|الخيول|خيل)|ميدان السباق|الفروسية.*(رهان|سباق)|horse ?rac|hippodrome|courses? hippiques?|\bturf\b|\bpmu\b|quint[ée] ?\+|مراهنات رياضية|المراهنات على|sports betting|bookmaker/i
+const LAB_AD = /(مختبر|معمل|مختبرات|تحاليل|laborato)[^.]{0,80}(خصم|عرض|عروض|تخفيض|اتصل|اتصلوا|للحجز|واتساب|whatsapp|offre|promo|discount|call)|(خصم|عرض خاص|تخفيضات)[^.]{0,60}(تحاليل|تحليل|مختبر)/i
+const AD_SIGNS = /(اتصل(وا)? (بنا )?على|للحجز والاستفسار|للاستفسار (اتصل|واتساب)|رقم الهاتف|واتساب ?:?\s*\+?\d|عرض لفترة محدودة|خصم \d+ ?%|سارعوا|اطلبوا الآن|call now|limited offer)/i
+export function noiseItem(it) {
+  const text = `${it.title || ''} ${it.summary || ''}`
+  if (HORSE_RACING.test(text)) return 'racing'
+  if (LAB_AD.test(text)) return 'ad'
+  // Publicité : signe d'annonce ET numéro de téléphone (7 chiffres ou plus)
+  if (AD_SIGNS.test(text) && /\+?\d[\d\s-]{6,}\d/.test(text)) return 'ad'
+  if (it.advert === true || it.publicite === true) return 'ad'
+  return ''
+}
+
 export function excludedBySource(it) {
+  if (noiseItem(it)) return true
   const o = canonicalOrigin(it.origin)
   const lo = lower(o)
   if (DEFAULT_BLOCKED.some((b) => lower(b) === lo) || policy.blocked.some((b) => lower(canonicalOrigin(b)) === lo)) return true

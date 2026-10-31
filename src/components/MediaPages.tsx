@@ -17,7 +17,7 @@ import { useIntel } from '../lib/intel'
 /** Pages « الوسائط » : tableau de bord et liste propres à chaque type de média (menu latéral) */
 
 type Card = { id: string; title: string; summary: string; origin: string; url: string; date: string; tone?: Tone | ''; lang?: string; subType?: string; author?: string }
-type Capture = { id: string; name: string; sub: string; state: string; last: string; via: string; count: number }
+type Capture = { id: string; name: string; sub: string; state: string; last: string; via: string; count: number; last24?: number }
 type Reply = { id: string; author: string; text: string; date: string; tone?: Tone | ''; url?: string; depth?: number }
 type Overview = {
   type?: MediaPageType
@@ -196,6 +196,7 @@ function CapturePanel({ rows }: { rows: Capture[] }) {
               {c.states[r.state] ?? r.state}
             </span>
             <small>
+              {r.state !== 'liveOnly' && typeof r.last24 === 'number' && `${i.lang === 'ar' ? 'مقتطفات/24 س' : 'excerpts/24 h'} ${i.num(r.last24)} · `}
               {r.count > 0 && `${c.inPeriod} ${i.num(r.count)} · `}
               {r.last ? `${c.last} ${i.dateTime(r.last)}` : c.hints[r.state]}
             </small>
@@ -270,7 +271,7 @@ function Board({ type, data, days }: { type: MediaPageType; data: Overview; days
   }
 
   // Pas de chaîne de ce type en cours d'enregistrement (radios aujourd'hui) : la page vide le dit
-  const noActive = !!data.capture && !data.capture.some((c) => ['ok', 'stale', 'offline'].includes(c.state))
+  const noActive = !!data.capture && !data.capture.some((c) => ['ok', 'silent', 'stale', 'offline'].includes(c.state))
 
   return (
     <>

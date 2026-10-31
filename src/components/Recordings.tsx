@@ -195,6 +195,7 @@ const TEXT = {
       YOUTUBE_BLOCKED:
         "هذه القناة غير متاحة للتسجيل حالياً لأن مصدرها يرفض الاتصال. اختر قناة متاحة الآن؛ الفريق التقني على علم.",
       UNAVAILABLE: "هذه القناة غير متاحة الآن.",
+      SHARED_READONLY: "حساب مشترك للقراءة فقط: لا يمكن جدولة تسجيل. استعملوا حساباً اسمياً.",
       NO_CHANNEL: "القناة غير موجودة.",
       BAD_RANGE: "يجب أن تكون النهاية بعد البداية.",
       FINISHED: "هذا التسجيل انتهى بالفعل.",
@@ -331,6 +332,7 @@ const TEXT = {
       YOUTUBE_BLOCKED:
         "This channel cannot be recorded right now because its source refuses the connection. Pick a channel available now; the technical team is aware.",
       UNAVAILABLE: "This channel is not available right now.",
+      SHARED_READONLY: "Shared account is read-only: recordings cannot be scheduled. Please use a named account.",
       NO_CHANNEL: "Unknown channel.",
       BAD_RANGE: "The end must be after the start.",
       FINISHED: "This recording has already finished.",

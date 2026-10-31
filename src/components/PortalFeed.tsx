@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useI18n } from '../lib/i18n'
+import { useAuth } from '../lib/auth'
 import { PageHead } from './Extras'
 import './portalFeed.css'
 
@@ -46,6 +47,8 @@ type FeedState = {
   updatedAt: string
   history: { by: string; at: string; what: string }[]
   options: { types: Count[]; langs: Count[]; categories: Count[]; sources: Count[] }
+  validators?: string[]
+  publicUrl?: string
 }
 type Row = {
   id: string
@@ -102,6 +105,8 @@ const TEXT = {
       SUMMARY_LENGTH: 'الملخص بين 40 و600 حرف.',
       NO_URL: 'رابط المصدر مطلوب (يبدأ بـ http).',
       TITLE_COPY: 'العنوان منسوخ من المصدر: أعيدوا صياغته.',
+      NOT_VALIDATOR: 'النشر مخصص لمدققي البوابة المعيّنين. اطلبوا من أحدهم الموافقة.',
+      SHARED_READONLY: 'حساب مشترك للقراءة فقط: استعملوا حساباً اسمياً.',
       SUMMARY_COPY: 'الملخص منسوخ من المصدر: أعيدوا صياغته.',
       NOT_PUBLISHED: 'لا يمكن تثبيت خبر غير منشور.',
       TYPE: 'التعليقات لا تُنشر.',
@@ -240,6 +245,8 @@ const TEXT = {
       SUMMARY_LENGTH: 'Summary must be 40 to 600 characters.',
       NO_URL: 'A source link (http…) is required.',
       TITLE_COPY: 'The title copies the source: please rewrite it.',
+      NOT_VALIDATOR: 'Publishing is reserved to the designated portal validators. Ask one of them to approve.',
+      SHARED_READONLY: 'Shared account is read-only: please use a named account.',
       SUMMARY_COPY: 'The summary copies the source: please rewrite it.',
       NOT_PUBLISHED: 'Only published stories can be pinned.',
       TYPE: 'Comments are never published.',
@@ -536,6 +543,8 @@ export function PortalFeed() {
           {t.open}
         </a>
       </div>
+
+      <PortalAdminBox st={st} />
 
       <section className="pf-status">
         <button type="button" className={cfg.enabled ? 'pf-switch is-on' : 'pf-switch'} role="switch" aria-checked={cfg.enabled} onClick={() => set({ enabled: !cfg.enabled })}>
@@ -1000,3 +1009,48 @@ function PublishEditor({ row, t, onDone, onCancel }: { row: Row; t: T; onDone: (
 }
 
 export default PortalFeed
+
+/** Adresse publique du portail et validateurs désignés (audit v5, constat 13) */
+function PortalAdminBox({ st }: { st: FeedState }) {
+  const i = useI18n()
+  const ar = i.lang === 'ar'
+  const isAdmin = useAuth()?.user?.role === 'admin'
+  const [list, setList] = useState((st.validators ?? []).join(', '))
+  const [msg, setMsg] = useState('')
+  async function save() {
+    const res = await fetch('/api/portal-feed/validators', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ validators: list.split(/[\s,;،]+/).filter(Boolean) }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (res.ok) {
+      setList((json.validators ?? []).join(', '))
+      setMsg(ar ? 'تم الحفظ.' : 'Saved.')
+    } else setMsg(ar ? 'تعذّر الحفظ.' : 'Could not save.')
+  }
+  const url = st.publicUrl || 'https://mearsaad.com/portal'
+  return (
+    <section className="pf-admin">
+      <p>
+        {ar ? 'العنوان العام للبوابة: ' : 'Public portal address: '}
+        <a href={url} target="_blank" rel="noopener noreferrer" dir="ltr">
+          {url}
+        </a>
+      </p>
+      <p>
+        {ar ? 'مدقّقو البوابة (من يوافق على النشر): ' : 'Portal validators (who approve publishing): '}
+        <b dir="ltr">{st.validators?.length ? st.validators.join(', ') : ar ? 'كل من يملك صلاحية النشر' : 'anyone with the publishing permission'}</b>
+      </p>
+      {isAdmin && (
+        <p className="pf-admin__edit">
+          <input value={list} onChange={(e) => setList(e.target.value)} dir="ltr" placeholder="name@npdc.gov.ly, …" aria-label={ar ? 'مدققو البوابة' : 'Portal validators'} />
+          <button type="button" className="news-btn news-btn--ghost" onClick={save}>
+            {ar ? 'تعيين المدققين' : 'Set validators'}
+          </button>
+          {msg && <small>{msg}</small>}
+        </p>
+      )}
+    </section>
+  )
+}

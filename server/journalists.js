@@ -32,6 +32,31 @@ const month = (iso) => String(iso).slice(0, 7)
 
 let memo = { items: null, at: 0, data: null }
 
+/**
+ * Nom complet plausible (audit v5, constat 11 : « aw », « hanan » listés comme journalistes) : deux à cinq mots de
+ * deux lettres au moins, des lettres seulement (traits d'union et apostrophes permis), ni pseudo, ni adresse, ni
+ * signature collective (« فريق التحرير », « Staff », « Admin »…).
+ */
+const COLLECTIVE = /^(admin|administrator|editor|editorial|staff|team|desk|newsroom|redaction|rédaction|webmaster|agence|agency|afp|reuters|ap|correspondent|reporter|guest|anonymous|unknown|فريق|هيئة التحرير|التحرير|المحرر|محرر|مراسل|مراسلنا|إدارة|ادارة|الموقع|وكالات|وكالة)(\s|$)/i
+export function plausibleName(raw) {
+  const a = String(raw || '').replace(/\s+/g, ' ').trim()
+  if (a.length < 5 || a.length > 60 || /[@\d/\\_|<>]/.test(a) || /https?:/i.test(a)) return false
+  if (COLLECTIVE.test(a)) return false
+  const words = a.split(' ')
+  if (words.length < 2 || words.length > 5) return false
+  return words.every((w) => /^[\p{L}][\p{L}'’.-]*$/u.test(w) && (w.replace(/[.'’-]/g, '').length >= 2 || /^\p{Lu}\.$/u.test(w)))
+}
+
+/** Signature trouvée dans le texte quand le flux n'en donne pas (« بقلم: … », « كتب … », « By … ») */
+export function bylineOf(it) {
+  const text = `${it.summary || ''} ${it.text || ''}`.slice(0, 600)
+  const ar = /(?:بقلم|كتب|كتبت|إعداد|اعداد|تقرير)\s*[:：-]?\s*((?:[\p{Script=Arabic}]{2,}\s+){1,3}[\p{Script=Arabic}]{2,})/u.exec(text)
+  if (ar && plausibleName(ar[1])) return ar[1].trim()
+  const en = /\b(?:By|Par|Di)\s+((?:[A-Z][a-zà-ÿ'’-]+\s+){1,3}[A-Z][a-zà-ÿ'’-]+)/.exec(text)
+  if (en && plausibleName(en[1])) return en[1].trim()
+  return ''
+}
+
 /** Index des journalistes et médias ; recalculé quand les fiches changent (au plus toutes les 5 minutes) */
 export function directory(items, now = Date.now()) {
   if (memo.items === items && now - memo.at < 300_000) return memo.data
@@ -40,21 +65,23 @@ export function directory(items, now = Date.now()) {
   for (const it of items) {
     if (!isPress(it)) continue
     const ly = countryOf(it) === 'LY'
-    if (ly) {
+    {
       let m = media.get(it.origin)
-      if (!m) media.set(it.origin, (m = { name: it.origin, kind: 'media', channels: new Set(), count: 0, first: it.date, last: it.date, authors: new Set(), reliability: reliabilityOf(it), byMonth: {} }))
+      if (!m) media.set(it.origin, (m = { name: it.origin, kind: 'media', libyan: ly, country: countryOf(it), channels: new Set(), count: 0, first: it.date, last: it.date, authors: new Set(), reliability: reliabilityOf(it), byMonth: {} }))
       m.count++
       m.channels.add(it.channel)
       if (it.date < m.first) m.first = it.date
       if (it.date > m.last) m.last = it.date
       m.byMonth[month(it.date)] = (m.byMonth[month(it.date)] || 0) + 1
-      if (it.author && it.author !== it.origin) m.authors.add(it.author)
+      if (it.author && it.author !== it.origin && plausibleName(it.author)) m.authors.add(it.author)
     }
-    const a = String(it.author || '').trim()
-    if (!a || a === it.origin || a.length > 80 || /^(u\/|@)/.test(a)) continue
+    const given = String(it.author || '').trim()
+    const a = given && given !== it.origin && !/^(u\/|@)/.test(given) && plausibleName(given) ? given : bylineOf(it)
+    if (!a || a === it.origin) continue
     let p = people.get(a)
-    if (!p) people.set(a, (p = { name: a, kind: 'journalist', outlets: new Map(), count: 0, lyCount: 0, first: it.date, last: it.date, byMonth: {} }))
+    if (!p) people.set(a, (p = { name: a, kind: 'journalist', outlets: new Map(), themes: new Map(), count: 0, lyCount: 0, first: it.date, last: it.date, byMonth: {} }))
     p.count++
+    if (it.category) p.themes.set(it.category, (p.themes.get(it.category) || 0) + 1)
     if (ly) p.lyCount++
     p.outlets.set(it.origin, (p.outlets.get(it.origin) || 0) + 1)
     if (it.date < p.first) p.first = it.date
@@ -63,7 +90,12 @@ export function directory(items, now = Date.now()) {
   }
   const data = {
     journalists: [...people.values()]
-      .map((p) => ({ ...p, libyan: p.lyCount * 2 >= p.count, outlets: [...p.outlets.entries()].sort((x, y) => y[1] - x[1]).map(([name, count]) => ({ name, count })) }))
+      .map((p) => ({
+        ...p,
+        libyan: p.lyCount * 2 >= p.count,
+        outlets: [...p.outlets.entries()].sort((x, y) => y[1] - x[1]).map(([name, count]) => ({ name, count })),
+        themes: [...p.themes.entries()].sort((x, y) => y[1] - x[1]).slice(0, 4).map(([name, count]) => ({ name, count })),
+      }))
       .sort((x, y) => y.count - x.count),
     media: [...media.values()].map((m) => ({ ...m, channels: [...m.channels], authors: [...m.authors].slice(0, 50) })).sort((x, y) => y.count - x.count),
   }
@@ -76,7 +108,7 @@ export function directoryList(items, { kind = 'journalist', q = '', libyan = '1'
   const d = directory(items)
   const needle = norm(q).slice(0, 100)
   let list = kind === 'media' ? d.media : d.journalists
-  if (kind !== 'media' && libyan === '1') list = list.filter((p) => p.libyan)
+  if (libyan === '1') list = list.filter((p) => p.libyan)
   if (needle) list = list.filter((x) => norm(x.name).includes(needle) || (x.outlets || []).some((o) => norm(o.name).includes(needle)))
   const n = Math.min(Math.max(Number(size) || 30, 5), 100)
   const pages = Math.max(Math.ceil(list.length / n), 1)
@@ -85,7 +117,7 @@ export function directoryList(items, { kind = 'journalist', q = '', libyan = '1'
     total: list.length,
     page: p,
     pages,
-    counts: { journalists: d.journalists.length, libyanJournalists: d.journalists.filter((x) => x.libyan).length, media: d.media.length },
+    counts: { journalists: d.journalists.length, libyanJournalists: d.journalists.filter((x) => x.libyan).length, media: d.media.length, libyanMedia: d.media.filter((x) => x.libyan).length },
     rows: list.slice((p - 1) * n, p * n).map(({ byMonth, lyCount, ...x }) => x),
   }
 }
@@ -103,7 +135,7 @@ export function directoryEntry(items, kind, name, now = Date.now()) {
   const cited = []
   for (const it of items) {
     if (it.media === 'comment') continue
-    const mine = kind === 'media' ? it.origin === name && isPress(it) : String(it.author || '').trim() === name
+    const mine = kind === 'media' ? it.origin === name && isPress(it) : String(it.author || '').trim() === name || (isPress(it) && !it.author && bylineOf(it) === name)
     if (mine) {
       own.push(it)
       continue

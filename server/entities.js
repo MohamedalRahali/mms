@@ -96,6 +96,22 @@ export const DEFAULT_ENTITIES = [
   M('العربية', ['قناة العربية', 'Al Arabiya']),
   M('رويترز', ['Reuters']),
   M('فرانس برس', ['وكالة فرانس برس', 'AFP']),
+  // Audit v5 : noms de médias encore relevés comme entités (« ليبيان إكسبريس »)
+  M('Libyan Express', ['ليبيان إكسبريس', 'ليبيان اكسبريس', 'ليبيا إكسبريس']),
+  M('Libya Review', ['ليبيا ريفيو']),
+  M('Libya Update', ['ليبيا أبديت', 'The Libya Update']),
+  M('عين ليبيا', ['Ean Libya']),
+  M('المرصد الليبي', ['صحيفة المرصد', 'المرصد', 'Almarsad']),
+  M('الساعة 24', ['Alsaaa24']),
+  M('أخبار ليبيا 24', ['Akhbarlibya24']),
+  M('بوابة إفريقيا الإخبارية', ['بوابة افريقيا الاخبارية', 'Afrigate News']),
+  M('سكاي نيوز عربية', ['سكاي نيوز', 'Sky News Arabia']),
+  M('بي بي سي عربي', ['بي بي سي', 'BBC Arabic', 'BBC']),
+  M('فرانس 24', ['France 24']),
+  M('الحدث', ['قناة الحدث', 'Al Hadath']),
+  M('العربي الجديد', ['Al-Araby Al-Jadeed', 'The New Arab']),
+  M('الشرق الأوسط', ['Asharq Al-Awsat']),
+  M('الأناضول', ['وكالة الأناضول', 'Anadolu']),
 ]
 
 // Mots qui rattachent un texte à la Libye (pertinence des alertes)
@@ -199,6 +215,14 @@ export const lookup = (name) => index.get(norm(name)) || null
 // Prénoms seuls (« محمد ») : trop ambigus pour être un acteur ; écartés sauf s'ils sont dans le référentiel
 const FIRST_NAMES = new Set(['محمد', 'أحمد', 'احمد', 'علي', 'عبدالله', 'عبد الله', 'خالد', 'عمر', 'مصطفى', 'إبراهيم', 'ابراهيم', 'يوسف', 'حسن', 'حسين', 'سالم', 'عبدالرحمن', 'صالح', 'محمود', 'فاطمة', 'مريم', 'عائشة', 'خديجة', 'سارة', 'Mohamed', 'Mohammed', 'Muhammad', 'Ahmed', 'Ali', 'Omar', 'Khaled'])
 
+/**
+ * Nom qui désigne un média (audit v5) : mots de titre de presse translittérés ou non (« إكسبريس », « نيوز », « تايمز »,
+ * « Express », « News », « Herald »…) ou forme « قناة / إذاعة / صحيفة / بوابة / وكالة أنباء + nom ». Jamais un acteur.
+ */
+const MEDIA_WORDS = /(^|\s)(إكسبريس|اكسبريس|نيوز|تايمز|هيرالد|أوبزرفر|اوبزرفر|ريفيو|بوست|تريبيون|غازيت|express|news|times|herald|observer|review|post|tribune|gazette|tv|fm|radio)(\s|$)/i
+const MEDIA_HEAD = /^(قناة|إذاعة|اذاعة|راديو|صحيفة|جريدة|مجلة|بوابة|موقع|وكالة أنباء|وكالة الأنباء)\s/
+export const looksLikeMedia = (name) => MEDIA_WORDS.test(String(name || '').trim()) || MEDIA_HEAD.test(String(name || '').trim())
+
 export function resolveEntities(it, mediaNames = new Set()) {
   const out = { people: [], orgs: [], places: [] }
   const seen = new Set()
@@ -209,7 +233,7 @@ export function resolveEntities(it, mediaNames = new Set()) {
     // Rejeté par la correction IA (ou le Super Admin) : pas un acteur
     if (e?.type === 'reject') return
     if (!e && list === 'people' && FIRST_NAMES.has(name)) return
-    if (e?.type === 'media' || (!e && mediaNames.has(norm(name)))) return
+    if (e?.type === 'media' || (!e && (mediaNames.has(norm(name)) || looksLikeMedia(name)))) return
     const canon = e ? e.name : name
     const target = e ? (e.type === 'person' ? 'people' : e.type === 'place' ? 'places' : 'orgs') : list
     const key = `${target}|${norm(canon)}`

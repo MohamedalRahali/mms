@@ -176,6 +176,7 @@ export const MEDIA_PAGE_TEXT = {
       title: 'حالة القنوات المسجّلة',
       states: {
         ok: 'يعمل',
+        silent: 'يسجّل دون مقتطفات',
         stale: 'متأخر',
         offline: 'خارج البث',
         blocked: 'محجوب',
@@ -186,7 +187,8 @@ export const MEDIA_PAGE_TEXT = {
         liveOnly: 'مشاهدة مباشرة فقط',
       } as Record<string, string>,
       hints: {
-        ok: 'سُجّلت مادة خلال آخر 36 ساعة',
+        ok: 'أنتج مقتطفات خلال آخر 24 ساعة',
+        silent: 'التسجيل يعمل لكن لم يُستخرج أي مقتطف خلال آخر 24 ساعة',
         stale: 'آخر تسجيل ناجح أقدم من 36 ساعة',
         offline: 'القناة لا تبث مباشرة الآن على يوتيوب؛ يُعاد المحاولة تلقائياً',
         blocked: 'المصدر (يوتيوب) يرفض الاتصال مؤقتاً؛ الفريق التقني يعمل على بديل',
@@ -286,6 +288,7 @@ export const MEDIA_PAGE_TEXT = {
       title: 'Recorded channels status',
       states: {
         ok: 'Working',
+        silent: 'Recording, no excerpts',
         stale: 'Late',
         offline: 'Off air',
         blocked: 'Blocked',
@@ -296,7 +299,8 @@ export const MEDIA_PAGE_TEXT = {
         liveOnly: 'Live view only',
       } as Record<string, string>,
       hints: {
-        ok: 'Recorded within the last 36 hours',
+        ok: 'Produced excerpts in the last 24 hours',
+        silent: 'Recording works but no excerpt was extracted in the last 24 hours',
         stale: 'Last successful recording is older than 36 hours',
         offline: 'The channel is not live on YouTube right now; retried automatically',
         blocked: 'The source (YouTube) is refusing the connection for now; the technical team is working on an alternative',

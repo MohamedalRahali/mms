@@ -9,8 +9,8 @@ import { PageHead } from './Extras'
  */
 
 type Kind = 'journalist' | 'media'
-type Row = { name: string; kind: Kind; count: number; first: string; last: string; libyan?: boolean; outlets?: { name: string; count: number }[]; channels?: string[]; authors?: string[]; reliability?: string }
-type List = { total: number; page: number; pages: number; counts: { journalists: number; libyanJournalists: number; media: number }; rows: Row[] }
+type Row = { name: string; kind: Kind; count: number; first: string; last: string; libyan?: boolean; themes?: { name: string; count: number }[]; outlets?: { name: string; count: number }[]; channels?: string[]; authors?: string[]; reliability?: string }
+type List = { total: number; page: number; pages: number; counts: { journalists: number; libyanJournalists: number; media: number; libyanMedia?: number }; rows: Row[] }
 type Brief = { id: string; title: string; origin: string; date: string; url: string }
 type Entry = Row & { published: Brief[]; publishedTotal: number; citations: Brief[]; citationsTotal: number; citedBy: string[]; timeline: { months: string[]; published: Record<string, number>; cited: Record<string, number> } }
 
@@ -86,7 +86,7 @@ export function Journalists() {
               }}
             >
               {k === 'journalist' ? t.journalists : t.media}
-              {data && <small> {k === 'journalist' ? (libyan ? data.counts.libyanJournalists : data.counts.journalists) : data.counts.media}</small>}
+              {data && <small> {k === 'journalist' ? (libyan ? data.counts.libyanJournalists : data.counts.journalists) : libyan ? (data.counts.libyanMedia ?? data.counts.media) : data.counts.media}</small>}
             </button>
           ))}
         </div>
@@ -100,7 +100,7 @@ export function Journalists() {
           placeholder={t.search}
           dir="auto"
         />
-        {kind === 'journalist' && (
+        {(
           <label>
             <input type="checkbox" checked={libyan} onChange={(e) => setLibyan(e.target.checked)} /> {t.libyanOnly}
           </label>
@@ -119,6 +119,7 @@ export function Journalists() {
                 {t.outlets}: {r.outlets.slice(0, 3).map((o) => o.name).join('، ')}
               </small>
             )}
+            {r.themes && r.themes.length > 0 && <small>{r.themes.map((x) => i.category(x.name)).join('، ')}</small>}
             {r.reliability && <small>{t.rel[r.reliability] ?? r.reliability}</small>}
           </button>
         ))}

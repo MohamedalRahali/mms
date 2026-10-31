@@ -3,7 +3,7 @@ import path from 'node:path'
 import { normalize } from './watches.js'
 import { findSpikes, spikeItems } from './intel.js'
 import { libyaRelevant, lookup } from './entities.js'
-import { collectionStartDay } from './history.js'
+import { collectionStartDay, firstDataDay } from './history.js'
 import { countryOf } from './sourceMeta.js'
 
 /**
@@ -181,6 +181,17 @@ function termsOf(it) {
 }
 
 /**
+ * Morceau d'expression sans sens seul (audit v5) : deux mots dont le premier est le complément d'un titre coupé
+ * (« الوزراء اليوناني » de « رئيس الوزراء اليوناني », « النواب الليبي » de « مجلس النواب الليبي »).
+ */
+const FRAGMENT_HEADS = new Set(['الوزراء', 'وزراء', 'النواب', 'الاركان', 'الأركان', 'الدوله', 'الدولة', 'الرئاسي', 'الامن', 'الأمن', 'الامه', 'الأمة'].map((w) => normalize(w)))
+export function isFragment(key, label = key) {
+  if (key.startsWith('@') || !key.includes(' ')) return false
+  const [first] = String(label).trim().split(/\s+/)
+  return FRAGMENT_HEADS.has(normalize(first))
+}
+
+/**
  * Sujets dont la fréquence explose : documents de la fenêtre récente comparés à la moyenne par fenêtre
  * équivalente des 7 jours précédents. Un sujet doit apparaître dans au moins 3 fiches et 2 sources.
  */
@@ -213,6 +224,7 @@ export function emergingTopics(items, { hours = 24, now = Date.now(), limit = 15
   let found = []
   for (const s of stats.values()) {
     if (s.recent < 3 || s.sources.size < 2) continue
+    if (isFragment(s.key, [...s.labels.entries()].sort((a, b) => b[1] - a[1])[0][0])) continue
     const avg = s.base / slots
     const growth = (s.recent + 1) / (avg + 1)
     if (growth < 2) continue
@@ -262,7 +274,16 @@ export function emergingTopics(items, { hours = 24, now = Date.now(), limit = 15
       const kr = roots(k.label)
       // Racine « proche » : l'une commence par l'autre (« يون » / « يونان » : le pluriel « ان » retiré d'un seul côté)
       if (f.kind !== 'entity' && sameRoots(fr, kr)) return true
-      if (f.kind === 'entity' && k.kind === 'entity') return false
+      // Deux entités dont l'une contient l'autre (« الزاوية » / « مصفاة الزاوية », « الحمادة » / « حقل الحمادة ») et
+      // qui partagent la moitié de leurs fiches : un seul sujet (audit v5)
+      if (f.kind === 'entity' && k.kind === 'entity') {
+        const a = labelKey(f.label)
+        const b = labelKey(k.label)
+        if (!(a.includes(b) || b.includes(a))) return false
+        let both = 0
+        for (const d of f.docs) if (k.docs.has(d)) both++
+        return both >= Math.min(f.docs.size, k.docs.size) * 0.5
+      }
       // Une entité n'est jamais absorbée par un simple mot ; un mot ou une expression peut l'être par une entité
       if (f.kind === 'entity') return false
       let inter = 0
@@ -585,9 +606,12 @@ export function sentimentBarometer(items, { days = 14, from = '', to = '', now =
 export const MIN_HISTORY_DAYS = 14
 export function historyOf(items, now = Date.now()) {
   // Même règle que les variations en % (server/history.js)
-  const since = collectionStartDay(items)
+  const since = collectionStartDay(items, now)
   const days = since ? Math.max(Math.round((now - Date.parse(`${since}T12:00:00Z`)) / DAY), 0) + 1 : 0
-  return { since: since || null, days, enough: days >= MIN_HISTORY_DAYS, min: MIN_HISTORY_DAYS }
+  // Audit v5 : date de couverture complète (since) distincte du premier jour avec des données partielles (reprise
+  // d'historique, montée en charge), pour ne plus annoncer « données depuis le 01/10 » quand presque rien n'existe
+  const partial = firstDataDay(items, now)
+  return { since: since || null, partialSince: partial && since && partial < since ? partial : null, days, enough: days >= MIN_HISTORY_DAYS, min: MIN_HISTORY_DAYS }
 }
 
 // Seuils minimaux : en dessous, un pourcentage ou un écart n'est qu'un effet statistique

@@ -62,21 +62,29 @@ export function countersOf(all, now) {
 }
 
 /** Chaînes enregistrées (tv, radio) avec leur état et le nombre de fiches de la période ; pas pour le sous-type youtube */
-export function capturePart(channels, found, sub) {
+export function capturePart(channels, found, sub, recent = [], now = Date.now()) {
   if (sub === 'youtube') return []
   const perOrigin = new Map()
   for (const it of found) perOrigin.set(it.origin, (perOrigin.get(it.origin) || 0) + 1)
-  const order = { ok: 0, stale: 1, offline: 2, blocked: 3, error: 4, nosource: 5, never: 6, disabled: 7, liveOnly: 8 }
+  // Extraits des dernières 24 h par source (audit v5) : « يعمل » seulement si la source produit vraiment des extraits ;
+  // une source qui enregistre sans rien produire passe en « silent » (enregistre, aucun extrait)
+  const last24 = new Map()
+  for (const it of recent) if (Date.parse(it.date) >= now - DAY && it.media === 'broadcast') last24.set(it.origin, (last24.get(it.origin) || 0) + 1)
+  const order = { ok: 0, silent: 1, stale: 2, offline: 3, blocked: 4, error: 5, nosource: 6, never: 7, disabled: 8, liveOnly: 9 }
   return channels
     .filter((c) => !sub || c.sub === sub)
-    .map((c) => ({ ...c, count: perOrigin.get(c.name) || 0 }))
+    .map((c) => {
+      // Chiffre de la veille quand il existe (rattaché par identifiant de chaîne), sinon fiches vues par MMS
+      const day = typeof c.extracts24 === 'number' ? Math.max(c.extracts24, last24.get(c.name) || 0) : last24.get(c.name) || 0
+      return { ...c, count: perOrigin.get(c.name) || 0, last24: day, state: c.state === 'ok' && day === 0 ? 'silent' : c.state }
+    })
     .sort((a, b) => order[a.state] - order[b.state] || b.count - a.count || a.name.localeCompare(b.name, 'ar'))
 }
 
 function broadcastPart(found, inSpan, span, now, sub) {
   const top = counts(found, 'origin', 6)
   return {
-    capture: capturePart(captureChannels(now), found, sub),
+    capture: capturePart(captureChannels(now), found, sub, inSpan, now),
     subTypes: counts(found, 'subType'),
     channels: top.map((c) => {
       const mine = inSpan.filter((it) => it.origin === c.name)

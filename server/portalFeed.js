@@ -51,7 +51,7 @@ export const DEFAULT_CONFIG = Object.freeze({
 })
 
 let file = ''
-let state = { config: { ...DEFAULT_CONFIG }, published: {}, pins: {}, excluded: {}, updatedBy: '', updatedAt: '', history: [] }
+let state = { config: { ...DEFAULT_CONFIG }, published: {}, pins: {}, excluded: {}, updatedBy: '', updatedAt: '', history: [], validators: [] }
 let logFile = ''
 let pubLog = [] // dernières lignes du journal des publications, les plus récentes d'abord
 const MAX_LOG = 2000
@@ -126,6 +126,31 @@ const save = () => {
   version++
 }
 
+/**
+ * Validateurs du portail (audit v5, constat 13) : comptes désignés par un administrateur pour valider les publications.
+ * Liste vide : comme avant, tout compte ayant le droit « publish_public » publie. Liste remplie : seuls ces comptes
+ * publient, modifient ou retirent une publication (les autres peuvent toujours proposer et préparer).
+ */
+const EMAIL = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/
+function cleanValidators(v) {
+  return [...new Set((Array.isArray(v) ? v : []).map((e) => String(e).trim().toLowerCase()).filter((e) => EMAIL.test(e)))].slice(0, 20)
+}
+export const portalValidators = () => [...(state.validators || [])]
+export function setValidators(list, by) {
+  state.validators = cleanValidators(list)
+  state.history = [{ by: String(by || '').slice(0, 120), at: new Date().toISOString(), what: `validators ${state.validators.length}` }, ...state.history].slice(0, MAX_HISTORY)
+  save()
+  return portalValidators()
+}
+export function mayValidate(email) {
+  const v = state.validators || []
+  return !v.length || v.includes(String(email || '').toLowerCase())
+}
+export const publicPortalUrl = () => {
+  const env = String(process.env.PUBLIC_URL || '').replace(/\/$/, '')
+  return `${!env || /localhost|127\.0\.0\.1/.test(env) ? 'https://mearsaad.com' : env}/portal`
+}
+
 export function initPortalFeed(dataDir) {
   file = path.join(dataDir, 'portal-feed.json')
   logFile = path.join(dataDir, 'portal-publications.jsonl')
@@ -138,6 +163,7 @@ export function initPortalFeed(dataDir) {
     updatedBy: String(s.updatedBy || ''),
     updatedAt: String(s.updatedAt || ''),
     history: Array.isArray(s.history) ? s.history.slice(0, MAX_HISTORY) : [],
+    validators: cleanValidators(s.validators),
   }
   // Épingles sans publication (ancien mode automatique) : retirées, une fiche épinglée doit être publiée
   for (const id of Object.keys(state.pins)) if (!state.published[id]) delete state.pins[id]
@@ -311,6 +337,7 @@ export function checkRewrite(it, { title, summary, url, confirm } = {}) {
 
 /** Publie (ou modifie) une fiche sur la vitrine, après validation humaine et réécriture */
 export function publishItem(it, body, by) {
+  if (!mayValidate(by)) throw fail('NOT_VALIDATOR', 403)
   if (!it) throw fail('NOT_FOUND', 404)
   if (typeOf(it) === 'comment') throw fail('TYPE')
   const bad = checkRewrite(it, body || {})
@@ -490,6 +517,8 @@ export function feedState(items) {
     config: state.config,
     defaults: DEFAULT_CONFIG,
     manualOnly: true,
+    validators: portalValidators(),
+    publicUrl: publicPortalUrl(),
     published: marks(state.published),
     pins: marks(state.pins),
     excluded: marks(state.excluded),
@@ -527,9 +556,19 @@ export function mountPortalFeed(app, { getItems }) {
     express.json({ limit: '8kb' }),
     wrap((req) => ({ published: publishItem(getItems().byId.get(String(req.params.id).slice(0, 200)), req.body || {}, req.user?.email) })),
   )
+  // Désignation des validateurs : administrateurs seulement
+  app.put(
+    '/api/portal-feed/validators',
+    express.json({ limit: '4kb' }),
+    wrap((req) => {
+      if (req.user?.role !== 'admin') throw fail('FORBIDDEN', 403)
+      return { validators: setValidators(req.body?.validators, req.user?.email) }
+    }),
+  )
   app.post(
     '/api/portal-feed/unpublish/:id',
     wrap((req) => {
+      if (!mayValidate(req.user?.email)) throw fail('NOT_VALIDATOR', 403)
       const id = String(req.params.id).slice(0, 200)
       return unpublishItem(id, req.user?.email, getItems().byId.get(id))
     }),

@@ -717,3 +717,9 @@
 .pf-log li {
   margin-block-end: 0.3rem;
 }
+
+/* Adresse publique et validateurs du portail (audit v5) */
+.pf-admin { margin: 0.4rem 0 0.8rem; padding: 0.6rem 0.9rem; border: 1px solid var(--line, #d9dee6); border-radius: 8px; display: grid; gap: 0.3rem; font-size: 0.9rem; }
+.pf-admin p { margin: 0; }
+.pf-admin__edit { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.pf-admin__edit input { flex: 1 1 16rem; min-width: 0; padding: 0.35rem 0.5rem; }

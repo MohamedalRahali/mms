@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
  * Profondeur des données (server/radar.js historyOf) : « données depuis le JJ/MM », nombre de jours, et si les
  * comparaisons (hausses, moyennes, sujets nouveaux) sont fiables (14 jours au moins). Lu une fois par page.
  */
-export type History = { since: string | null; days: number; enough: boolean; min: number }
+export type History = { since: string | null; partialSince?: string | null; days: number; enough: boolean; min: number }
 
 let cached: Promise<History | null> | null = null
 let at = 0

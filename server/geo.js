@@ -126,7 +126,22 @@ function takeQuota() {
   return true
 }
 
+const sameText = (a, b) => String(a).replace(/\s+/g, ' ').trim().toLowerCase() === String(b).replace(/\s+/g, ' ').trim().toLowerCase()
+
+/** Réponse déjà obtenue dans l'heure pour la même question (même texte) : réutilisée, pas de nouvelle ligne (audit v5) */
+export function recentRun(question, runs = state.runs, now = Date.now()) {
+  for (let k = runs.length - 1; k >= 0; k--) {
+    const r = runs[k]
+    if (now - Date.parse(r.at) > 3600_000) break
+    if (r.questionId === question.id || sameText(r.question, question.text)) return r
+  }
+  return null
+}
+
 async function ask(question, aiRun, why) {
+  // La même question posée 3 fois en une minute ne crée plus 3 réponses (ni 3 appels comptés)
+  const again = recentRun(question)
+  if (again) return again
   if (!takeQuota()) throw Object.assign(new Error('DAY_LIMIT'), { code: 'DAY_LIMIT', status: 429 })
   const at = new Date().toISOString()
   // Une même question n'est reposée qu'une fois par heure (cache de l'IA), même si on clique plusieurs fois
@@ -145,7 +160,9 @@ export async function runQuestions(aiRun, { id = '', why = 'manual' } = {}) {
   running = true
   const done = []
   try {
-    for (const q of state.settings.questions.filter((x) => !id || x.id === id)) {
+    // Questions au texte identique : posées une seule fois
+    const qs = state.settings.questions.filter((x) => !id || x.id === id).filter((x, k, all) => all.findIndex((y) => sameText(y.text, x.text)) === k)
+    for (const q of qs) {
       try {
         done.push(await ask(q, aiRun, why))
       } catch (err) {

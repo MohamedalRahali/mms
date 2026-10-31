@@ -28,24 +28,31 @@ const readJson = (file, fb) => {
 export function computeRetention({ watches = [], byId = new Map(), rasdHits = {}, now = Date.now(), previous = kept } = {}) {
   const limit = now - KEEP_DAYS * 86_400_000
   const out = { fenetres: { ...previous.fenetres }, enregistrements: { ...previous.enregistrements } }
+  const refs = new Set()
   for (const w of watches)
     for (const m of w.matches || []) {
+      if (m.id && Date.parse(m.date || '') >= limit) refs.add(m.id)
       const it = byId.get(m.id)
       const win = it?.audioWindow
       if (win && !out.fenetres[win]) out.fenetres[win] = m.date || new Date(now).toISOString()
     }
+  // Audit v5 : les extraits TV/radio jugés critiques (importance 3, base des alertes du radar) gardent aussi leur audio
+  for (const it of byId.values())
+    if (it?.media === 'broadcast' && (it.importance || 1) >= 3 && it.audioWindow && !out.fenetres[it.audioWindow] && Date.parse(it.date) >= limit) out.fenetres[it.audioWindow] = it.date
   for (const [rid, hits] of Object.entries(rasdHits || {})) {
     const at = Object.values(hits || {}).map((h) => h?.at || h?.last || '').sort().pop() || new Date(now).toISOString()
     if (!out.enregistrements[rid]) out.enregistrements[rid] = at
   }
   for (const k of ['fenetres', 'enregistrements']) for (const [key, at] of Object.entries(out[k])) if (Date.parse(at) < limit) delete out[k][key]
+  out.refs = [...refs].slice(0, 5000)
   return out
 }
 
 export function writeRetention(state) {
   kept = state
   const file = path.join(dir, 'libye-conservation.json')
-  const body = { maj: new Date().toISOString(), jours: KEEP_DAYS, fenetres: Object.keys(state.fenetres), enregistrements: Object.keys(state.enregistrements), depuis: state }
+  // refs : identifiants des fiches alertées (lus par la veille en plus des créneaux, audit v5)
+  const body = { maj: new Date().toISOString(), jours: KEEP_DAYS, fenetres: Object.keys(state.fenetres), enregistrements: Object.keys(state.enregistrements), refs: state.refs || [], depuis: state }
   try {
     const tmp = `${file}.${process.pid}.tmp`
     fs.writeFileSync(tmp, JSON.stringify(body))

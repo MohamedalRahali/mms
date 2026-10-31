@@ -8,7 +8,11 @@ export function DataSince({ compact = false }: { compact?: boolean }) {
   if (!h?.since) return null
   const ar = i.lang === 'ar'
   const since = shortDay(h.since)
-  const text = ar ? `البيانات متوفرة منذ ${since} (${h.days} يوماً)` : `Data available since ${since} (${h.days} days)`
+  // Couverture complète depuis « since » ; avant, quelques données partielles seulement (reprise d'historique en cours)
+  const partial = h.partialSince ? shortDay(h.partialSince) : ''
+  const text = ar
+    ? `التغطية كاملة منذ ${since} (${h.days} يوماً)${partial ? ` · بيانات جزئية فقط منذ ${partial} (استرجاع الأرشيف جارٍ)` : ''}`
+    : `Complete coverage since ${since} (${h.days} days)${partial ? ` · partial data only since ${partial} (archive back-fill in progress)` : ''}`
   const warn = h.enough ? '' : ar ? ` · المقارنات و«الارتفاعات المفاجئة» تظهر بعد ${h.min} يوماً من البيانات` : ` · Comparisons and “sudden rises” appear after ${h.min} days of data`
   return (
     <p className={`mms-since${h.enough ? '' : ' is-short'}${compact ? ' is-compact' : ''}`} role="note">
