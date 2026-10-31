@@ -21,7 +21,7 @@ import { buildBriefing, comparePeriods, engagementTotals, interactions, retrieve
 import { briefingConf, briefingKey, briefingWithSummary, sendBriefing, setBriefingConf, startBriefing } from './briefing.js'
 import { imageRoute, initImages, withImages } from './images.js'
 import { mountSuperAdmin } from './superadmin.js'
-import { auditMiddleware, initAuditTrail } from './auditTrail.js'
+import { auditMiddleware, initAuditTrail, mountClientAuditTrail } from './auditTrail.js'
 import { activateAccount, sharedGate, sharedReadOnly, startAccountPolicy } from './accountPolicy.js'
 import { isSharedAccount } from './auditTrail.js'
 import { mountJournalists } from './journalists.js'
@@ -384,6 +384,8 @@ mountFace(app)
 // envois programmés et sources de diffusion pour les administrateurs). Chaque refus est journalisé.
 // Compte partagé en lecture seule dès qu'un administrateur nominatif existe ; chaque usage journalisé (audit v5)
 app.use('/api', sharedGate)
+// Journal d'audit en lecture seule pour l'administrateur du client (audit v5, décision du 31/10)
+mountClientAuditTrail(app)
 app.use(
   '/api',
   permissionGate((req, why) =>

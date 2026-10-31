@@ -4850,3 +4850,9 @@ img.mms-user__avatar--img {
 /* Revue de presse : rubriques médias / réseaux sociaux (audit v5) */
 .mms-report__part { margin: 1.2rem 0 0.4rem; font-size: 1.05rem; border-bottom: 2px solid var(--line, #d9dee6); padding-bottom: 0.25rem; }
 .mms-report__note { font-size: 0.85rem; opacity: 0.8; }
+
+/* Journal d'audit en lecture seule (admin client, audit v5) */
+.audit-client { overflow-x: auto; }
+.audit-client table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+.audit-client th, .audit-client td { padding: 0.4rem 0.55rem; border-bottom: 1px solid var(--line, #d9dee6); text-align: start; vertical-align: top; }
+.audit-client tr.is-shared td { background: rgba(192, 57, 43, 0.12); }

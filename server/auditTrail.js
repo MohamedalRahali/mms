@@ -209,3 +209,44 @@ export function mountAuditTrail(router) {
     res.send('﻿' + ['date,compte,role,ip,categorie,action,cible,statut,detail,compte_partage,empreinte', ...lines].join('\n'))
   })
 }
+
+/**
+ * Journal d'audit en LECTURE SEULE pour l'administrateur du client (audit v5, P0 ; décision d'Around du 31/10) :
+ * GET /api/audit-trail, rôle admin seulement (403 sinon). Aucune écriture possible (toute autre méthode : 403).
+ * La version complète reste dans la console Super Admin. Ici, comme dans le reste de l'interface client :
+ * adresse IP masquée (fin remplacée par x), actions internes de la console Super Admin et empreintes retirées,
+ * détail limité aux textes non techniques.
+ */
+export function maskIp(ip) {
+  const s = String(ip || '')
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(s)) return s.split('.').slice(0, 2).concat(['x', 'x']).join('.')
+  if (s.includes(':')) return `${s.split(':').slice(0, 2).join(':')}:…`
+  return s ? 'x' : ''
+}
+const TECH = /error|erreur|stack|yt-dlp|ffmpeg|https?:\/\/|\$|token|cookie/i
+export function clientAuditRows(query = {}) {
+  return auditQuery({ ...query, limit: Math.min(Number(query.limit) || 500, 2000) })
+    .filter((r) => !String(r.actor).startsWith('superadmin'))
+    .map((r) => ({
+      t: r.t,
+      actor: r.actor,
+      role: r.role,
+      ip: maskIp(r.ip),
+      category: r.category,
+      action: r.action,
+      target: r.target,
+      status: r.status,
+      ...(r.detail && !TECH.test(r.detail) ? { detail: r.detail } : {}),
+      ...(r.shared || isSharedAccount(r.actor) ? { shared: true } : {}),
+    }))
+}
+export function mountClientAuditTrail(app) {
+  app.get('/api/audit-trail', (req, res) => {
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'FORBIDDEN' })
+    const rows = clientAuditRows(req.query)
+    const s = auditSummary()
+    res.json({ rows, summary: { total: s.total, last7: s.last7, intact: s.intact, shared: { count: s.shared.count } }, readOnly: true })
+  })
+  // Lecture seule : aucune modification ni suppression, quel que soit le rôle
+  app.all(/^\/api\/audit-trail(\/.*)?$/, (req, res) => res.status(403).json({ error: req.user?.role === 'admin' ? 'READ_ONLY' : 'FORBIDDEN' }))
+}

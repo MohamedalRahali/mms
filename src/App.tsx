@@ -1,4 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AuditLogClient } from './components/AuditLogClient'
 import { Avatar, ProfilePanel } from './components/Profile'
 import { Builder } from './components/Builder'
 import { Watches } from './components/Watches'
@@ -69,6 +70,7 @@ type View =
   | 'pool'
   | 'portal-admin'
   | 'journalists'
+  | 'audit-log'
   | `media-${MediaPageType}`
   | 'media-live'
 const VIEWS: View[] = [
@@ -91,13 +93,14 @@ const VIEWS: View[] = [
   'pool',
   'portal-admin',
   'journalists',
+  'audit-log',
   ...MEDIA_PAGES.map((m) => `media-${m}` as const),
   'media-live',
 ]
 
 /** Module de permissions dont dépend chaque page (null : toujours ouverte) */
 function moduleOf(v: View): ModuleKey | null {
-  if (v === 'help') return null
+  if (v === 'help' || v === 'audit-log') return null
   if (v === 'pool' || v === 'portal-admin' || v === 'journalists') return 'news'
   if (v.startsWith('media-')) return 'media'
   return v as ModuleKey
@@ -106,6 +109,8 @@ const viewAllowed = (user: User | undefined | null, v: View) => {
   const m = moduleOf(v)
   // إدارة البوابة العامة : seulement les profils qui ont le droit de publier sur la vitrine
   if (v === 'portal-admin' && !canDo(user, 'publish_public')) return false
+  // Journal d'audit en lecture seule : administrateurs du client seulement (audit v5)
+  if (v === 'audit-log') return user?.role === 'admin'
   return !m || hasModule(user, m)
 }
 
@@ -152,6 +157,7 @@ const ICONS: Record<string, string> = {
   team: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm7 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM1 20c0-3.3 3.6-6 8-6s8 2.7 8 6v1H1v-1zm17.5 1v-1c0-1.9-.8-3.6-2.1-4.8 3.5.3 6.6 2.3 6.6 4.8v1h-4.5z',
   journalists: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm7 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM1 20c0-3.3 3.6-6 8-6s8 2.7 8 6v1H1v-1zm17.5 1v-1c0-1.9-.8-3.6-2.1-4.8 3.5.3 6.6 2.3 6.6 4.8v1h-4.5z',
   security: 'M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3zm-1 14-4-4 1.4-1.4L11 13.2l4.6-4.6L17 10l-6 6z',
+  'audit-log': 'M5 3h10l4 4v14H5V3zm9 1.5V8h3.5L14 4.5zM7 11h10v1.6H7zm0 3.5h10v1.6H7zm0 3.5h6v1.6H7z',
   audit: 'M5 3h10l4 4v14H5V3zm9 1.5V8h3.5L14 4.5zM7 11h10v1.6H7zm0 3.5h10v1.6H7zm0 3.5h6v1.6H7z',
 }
 
@@ -363,6 +369,7 @@ export default function App() {
           { key: 'geo', label: lang === 'ar' ? 'الحضور في إجابات النموذج الداخلي' : 'Presence in internal-model answers' },
           { key: 'pool', label: lang === 'ar' ? 'مجمع البحث' : 'Search pool' },
           { key: 'journalists', label: lang === 'ar' ? 'الصحفيون ووسائل الإعلام' : 'Journalists & media' },
+          { key: 'audit-log', label: lang === 'ar' ? 'سجل التدقيق (اطلاع)' : 'Audit log (read-only)' },
         ],
       },
       {
@@ -678,6 +685,7 @@ export default function App() {
                       {shown === 'favorites' && <Favorites />}
                       {shown === 'help' && <HelpCenter />}
                       {shown === 'journalists' && <Journalists />}
+                      {shown === 'audit-log' && <AuditLogClient />}
                       {shown === 'assistant' &&
                         (canDo(auth?.user, 'ai_ask') ? (
                           <Around flux={flux} />

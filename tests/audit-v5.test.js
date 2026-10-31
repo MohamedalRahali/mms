@@ -278,3 +278,33 @@ test('thème « autre » (constat 8) : thème déduit des mots quand la source n
   assert.equal(inferCategory('autre', 'صورة جميلة من المدينة', ''), 'autre')
   assert.equal(inferCategory('politique', 'مباراة كرة القدم', ''), 'politique')
 })
+
+test('journal d’audit client (décision du 31/10) : admin client en lecture seule, écriture 403, non-admin 403, IP masquées', async () => {
+  const at = await import('../server/auditTrail.js')
+  at.initAuditTrail(tmp('mms-v5audc-'))
+  at.recordAudit({ actor: 'w.farhat@npdc.gov.ly', role: 'viewer', ip: '197.38.10.25', category: 'recording', action: 'POST recordings', status: 200 })
+  at.recordAudit({ actor: 'superadmin:sa', role: 'superadmin', ip: '1.2.3.4', category: 'settings', action: 'ai_gemini_paid', status: 200 })
+  at.recordAudit({ actor: 'x@npdc.gov.ly', category: 'other', action: 'POST x', status: 500, detail: 'yt-dlp ERROR https://github.com/x' })
+  const routes = []
+  const app = { get: (p, h) => routes.push(['GET', p, h]), all: (p, h) => routes.push(['ALL', p, h]) }
+  at.mountClientAuditTrail(app)
+  const call = (method, user) => {
+    const res = { code: 200, body: null, status(c) { this.code = c; return this }, json(b) { this.body = b; return this } }
+    const r = routes.find(([m, p]) => (m === method || m === 'ALL') && (typeof p === 'string' ? p === '/api/audit-trail' : p.test('/api/audit-trail')))
+    r[2]({ method, query: {}, user }, res)
+    return res
+  }
+  const ok = call('GET', { email: 'admin@npdc.gov.ly', role: 'admin' })
+  assert.equal(ok.code, 200)
+  assert.equal(ok.body.readOnly, true)
+  assert.ok(ok.body.rows.some((r) => r.actor === 'w.farhat@npdc.gov.ly' && r.ip === '197.38.x.x'))
+  assert.ok(ok.body.rows.every((r) => !r.actor.startsWith('superadmin') && !r.h))
+  assert.ok(ok.body.rows.every((r) => !/github|yt-dlp/.test(r.detail || '')))
+  assert.equal(call('GET', { email: 'v@npdc.gov.ly', role: 'viewer' }).code, 403)
+  assert.equal(call('GET', { email: 'a@npdc.gov.ly', role: 'analyst' }).code, 403)
+  for (const m of ['POST', 'PUT', 'DELETE']) {
+    const r = call(m, { email: 'admin@npdc.gov.ly', role: 'admin' })
+    assert.equal(r.code, 403)
+    assert.equal(r.body.error, 'READ_ONLY')
+  }
+})

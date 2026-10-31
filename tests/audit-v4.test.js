@@ -367,7 +367,9 @@ test('sujets émergents : libellés relevés en production le 30/10 reconnus com
   assert.equal(sameRoots('محمد الشحاتي', 'محفظة ليبيا أفريقيا للاستثمار'), false)
 })
 
-test("سجل التدقيق et ملاحظة الأمان : dans la console Super Admin seulement", async () => {
+// Audit v5 (décision du 31/10) : version complète dans la console Super Admin ; l'admin client a en plus une
+// consultation en lecture seule (mountClientAuditTrail, testée dans audit-v5.test.js)
+test("سجل التدقيق et ملاحظة الأمان : version complète dans la console Super Admin", async () => {
   const at = await import('../server/auditTrail.js')
   const routes = []
   at.mountAuditTrail({ get: (p) => routes.push(p) })
