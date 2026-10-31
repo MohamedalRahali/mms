@@ -185,7 +185,7 @@ export const WATCH_TEXT = {
     lastSent: 'آخر ما أُرسل',
     noRecipients: 'بدون بريد: النتائج تظهر في قسم الأخبار فقط',
     noRecipientsSent: 'لم يُرسل التنبيه: لا يوجد مستلم صالح (بريد أو Telegram). أضف مستلمين للرصد.',
-    smtpMissing: 'إرسال البريد غير مُعدّ: أضف SMTP_USER و SMTP_PASS إلى ملف ‎.env. النتائج تبقى ظاهرة في قسم الأخبار.',
+    smtpMissing: 'إرسال البريد غير مُعدّ بعد على المنصة (الفريق التقني على علم). النتائج تبقى ظاهرة في قسم الأخبار.',
     smtpError: 'تعذّر إرسال البريد، ستُعاد المحاولة في التحديث القادم.',
     errors: {
       NO_RULES: 'اختر موضوعاً واحداً على الأقل وفيه كلمات.',
@@ -241,7 +241,7 @@ export const WATCH_TEXT = {
     lastSent: 'Last sent',
     noRecipients: 'No email: results only appear in the news',
     noRecipientsSent: 'Alert not sent: no valid recipient (email or Telegram). Add recipients to this watch.',
-    smtpMissing: 'Email sending is not set up: add SMTP_USER and SMTP_PASS to .env. Results stay visible in the news.',
+    smtpMissing: 'Email sending is not set up on the platform yet (the technical team is aware). Results stay visible in the news.',
     smtpError: 'Email sending failed, it will be retried at the next update.',
     errors: {
       NO_RULES: 'Tick at least one topic that contains words.',
