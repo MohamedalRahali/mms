@@ -1,5 +1,4 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
-import { AiProvider } from './AiProvider'
 import { createPortal } from 'react-dom'
 import { type Flux, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
@@ -952,7 +951,6 @@ function AnalysisCards({ onExpress, onCustom }: { onExpress: (id: AgentId) => vo
         })}
       </div>
       <small className="around-analyses__hint">{a.analysesInfo}</small>
-      <AiProvider />
     </section>
   )
 }

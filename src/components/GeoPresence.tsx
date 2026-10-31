@@ -23,7 +23,7 @@ const TEXT = {
   ar: {
     title: 'الحضور في إجابات النموذج الداخلي (تقدير)',
     sub: 'نطرح أسئلتكم على الذكاء الاصطناعي المُعدّ في MMS ونقيس هل تُذكر الجهات التي تتابعونها، وكم مرة، وبأي نبرة، مع سجل للتطور.',
-    note: 'القياس يخص نموذج الذكاء الاصطناعي المُعدّ في MMS (وليس ChatGPT أو غيره من الخدمات)؛ لا يتم جمع أي بيانات من تلك الخدمات.',
+    note: 'القياس يخص نموذج الذكاء الاصطناعي المُعدّ في MMS (وليس خدمات الذكاء الاصطناعي العامة)؛ لا يتم جمع أي بيانات من تلك الخدمات.',
     noKey: 'لا يوجد مفتاح ذكاء اصطناعي مُعدّ على الخادم: يمكنكم تحضير الأسئلة، لكن لا يمكن طرحها الآن.',
     questions: 'الأسئلة',
     qHint: 'سؤال في كل سطر، كما يطرحه الجمهور (30 كحد أقصى)',
@@ -52,7 +52,7 @@ const TEXT = {
   en: {
     title: 'Presence in internal-model answers (estimate)',
     sub: 'Your questions are asked to the AI configured in MMS; we measure whether the entities you follow are mentioned, how often and with what tone, with history.',
-    note: 'This measures the AI model configured in MMS (not ChatGPT or other services); no data is collected from those services.',
+    note: 'This measures the AI model configured in MMS (not public AI services); no data is collected from those services.',
     noKey: 'No AI key is configured on the server: you can prepare questions, but they cannot be asked yet.',
     questions: 'Questions',
     qHint: 'One question per line, as the public would ask it (30 max)',

@@ -220,7 +220,6 @@ export type Health = {
   lastUpdate: string | null
   demo: boolean
   ai: boolean
-  aiProvider?: '' | 'claude' | 'gemini' | 'openai'
   keys?: { mms: KeyState[]; libye: KeyState[] | null }
   aiUsage?: { month: string; current: Record<string, UsageRow>; total: Record<string, UsageRow> }
   sources: { flux: Flux; dir?: string; found: boolean; count: number }[]

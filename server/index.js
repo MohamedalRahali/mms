@@ -1,5 +1,4 @@
 import 'dotenv/config'
-import { aiBadge, aiDisclosure } from './aiDisclosure.js'
 import { backfillState } from './history.js'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -426,7 +425,6 @@ app.get('/api/health', (_req, res) => {
     lastUpdate,
     demo,
     ai: aiEnabled(),
-    aiProvider: aiProvider(),
     sources: [
       process.env.MMS_MOSAIQUE === '1' && {
         flux: 'mosaique',
@@ -815,8 +813,6 @@ function aiScope(q) {
   return { items: found, days, key: `${q.flux || 'all'}|${days}|${lastUpdate}|${found.length}`, fluxLabel: FLUX_LABEL[q.flux] || 'Mosaïque FM et Libye' }
 }
 let aiRunning = false
-// Fournisseur et offre d'IA réellement utilisés (audit v5, constat 1) : écran IA, FAQ
-app.get('/api/ai/providers', (req, res) => res.json({ badge: aiBadge(req.query.lang), ...aiDisclosure(req.query.lang) }))
 app.get('/api/ai/analysis', (req, res) => {
   const scope = aiScope(req.query)
   res.json({ enabled: aiEnabled(), count: scope.items.length, running: aiRunning, result: cached(scope.key) })
@@ -831,7 +827,7 @@ app.post('/api/ai/analysis', async (req, res) => {
     res.json({ result: await analyse(scope) })
   } catch (err) {
     console.error('Analyse intelligente :', err.message)
-    res.status(500).json({ error: err.code || 'FAILED', message: err.message })
+    res.status(500).json({ error: err.code || 'FAILED' }) // message brut (nom du moteur) jamais renvoyé au client (audit v5)
   } finally {
     aiRunning = false
   }
@@ -860,7 +856,7 @@ app.post('/api/ai/spike', express.json({ limit: '2kb' }), async (req, res) => {
     })
   } catch (err) {
     console.error('Explication du pic :', err.message)
-    res.status(500).json({ error: err.code || 'FAILED', message: err.message })
+    res.status(500).json({ error: err.code || 'FAILED' }) // message brut (nom du moteur) jamais renvoyé au client (audit v5)
   } finally {
     spikeRunning = false
   }
@@ -1212,7 +1208,7 @@ app.post('/api/radar/explain', express.json({ limit: '2kb' }), async (req, res) 
     res.json({ result: await explainSpike({ key: target.key, label: target.label, count: target.count, avg: target.avg, items: found }) })
   } catch (err) {
     console.error('Radar, résumé IA :', err.message)
-    res.status(500).json({ error: err.code || 'FAILED', message: err.message })
+    res.status(500).json({ error: err.code || 'FAILED' }) // message brut (nom du moteur) jamais renvoyé au client (audit v5)
   } finally {
     radarAiRunning = false
   }

@@ -322,3 +322,23 @@ test('reprise d’historique (constat 10) : avancement lu dans l’état de la v
   assert.equal(b.failedWeeks, 1)
   assert.deepEqual(b.perMonth.map((r) => r.month), ['2026-09', '2026-10'])
 })
+
+test('confidentialité des fournisseurs (décision du 31/10) : aucun nom de moteur d’IA dans le build client ni dans l’API client', () => {
+  const NAMES = /anthropic|claude|gemini|openai|chatgpt|whisper|vertex ai|gpt-4|haiku|sonnet/i
+  const dist = path.join(import.meta.dirname, '..', 'dist')
+  if (fs.existsSync(dist)) {
+    const files = [path.join(dist, 'index.html'), ...fs.readdirSync(path.join(dist, 'assets')).filter((f) => /\.(js|css)$/.test(f) && !/^SuperAdmin-/.test(f)).map((f) => path.join(dist, 'assets', f))]
+    const hits = files.filter((f) => NAMES.test(fs.readFileSync(f, 'utf8'))).map((f) => path.basename(f))
+    assert.deepEqual(hits, [], 'fichiers servis aux clients contenant un nom de fournisseur')
+  }
+  // Textes de l'interface client (hors console Super Admin), commentaires retirés
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? (e.name === 'superadmin' ? [] : walk(path.join(d, e.name))) : /\.(tsx?|css)$/.test(e.name) ? [path.join(d, e.name)] : []))
+  const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1')
+  const src = walk(path.join(import.meta.dirname, '..', 'src')).filter((f) => NAMES.test(strip(fs.readFileSync(f, 'utf8')))).map((f) => path.relative(path.join(import.meta.dirname, '..'), f))
+  assert.deepEqual(src, [], 'sources client contenant un nom de fournisseur')
+  // API visible par les comptes client : plus de route des fournisseurs, plus de nom de moteur dans /api/health
+  const idx = fs.readFileSync(path.join(import.meta.dirname, '..', 'server', 'index.js'), 'utf8')
+  assert.equal(/app\.get\('\/api\/ai\/providers'/.test(idx), false)
+  assert.equal(/aiProvider: aiProvider\(\)/.test(idx), false)
+  assert.equal(/message: err\.message/.test(idx), false)
+})
