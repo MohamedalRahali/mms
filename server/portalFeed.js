@@ -1,4 +1,4 @@
-import { categoryKey } from './classify.js'
+import { fineCategory } from './classify.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import express from 'express'
@@ -232,7 +232,7 @@ export function evaluate(items, config, marks = state, now = Date.now()) {
     const type = typeOf(it)
     if (type === 'comment' || !types.has(type)) return 'type'
     if (langs.size && !langs.has(it.lang)) return 'lang'
-    if (cats.size && !cats.has(it.category)) return 'category'
+    if (cats.size && !cats.has(it.category) && !cats.has(fineCategory(it))) return 'category'
     if (c.sourceMode === 'include' && !sources.has(it.origin)) return 'source'
     if (c.sourceMode === 'exclude' && sources.has(it.origin)) return 'source'
     const d = Date.parse(it.date)
@@ -501,7 +501,7 @@ export function options(items) {
     }
     return [...m.entries()].map(([name, n]) => ({ name, count: n })).sort((a, b) => b.count - a.count)
   }
-  return { types: count(typeOf), langs: count((it) => it.lang), categories: count(categoryKey), sources: count((it) => it.origin).slice(0, 600) }
+  return { types: count(typeOf), langs: count((it) => it.lang), categories: count(fineCategory), sources: count((it) => it.origin).slice(0, 600) }
 }
 
 export function feedState(items) {

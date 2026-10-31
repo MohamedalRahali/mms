@@ -364,3 +364,36 @@ test('conservation affichée (constat 10) : 90 jours après l’alerte, sinon 3 
   assert.deepEqual(audioUntil(it, { fenetres: { 'tv/2026-10-30_2100': '2026-10-31T08:00:00Z' } }), { until: '2027-01-29T08:00:00.000Z', kept: true })
   assert.equal(audioUntil({ media: 'article', date: '2026-10-30' }), null)
 })
+
+test('section 03 : sujets émergents de l’audit (« الحمادة » en double, « الزاوية » / « مصفاة الزاوية », « الوزراء اليوناني »)', async () => {
+  const { emergingTopics } = await import('../server/radar.js')
+  const now = Date.parse('2026-10-31T12:00:00Z')
+  const items = []
+  const add = (n, title, extra = {}) => {
+    for (let k = 0; k < n; k++) items.push({ id: `${items.length}`, title: `${title} ${k}`, summary: '', date: new Date(now - (k % 20) * 3600_000).toISOString(), origin: `src${k % 6}`, channel: 'site', category: 'énergie', ...extra })
+  }
+  add(12, 'إغلاق صمام الحمادة', { places: ['الحمادة'], orgs: ['حقل الحمادة'] })
+  add(12, 'توقف مصفاة الزاوية بعد إغلاق الصمام', { places: ['الزاوية'], orgs: ['مصفاة الزاوية'] })
+  add(10, 'رئيس الوزراء اليوناني يزور طرابلس', { people: ['كيرياكوس ميتسوتاكيس'] })
+  // Référence ancienne, sans ces sujets
+  for (let d = 2; d < 8; d++) for (let k = 0; k < 10; k++) items.push({ id: `old${d}-${k}`, title: `خبر عام ${d} ${k}`, summary: '', date: new Date(now - d * 86_400_000).toISOString(), origin: `o${k}`, channel: 'site' })
+  const labels = emergingTopics(items, { now, limit: 15 }).map((t) => t.label)
+  const count = (re) => labels.filter((l) => re.test(l)).length
+  assert.ok(count(/الحمادة/) <= 1, `الحمادة : ${labels.join(' | ')}`)
+  assert.ok(count(/الزاوية/) <= 1, `الزاوية : ${labels.join(' | ')}`)
+  assert.equal(labels.some((l) => /^الوزراء اليوناني$/.test(l)), false)
+})
+
+test('section 03 : même classification sur les 4 pages (analyse, comparaison, portail, rapport)', async () => {
+  const { categoryCounts, fineCategory } = await import('../server/classify.js')
+  const fs2 = await import('node:fs')
+  const items = [{ category: 'international', intl: 'europe' }, { category: 'international', intl: 'maghreb' }, { category: 'international' }, { category: '' }, { category: 'politique' }]
+  const names = categoryCounts(items).map((r) => r.name).sort()
+  assert.deepEqual(names, ['autre', 'international.europe', 'international.maghreb', 'international.other', 'politique'])
+  assert.ok(items.every((it) => fineCategory(it) !== 'international'))
+  const read = (f) => fs2.readFileSync(new URL(`../server/${f}`, import.meta.url), 'utf8')
+  assert.match(read('insights.js'), /pair\(categoryCounts\(uCur\), categoryCounts\(uPrev\)\)/)
+  assert.match(read('index.js'), /categories: categoryCounts\(found\)/)
+  assert.match(read('portal.js'), /categories: count\(fineCategory\)/)
+  assert.match(read('portalFeed.js'), /categories: count\(fineCategory\)/)
+})
