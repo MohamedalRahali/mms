@@ -397,3 +397,15 @@ test('section 03 : même classification sur les 4 pages (analyse, comparaison, p
   assert.match(read('portal.js'), /categories: count\(fineCategory\)/)
   assert.match(read('portalFeed.js'), /categories: count\(fineCategory\)/)
 })
+
+test('état des chaînes honnête (production du 31/10) : état périmé signalé, flux direct jamais « bloqué par YouTube », radio continue sans enregistrement depuis 2 h', async () => {
+  const { captureState } = await import('../server/live.js')
+  const now = Date.parse('2026-10-31T18:30:00Z')
+  const fresh = '2026-10-31T18:20:00Z'
+  const yt = "ERROR: [youtube] x: Sign in to confirm you're not a bot. Use --cookies"
+  assert.equal(captureState({ erreur: yt, dernier_succes: fresh }, now, '2026-10-31T03:37:00Z'), 'unknown')
+  assert.equal(captureState({ erreur: yt, flux: 'https://live.france24.com/x.m3u8', dernier_succes: fresh }, now, fresh), 'ok')
+  assert.equal(captureState({ erreur: yt, youtube: 'https://www.youtube.com/@x' }, now, fresh), 'blocked')
+  assert.equal(captureState({ continu: true, dernier_enregistrement: '2026-10-31T03:37:00Z', dernier_succes: fresh }, now, fresh), 'stale')
+  assert.equal(captureState({ continu: true, dernier_enregistrement: '2026-10-31T18:10:00Z', dernier_succes: fresh }, now, fresh), 'ok')
+})

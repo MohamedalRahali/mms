@@ -70,7 +70,7 @@ export function capturePart(channels, found, sub, recent = [], now = Date.now())
   // une source qui enregistre sans rien produire passe en « silent » (enregistre, aucun extrait)
   const last24 = new Map()
   for (const it of recent) if (Date.parse(it.date) >= now - DAY && it.media === 'broadcast') last24.set(it.origin, (last24.get(it.origin) || 0) + 1)
-  const order = { ok: 0, silent: 1, stale: 2, offline: 3, blocked: 4, error: 5, nosource: 6, never: 7, disabled: 8, liveOnly: 9 }
+  const order = { ok: 0, silent: 1, stale: 2, unknown: 3, offline: 4, blocked: 5, error: 6, nosource: 7, never: 8, disabled: 9, liveOnly: 10 }
   return channels
     .filter((c) => !sub || c.sub === sub)
     .map((c) => {

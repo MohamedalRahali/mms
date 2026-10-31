@@ -177,6 +177,7 @@ export const MEDIA_PAGE_TEXT = {
       states: {
         ok: 'يعمل',
         silent: 'يسجّل دون مقتطفات',
+        unknown: 'حالة غير محدّثة',
         stale: 'متأخر',
         offline: 'خارج البث',
         blocked: 'محجوب',
@@ -189,6 +190,7 @@ export const MEDIA_PAGE_TEXT = {
       hints: {
         ok: 'أنتج مقتطفات خلال آخر 24 ساعة',
         silent: 'التسجيل يعمل لكن لم يُستخرج أي مقتطف خلال آخر 24 ساعة',
+        unknown: 'لم تصل حالة التسجيل من خادم الرصد منذ أكثر من 40 دقيقة؛ الفريق التقني على علم',
         stale: 'آخر تسجيل ناجح أقدم من 36 ساعة',
         offline: 'القناة لا تبث مباشرة الآن على يوتيوب؛ يُعاد المحاولة تلقائياً',
         blocked: 'المصدر (يوتيوب) يرفض الاتصال مؤقتاً؛ الفريق التقني يعمل على بديل',
@@ -289,6 +291,7 @@ export const MEDIA_PAGE_TEXT = {
       states: {
         ok: 'Working',
         silent: 'Recording, no excerpts',
+        unknown: 'Status not updated',
         stale: 'Late',
         offline: 'Off air',
         blocked: 'Blocked',
@@ -301,6 +304,7 @@ export const MEDIA_PAGE_TEXT = {
       hints: {
         ok: 'Produced excerpts in the last 24 hours',
         silent: 'Recording works but no excerpt was extracted in the last 24 hours',
+        unknown: 'The recording status has not been updated for more than 40 minutes; the technical team is aware',
         stale: 'Last successful recording is older than 36 hours',
         offline: 'The channel is not live on YouTube right now; retried automatically',
         blocked: 'The source (YouTube) is refusing the connection for now; the technical team is working on an alternative',

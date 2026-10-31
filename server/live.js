@@ -95,11 +95,20 @@ export function liveSources() {
 const DAY = 86_400_000
 
 /** État d'enregistrement d'une chaîne d'après la veille : motif de l'échec ramené à une catégorie (jamais le message brut) */
-export function captureState(c, now = Date.now()) {
+export function captureState(c, now = Date.now(), maj = null) {
   if (c.liveOnly) return 'liveOnly'
   if (c.actif === false) return 'disabled'
-  const err = String(c.erreur || '')
+  // État de la veille trop ancien (plus de 40 min sans mise à jour) : on ne prétend pas que la chaîne fonctionne
+  if (maj && now - Date.parse(maj) > 40 * 60_000) return 'unknown'
+  if (c.erreur_etat) return 'unknown'
+  // Ancienne erreur du repli YouTube sur une chaîne qui a maintenant un flux direct : elle ne dit rien du flux
+  const raw = String(c.erreur || '')
+  const err = c.flux && /youtube|not a bot|cookies/i.test(raw) ? '' : raw
+  // Refus de YouTube : seulement pour une chaîne lue par YouTube (une chaîne avec flux direct n'en dépend plus)
   if (/confirm you.?re not a bot|cookies/i.test(err)) return 'blocked'
+  // Radio en continu : un enregistrement doit dater de moins de 2 heures
+  const lastRec = Date.parse(c.dernier_enregistrement || '')
+  if (c.continu && Number.isFinite(lastRec) && now - lastRec > 2 * 3_600_000) return 'stale'
   if (/not currently live|does not have a streams tab|is not live/i.test(err)) return 'offline'
   if (/introuvable|not found|404/i.test(err)) return 'nosource'
   if (err) return 'error'
@@ -121,7 +130,7 @@ export function captureChannels(now = Date.now()) {
     id: c.id,
     name: c.nom || c.id,
     sub: c.canal === 'radio' ? 'radio' : 'tv',
-    state: captureState(c, now),
+    state: captureState(c, now, status.maj || null),
     last: c.dernier_enregistrement || c.dernier_succes || '',
     via: c.flux ? 'stream' : c.youtube ? 'youtube' : '',
     // Production réelle écrite par la veille (audit v5) : extraits sur 24 h, état et cause sans extrait
