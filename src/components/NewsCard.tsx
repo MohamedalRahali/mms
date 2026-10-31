@@ -220,6 +220,13 @@ function FullCard({ item, variant, brief }: { item: NewsItem; variant: 'list' | 
           {item.broadcasts > 1 && <span className="news-badge news-badge--rep">{i.t.broadcastTimes(item.broadcasts)}</span>}
           {item.live && <span className="mms-tag mms-tag--live">{i.t.notConsolidated}</span>}
           {item.demo && <span className="mms-tag mms-tag--demo">{i.t.example}</span>}
+          {/* Administrateurs : date de suppression prévue de l'audio de l'extrait (la transcription reste) */}
+          {item.audioUntil && auth?.user?.role === 'admin' && (
+            <span className={`mms-tag${item.audioUntil.kept ? ' mms-tag--kept' : ''}`} title={i.lang === 'ar' ? 'الصوت المرتبط بتنبيه يُحفظ 90 يوماً، وبقية الصوت 3 أيام؛ النص يبقى دائماً' : 'Audio linked to an alert is kept 90 days, other audio 3 days; the transcript is always kept'}>
+              {i.lang === 'ar' ? `الصوت محفوظ حتى ${i.day(item.audioUntil.until.slice(0, 10))}` : `Audio kept until ${i.day(item.audioUntil.until.slice(0, 10))}`}
+              {item.audioUntil.kept && (i.lang === 'ar' ? ' · مرتبط بتنبيه' : ' · linked to an alert')}
+            </span>
+          )}
         </p>
         <MediaTranscript item={item} />
         <EngagementChips value={item.engagement} />

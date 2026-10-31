@@ -356,3 +356,11 @@ test('détails techniques (constat 7, preuve) : aucun message d’outil, consign
   assert.equal(TECH.test(r.erreur) || /github|cookies/i.test(r.erreur), false)
   assert.equal(/\d\.\d+/.test(JSON.stringify(hoursOnly({ total: 4.32, remaining: 1, cap: 1.1 }))) && JSON.stringify(hoursOnly({ total: 4.32 })).includes('4.32'), false)
 })
+
+test('conservation affichée (constat 10) : 90 jours après l’alerte, sinon 3 jours après le créneau', async () => {
+  const { audioUntil } = await import('../server/retention.js')
+  const it = { media: 'broadcast', audioWindow: 'tv/2026-10-30_2100', date: '2026-10-30T19:00:00Z' }
+  assert.deepEqual(audioUntil(it, { fenetres: {} }), { until: '2026-11-02T19:00:00.000Z', kept: false })
+  assert.deepEqual(audioUntil(it, { fenetres: { 'tv/2026-10-30_2100': '2026-10-31T08:00:00Z' } }), { until: '2027-01-29T08:00:00.000Z', kept: true })
+  assert.equal(audioUntil({ media: 'article', date: '2026-10-30' }), null)
+})

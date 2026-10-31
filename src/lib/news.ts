@@ -51,6 +51,8 @@ export type NewsItem = {
   // Fiabilité de la source (réglage du Super Admin, sinon déduite) : affichée sur la carte et dans les rapports
   reliability?: 'high' | 'medium' | 'social' | 'low'
   sourceTier?: string
+  // Extrait TV/radio : suppression prévue de l'audio (audit v5)
+  audioUntil?: { until: string; kept: boolean }
   intl?: string
   processed?: { by: string; at: string } | null
   similar?: SimilarItem[]

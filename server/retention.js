@@ -48,6 +48,21 @@ export function computeRetention({ watches = [], byId = new Map(), rasdHits = {}
   return out
 }
 
+/**
+ * Date de suppression prévue de l'audio d'un extrait TV/radio (audit v5, affichée aux administrateurs) : 90 jours
+ * après l'alerte si son créneau est dans la liste de conservation, sinon 3 jours après le créneau (la transcription,
+ * elle, reste toujours). null pour une fiche sans audio de créneau.
+ */
+export const DEFAULT_AUDIO_DAYS = 3
+export function audioUntil(it, state = kept) {
+  const win = it?.audioWindow
+  if (!win || it.media !== 'broadcast') return null
+  const alert = state?.fenetres?.[win]
+  const from = Date.parse(alert || it.date)
+  if (!Number.isFinite(from)) return null
+  return { until: new Date(from + (alert ? KEEP_DAYS : DEFAULT_AUDIO_DAYS) * 86_400_000).toISOString(), kept: Boolean(alert) }
+}
+
 export function writeRetention(state) {
   kept = state
   const file = path.join(dir, 'libye-conservation.json')

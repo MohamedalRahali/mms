@@ -178,6 +178,7 @@ function CapturePanel({ rows }: { rows: Capture[] }) {
   const recorded = rows.filter((r) => r.state !== 'liveOnly' && r.state !== 'disabled')
   const working = recorded.filter((r) => r.state === 'ok').length
   const blocked = rows.filter((r) => r.state === 'blocked').length
+  const isAdmin = useAuth()?.user?.role === 'admin'
   return (
     <details className="mms-capture" open={working < recorded.length || !recorded.length}>
       <summary>
@@ -185,6 +186,12 @@ function CapturePanel({ rows }: { rows: Capture[] }) {
         <span>{recorded.length ? c.summary(i.num(working), i.num(recorded.length)) : c.none}</span>
       </summary>
       {blocked > 0 && <p className="mms-capture__note">{c.blockedNote(i.num(blocked))}</p>}
+      {/* Règle de conservation de l'audio, pour les administrateurs (audit v5) */}
+      {isAdmin && (
+        <p className="mms-capture__note">
+          {i.lang === 'ar' ? 'الصوت المرتبط بتنبيه يُحفظ 90 يوماً، وبقية الصوت 3 أيام؛ النص المفرَّغ يبقى دائماً. تاريخ الحذف المتوقع يظهر على كل مقتطف.' : 'Audio linked to an alert is kept 90 days, other audio 3 days; transcripts are always kept. The planned deletion date is shown on each excerpt.'}
+        </p>
+      )}
       <ul className="mms-capture__list">
         {rows.map((r) => (
           <li key={r.id} className={`is-${r.state}`}>

@@ -1,6 +1,7 @@
 import { toneOf } from './radar.js'
 import { interactions } from './insights.js'
 import { countryOf, reachOf, reliabilityOf, sourceTier } from './sourceMeta.js'
+import { audioUntil } from './retention.js'
 
 /**
  * Présentation de la liste des actualités, dans l'esprit des plateformes de veille professionnelles :
@@ -122,6 +123,9 @@ export function groupNews(list, group) {
 /** Fiche enrichie pour l'interface : pays, portée, histoire repliée (fiches similaires réduites) */
 export function decorate(it, extra = {}) {
   const out = { ...it, country: countryOf(it), reach: reachOf(it), reliability: reliabilityOf(it), sourceTier: sourceTier(it), ...extra }
+  // Extrait TV/radio : date de suppression prévue de l'audio (90 jours si lié à une alerte, sinon 3 jours)
+  const audio = audioUntil(it)
+  if (audio) out.audioUntil = audio
   if (it.similar) out.similar = it.similar.map((s) => ({ id: s.id, title: s.title, origin: s.origin, date: s.date, url: s.url, country: countryOf(s), channel: s.channel }))
   return out
 }

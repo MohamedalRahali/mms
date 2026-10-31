@@ -4856,3 +4856,4 @@ img.mms-user__avatar--img {
 .audit-client table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
 .audit-client th, .audit-client td { padding: 0.4rem 0.55rem; border-bottom: 1px solid var(--line, #d9dee6); text-align: start; vertical-align: top; }
 .audit-client tr.is-shared td { background: rgba(192, 57, 43, 0.12); }
+.mms-tag--kept { background: rgba(46, 125, 50, 0.14); color: light-dark(#2e6b31, #9fd6a2); }
