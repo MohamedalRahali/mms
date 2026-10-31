@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import express from 'express'
 import { hoursOnly, isAdminReq, redactErrors } from './redact.js'
+import { isSharedAccount } from './auditTrail.js'
 import { fileURLToPath } from 'node:url'
 import { passagesOf } from './broadcast.js'
 import { liveSources } from './live.js'
@@ -370,6 +371,8 @@ export function mountRecordings(app) {
           debut: r.debut,
           fin: r.fin,
           par: r.par,
+          // Lancé par un compte partagé : signalé en rouge dans la liste (audit v5)
+          parPartage: isSharedAccount(r.par),
           cree: r.cree,
           rasd: r.rasd || [],
           hits: hits[r.id] ? Object.values(hits[r.id]).reduce((n, h) => n + (h.count || 0), 0) : null,

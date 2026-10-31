@@ -23,6 +23,7 @@ type Rec = {
   debut: string;
   fin: string;
   par: string;
+  parPartage?: boolean;
   estimate: number;
   etat: State;
   enregistrement?: number;
@@ -630,6 +631,7 @@ function RecRow({
         )}
         <small className="rec-row__by" dir="ltr">
           {r.par}
+          {r.parPartage && <span className="rec-shared"> {i.lang === "ar" ? "حساب مشترك" : "Shared account"}</span>}
         </small>
       </div>
       {(r.etat === "en_cours" || r.etat === "transcription") && (
