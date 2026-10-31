@@ -10,6 +10,8 @@
  * couverte à moitié par la collecte compte donc pour une demi-période, même si quelques fiches existent.
  */
 
+import fs from 'node:fs'
+
 const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tripoli', year: 'numeric', month: '2-digit', day: '2-digit' })
 const DAY_MS = 86_400_000
 const FULL_SHARE = 0.35
@@ -89,4 +91,33 @@ export function coveredDays(items, a, b, now = Date.now()) {
     t = end > t ? end : t + DAY_MS
   }
   return total
+}
+
+/**
+ * Avancement de la reprise d'historique écrit par la veille (data/libye-reprise-etat.json, audit v5) : semaines faites,
+ * plus ancien jour traité, jour à partir duquel la couverture est complète, fiches par mois. null si absent.
+ */
+export function backfillState(file) {
+  let raw
+  try {
+    raw = JSON.parse(fs.readFileSync(file, 'utf8'))
+  } catch {
+    return null
+  }
+  if (!raw || typeof raw !== 'object') return null
+  const months = raw.fiches_par_mois && typeof raw.fiches_par_mois === 'object' ? raw.fiches_par_mois : {}
+  return {
+    active: raw.actif !== false,
+    done: Number(raw.semaines_faites) || 0,
+    total: Number(raw.semaines_total) || 52,
+    finished: raw.termine === true,
+    oldest: /^\d{4}-\d{2}-\d{2}$/.test(raw.plage_debut || '') ? raw.plage_debut : null,
+    completeSince: /^\d{4}-\d{2}-\d{2}$/.test(raw.complet_depuis || '') ? raw.complet_depuis : null,
+    failedWeeks: Array.isArray(raw.semaines_en_echec) ? raw.semaines_en_echec.length : 0,
+    perMonth: Object.entries(months)
+      .filter(([m, n]) => /^\d{4}-\d{2}$/.test(m) && Number.isFinite(Number(n)))
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, n]) => ({ month, count: Number(n) })),
+    at: raw.maj || null,
+  }
 }

@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import { aiBadge, aiDisclosure } from './aiDisclosure.js'
+import { backfillState } from './history.js'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -421,7 +422,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     // Profondeur des données : « données depuis le JJ/MM » et comparaisons masquées avant 14 jours
-    history: historyMemo(items),
+    history: { ...historyMemo(items), backfill: backfillState(path.join(root, 'data', 'libye-reprise-etat.json')) },
     lastUpdate,
     demo,
     ai: aiEnabled(),

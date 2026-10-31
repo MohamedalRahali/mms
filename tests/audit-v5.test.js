@@ -308,3 +308,17 @@ test('journal d’audit client (décision du 31/10) : admin client en lecture se
     assert.equal(r.body.error, 'READ_ONLY')
   }
 })
+
+test('reprise d’historique (constat 10) : avancement lu dans l’état de la veille', async () => {
+  const { backfillState } = await import('../server/history.js')
+  const dir = tmp('mms-v5bf-')
+  const f = path.join(dir, 'libye-reprise-etat.json')
+  assert.equal(backfillState(f), null)
+  fs.writeFileSync(f, JSON.stringify({ actif: true, semaines_faites: 9, semaines_total: 52, termine: false, plage_debut: '2026-08-29', complet_depuis: '2026-09-05', semaines_en_echec: [{}], fiches_par_mois: { '2026-09': 1200, '2026-10': 9000, x: 3 } }))
+  const b = backfillState(f)
+  assert.equal(b.done, 9)
+  assert.equal(b.oldest, '2026-08-29')
+  assert.equal(b.completeSince, '2026-09-05')
+  assert.equal(b.failedWeeks, 1)
+  assert.deepEqual(b.perMonth.map((r) => r.month), ['2026-09', '2026-10'])
+})

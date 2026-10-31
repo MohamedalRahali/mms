@@ -1136,3 +1136,7 @@
 .face-capture__arrow.is-ok {
   color: var(--green, #1f9d57);
 }
+/* Bandeau de couverture : paragraphes internes et volume par mois (audit v5) */
+.mms-since p { margin: 0; }
+.mms-since__months { font-size: 0.8rem; opacity: 0.8; margin-top: 0.2rem !important; }
+.mms-since:has(.mms-since__months) { border-radius: 10px; flex-direction: column; align-items: flex-start; }
