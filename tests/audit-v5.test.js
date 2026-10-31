@@ -342,3 +342,17 @@ test('confidentialité des fournisseurs (décision du 31/10) : aucun nom de mote
   assert.equal(/aiProvider: aiProvider\(\)/.test(idx), false)
   assert.equal(/message: err\.message/.test(idx), false)
 })
+
+test('détails techniques (constat 7, preuve) : aucun message d’outil, consigne interne ni chemin serveur dans le build client', async () => {
+  const TECH = /yt-dlp|ytdlp|youtube-dl|ffmpeg|ENOENT|ECONNREFUSED|\/opt\/|ملف الكوكيز|ملف cookies|cookies file|renew the cookies|يرفض الخادم|refusing the server|\.env الخاص|ملف ‎\.env|\.env file|in \.env/i
+  const dist = path.join(import.meta.dirname, '..', 'dist', 'assets')
+  if (fs.existsSync(dist)) {
+    const hits = fs.readdirSync(dist).filter((f) => /\.js$/.test(f) && !/^SuperAdmin-/.test(f) && TECH.test(fs.readFileSync(path.join(dist, f), 'utf8')))
+    assert.deepEqual(hits, [])
+  }
+  // Côté serveur : erreur brute ramenée à un code, coûts retirés pour le client
+  const { redactErrors, hoursOnly } = await import('../server/redact.js')
+  const [r] = redactErrors([{ erreur: "STREAM_DOWN|3|ERROR: [youtube] x: Sign in to confirm you're not a bot. Use --cookies https://github.com/yt-dlp/yt-dlp/wiki ffmpeg /opt/veille ENOENT" }])
+  assert.equal(TECH.test(r.erreur) || /github|cookies/i.test(r.erreur), false)
+  assert.equal(/\d\.\d+/.test(JSON.stringify(hoursOnly({ total: 4.32, remaining: 1, cap: 1.1 }))) && JSON.stringify(hoursOnly({ total: 4.32 })).includes('4.32'), false)
+})
