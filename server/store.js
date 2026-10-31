@@ -3,6 +3,7 @@ import path from 'node:path'
 import { demoItems } from './demo.js'
 import { canonicalOrigin, excludedBySource } from './sourcePolicy.js'
 import { applyItemEdits } from './itemEdits.js'
+import { inferCategory } from './classify.js'
 
 /**
  * Lit les sorties des veilles et les ramène à un seul format d'actualité :
@@ -228,7 +229,8 @@ function loadLibye(dir, track) {
         flux: 'libye',
         title: clean(n.titre),
         summary: clean(n.resume),
-        category: normCategory(n.categorie),
+        // Thème déduit des mots quand la veille n'en donne pas (audit v5, server/classify.js)
+        category: inferCategory(normCategory(n.categorie), clean(n.titre), clean(n.resume)),
         date: date.toISOString(),
         // « r/u/X » et « r/u_X » ramenés à « u/X » (sourcePolicy.js)
         origin: canonicalOrigin(clean(n.source)) || 'Source libyenne',

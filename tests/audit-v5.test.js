@@ -270,3 +270,11 @@ test('conservation (constat 10) : extraits critiques et fiches alertées transmi
   assert.ok(r.fenetres['radio/2026-10-30_0800'])
   assert.deepEqual(r.refs, ['y'])
 })
+
+test('thème « autre » (constat 8) : thème déduit des mots quand la source n’en donne pas, prudemment', async () => {
+  const { inferCategory } = await import('../server/classify.js')
+  assert.equal(inferCategory('autre', 'اشتباكات مسلحة في طرابلس بين كتيبتين', ''), 'sécurité')
+  assert.equal(inferCategory('', 'المؤسسة الوطنية للنفط تعلن استئناف الإنتاج في حقل الشرارة', ''), 'énergie')
+  assert.equal(inferCategory('autre', 'صورة جميلة من المدينة', ''), 'autre')
+  assert.equal(inferCategory('politique', 'مباراة كرة القدم', ''), 'politique')
+})
