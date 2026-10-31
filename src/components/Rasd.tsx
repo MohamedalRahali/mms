@@ -383,7 +383,7 @@ function WatchEditor({ initial, channels, onDone }: { initial: Draft; channels: 
       )}
       {cost && (
         <p className={`rasd-cost is-${cost.level}`}>
-          {admin ? `${t.estimate(cost.minutesPerDay, cost.costPerDay.toFixed(3))} · ${t.total(cost.totalCostPerDay.toFixed(3), cost.part.toFixed(2))}` : t.minutesOnly(cost.minutesPerDay)}
+          {t.minutesOnly(cost.minutesPerDay)}
           {cost.level !== 'ok' && <b> — {cost.level === 'over' ? t.over : t.warn}</b>}
         </p>
       )}
@@ -416,7 +416,7 @@ function WatchCard({ w, channels, can, onChange, onEdit }: { w: Watch; channels:
       <header>
         <b dir="auto">🎯 {w.name}</b>
         <span className={w.paused ? 'rec-state is-annule' : 'rec-state is-termine'}>{w.paused ? t.paused : t.active}</span>
-        <small className="rasd-card__cost">{t.estimate(w.cost.minutesPerDay, w.cost.costPerDay.toFixed(3))}</small>
+        <small className="rasd-card__cost">{t.minutesOnly(w.cost.minutesPerDay)}</small>
       </header>
       <p className="rasd-card__line">
         {[...w.keywords, ...w.synonyms].map((k) => (

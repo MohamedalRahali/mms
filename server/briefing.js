@@ -7,6 +7,8 @@ import { aiEnabled, briefingSummary } from './ai.js'
 import { briefingFacts, buildBriefing, fairChange } from './insights.js'
 import { sendMail, sendTelegram, telegramReady } from './watches.js'
 import { accentOr, outputName } from './brand.js'
+import { readUsers } from './auth.js'
+import { isSharedAccount } from './auditTrail.js'
 
 /**
  * Rapport exécutif programmé : chaque semaine (jour et heure de Tunis choisis dans MMS),
@@ -29,7 +31,7 @@ function save() {
   fs.writeFileSync(file, JSON.stringify(conf, null, 2))
 }
 
-export const briefingConf = () => ({ ...conf, smtp: Boolean(process.env.SMTP_USER && process.env.SMTP_PASS), telegramReady: telegramReady(), ai: aiEnabled() })
+export const briefingConf = () => ({ ...conf, noRecipients: !conf.recipients?.length && !(conf.telegram && telegramReady()), smtp: Boolean(process.env.SMTP_USER && process.env.SMTP_PASS), telegramReady: telegramReady(), ai: aiEnabled() })
 
 /** Liste blanche : adresses hors domaines autorisés mises de côté (jamais supprimées), rendues si le domaine est autorisé */
 export function applyMailPolicyToBriefing() {
@@ -112,6 +114,7 @@ export function briefingEmail({ b, summary }) {
 <p style="margin:0;color:${accentOr('#00a362')};font-weight:800;letter-spacing:.08em">${esc(outputName())}</p>
 <h1 style="margin:4px 0 2px;font-size:24px">التقرير التنفيذي</h1>
 <p style="margin:0 0 18px;color:#5f7469">${esc(period)}</p>
+${b.coverageNote?.ar ? `<p style="margin:0 0 14px;padding:8px 12px;background:#fff6e0;border-radius:6px;color:#6b4e10">${esc(b.coverageNote.ar)}</p>` : ''}
 <table style="width:100%;border-spacing:8px"><tr>
 ${kpi('عدد الأخبار', b.current.total, b.previous.total)}${kpi('المصادر الإعلامية', b.current.sources, b.previous.sources)}${kpi('أخبار لافتة', b.current.important, b.previous.important)}${kpi('نبرة سلبية', b.current.tones.negative, b.previous.tones.negative)}
 </tr></table>
@@ -144,6 +147,7 @@ export function briefingTelegram({ b, summary }) {
   const lines = [
     `<b>${esc(outputName())} · التقرير التنفيذي (${b.days} ${b.days === 1 ? 'يوم' : 'أيام'})</b>`,
     `عدد الأخبار : <b>${b.current.total}</b> ${delta(b.current.total, b.previous.total)}`,
+    b.coverageNote?.ar ? `<i>${esc(b.coverageNote.ar)}</i>` : '',
     summary ? `\n${esc(summary.resume)}` : '',
     summary ? `\n<b>أبرز الأحداث</b>\n${summary.faits.map((f) => `• ${esc(f)}`).join('\n')}` : '',
     `\n<a href="${esc(link)}/?view=briefing">فتح التقرير</a>`,
@@ -169,6 +173,26 @@ export async function sendBriefing() {
   return sent
 }
 
+/**
+ * Audit v5 (constat 6) : envoi hebdomadaire du rapport exécutif activé une fois (dimanche 08:00, heure de Tripoli,
+ * 7 jours), toujours réglable ou désactivable dans MMS. Destinataires : MMS_BRIEFING_TO s'il est défini, sinon les
+ * administrateurs nominatifs actifs dont l'adresse est dans un domaine autorisé (jamais un compte partagé).
+ * Sans destinataire, l'envoi reste programmé et la page le signale (noRecipients).
+ */
+function enableWeeklyV5() {
+  if (conf.v5) return
+  const fromEnv = String(process.env.MMS_BRIEFING_TO || '')
+    .split(/[\s,;]+/)
+    .filter((e) => EMAIL_RE.test(e))
+  const admins = readUsers()
+    .filter((u) => !u.disabled && !u.pendingActivation && (u.role === 'admin' || !u.role) && !isSharedAccount(u.email))
+    .map((u) => String(u.email).toLowerCase())
+  const recipients = conf.recipients?.length ? conf.recipients : splitRecipients(fromEnv.length ? fromEnv : admins).ok.slice(0, 20)
+  conf = { ...conf, enabled: true, weekday: conf.enabled ? conf.weekday : 0, hour: conf.enabled ? conf.hour : 8, days: conf.days || 7, recipients, v5: new Date().toISOString() }
+  save()
+  console.log(`Rapport exécutif hebdomadaire activé (audit v5) : ${recipients.length} destinataire(s)`)
+}
+
 export function startBriefing(dataDir) {
   file = path.join(dataDir, 'briefing.json')
   try {
@@ -176,6 +200,7 @@ export function startBriefing(dataDir) {
   } catch {
     /* pas encore configuré */
   }
+  enableWeeklyV5()
   applyMailPolicyToBriefing()
   onMailPolicyChange(applyMailPolicyToBriefing)
   const tick = async () => {

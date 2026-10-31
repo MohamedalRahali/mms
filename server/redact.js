@@ -2,10 +2,27 @@
  * Ce que voient les comptes qui ne sont pas administrateurs (audit produit v4, constat 7) :
  * jamais le message brut d'un outil (yt-dlp, ffmpeg, Python…), ni ses liens (dépôt GitHub de yt-dlp…), ni de coût en
  * dollars. Ils reçoivent un code lisible (STREAM_DOWN, YOUTUBE_BLOCKED…) que l'interface traduit en phrase claire.
- * Les administrateurs (rôle admin ou action « diffusion ») gardent le détail pour le diagnostic.
+ * Audit v5 : réservé à la console Super Admin, y compris pour l'administrateur du client (MMS_SHOW_TECH=1 pour dépanner).
  */
 
-export const isAdminReq = (req) => req.user?.role === 'admin' || Boolean(req.perms?.actions?.includes('diffusion'))
+// Audit v5 (constat 7) : même l'administrateur du client ne voit plus le détail technique ni les coûts en dollars ;
+// ils restent dans la console Super Admin. MMS_SHOW_TECH=1 les rend aux administrateurs (dépannage ponctuel).
+export const isAdminReq = (req) => process.env.MMS_SHOW_TECH === '1' && (req.user?.role === 'admin' || Boolean(req.perms?.actions?.includes('diffusion')))
+
+/** Budget sans montants en dollars : heures d'audio seulement (pour l'application client) */
+export function hoursOnly(budget, perMinute = 0.003) {
+  if (!budget || typeof budget !== 'object') return budget
+  const h = (usd) => (typeof usd === 'number' && Number.isFinite(usd) ? Math.round((usd / (perMinute * 60)) * 10) / 10 : null)
+  return {
+    known: budget.known,
+    hours: budget.hours,
+    totalHours: h(budget.totalSet ?? budget.total),
+    remainingHours: h(budget.remaining),
+    capHours: h(budget.cap),
+    maxHours: h(budget.maxTotal ?? 15),
+    targetHours: budget.target?.hours ?? 24,
+  }
+}
 
 const CODE = /^[A-Z][A-Z0-9_]{2,40}$/
 

@@ -43,6 +43,14 @@ export function categoryOf(method, p) {
   return 'other'
 }
 
+/** Comptes partagés (audit v5, constat 2) : tout usage est signalé en rouge dans le journal et la console Super Admin */
+export const sharedAccounts = () =>
+  String(process.env.MMS_SHARED_ACCOUNTS ?? 'aroundexpressions@gmail.com')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+export const isSharedAccount = (email) => Boolean(email) && sharedAccounts().includes(String(email).trim().toLowerCase())
+
 const hashOf = (prev, row) => crypto.createHash('sha256').update(prev + JSON.stringify(row)).digest('hex').slice(0, 32)
 
 export function initAuditTrail(dataDir) {
@@ -79,6 +87,7 @@ export function recordAudit({ actor = '', role = '', ip = '', category, action, 
     target: String(target).slice(0, 200),
     status: Number(status) || 0,
     ...(detail ? { detail: String(detail).slice(0, 300) } : {}),
+    ...(isSharedAccount(actor) ? { shared: true } : {}),
   }
   row.h = hashOf(lastHash, row)
   lastHash = row.h
@@ -130,10 +139,11 @@ export function auditQuery({ category = '', actor = '', q = '', from = '', to = 
   const out = []
   for (let k = rows.length - 1; k >= 0 && out.length < Math.min(Number(limit) || 500, 5000); k--) {
     const r = rows[k]
-    if (category && r.category !== category) continue
+    if (category && category !== 'shared' && r.category !== category) continue
     if (a && !r.actor.toLowerCase().includes(a)) continue
     if (f && r.t < f) continue
     if (t && r.t > t) continue
+    if (category === 'shared' ? !(r.shared || isSharedAccount(r.actor)) : false) continue
     if (needle && !`${r.action} ${r.target} ${r.actor} ${r.detail || ''}`.toLowerCase().includes(needle)) continue
     out.push(r)
   }
@@ -164,7 +174,22 @@ export function auditSummary() {
     byCat[r.category] = (byCat[r.category] || 0) + 1
     if (r.actor) actors.add(r.actor)
   }
-  return { total: rows.length, last7: byCat, actors: [...actors].slice(0, 200), intact: verifyAudit() === -1 }
+  return { total: rows.length, last7: byCat, actors: [...actors].slice(0, 200), intact: verifyAudit() === -1, shared: sharedUsage() }
+}
+
+/** Usage des comptes partagés sur 7 jours : nombre de lignes, dernière action, comptes concernés */
+export function sharedUsage(now = Date.now()) {
+  const since = new Date(now - 7 * 86_400_000).toISOString()
+  let count = 0
+  let last = null
+  const accounts = new Set()
+  for (const r of rows) {
+    if (r.t < since || !(r.shared || isSharedAccount(r.actor))) continue
+    count++
+    accounts.add(r.actor)
+    last = { t: r.t, action: r.action, actor: r.actor, status: r.status }
+  }
+  return { count, last, accounts: [...accounts] }
 }
 
 /**
@@ -178,9 +203,9 @@ export function mountAuditTrail(router) {
   })
   router.get('/audit-trail.csv', (req, res) => {
     const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const lines = auditQuery({ ...req.query, limit: 5000 }).map((r) => [r.t, r.actor, r.role, r.ip, r.category, r.action, r.target, r.status, r.detail, r.h].map(esc).join(','))
+    const lines = auditQuery({ ...req.query, limit: 5000 }).map((r) => [r.t, r.actor, r.role, r.ip, r.category, r.action, r.target, r.status, r.detail, r.shared || isSharedAccount(r.actor) ? 'oui' : '', r.h].map(esc).join(','))
     res.setHeader('Content-Type', 'text/csv; charset=utf-8')
     res.setHeader('Content-Disposition', 'attachment; filename="journal-audit-mms.csv"')
-    res.send('﻿' + ['date,compte,role,ip,categorie,action,cible,statut,detail,empreinte', ...lines].join('\n'))
+    res.send('﻿' + ['date,compte,role,ip,categorie,action,cible,statut,detail,compte_partage,empreinte', ...lines].join('\n'))
   })
 }

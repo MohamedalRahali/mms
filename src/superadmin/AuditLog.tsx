@@ -7,16 +7,16 @@ import { api, errText, fmtDate } from './api'
  * filtres, export CSV, chaîne d'empreintes vérifiée. Arabe par défaut, anglais au choix.
  */
 
-type Row = { t: string; actor: string; role: string; ip: string; category: string; action: string; target: string; status: number; detail?: string }
+type Row = { t: string; actor: string; role: string; ip: string; category: string; action: string; target: string; status: number; detail?: string; shared?: boolean }
 type Data = { rows: Row[]; summary: { total: number; last7: Record<string, number>; actors: string[]; intact: boolean } }
 
-const CATS = ['login', 'recording', 'portal', 'watch', 'export', 'users', 'sources', 'settings', 'other'] as const
+const CATS = ['login', 'recording', 'portal', 'watch', 'export', 'users', 'sources', 'settings', 'other', 'shared'] as const
 
 const TEXT = {
   ar: {
     title: 'سجل التدقيق',
     intro: 'كل عملية حساسة على المنصة: من دخل، ومن برمج تسجيلاً، ومن نشر على البوابة، ومن عدّل رصداً أو صدّر بيانات أو غيّر الحسابات. لا تُسجّل كلمات المرور ولا المحتوى.',
-    cats: { login: 'الدخول', recording: 'التسجيلات', portal: 'البوابة العامة', watch: 'الرصد', export: 'التصدير والتقارير', users: 'الحسابات والصلاحيات', sources: 'مصادر البث', settings: 'الإعدادات', other: 'أخرى' } as Record<string, string>,
+    cats: { login: 'الدخول', recording: 'التسجيلات', portal: 'البوابة العامة', watch: 'الرصد', export: 'التصدير والتقارير', users: 'الحسابات والصلاحيات', sources: 'مصادر البث', settings: 'الإعدادات', other: 'أخرى', shared: '⚠ الحسابات المشتركة' } as Record<string, string>,
     all: 'كل الفئات',
     actor: 'الحساب',
     q: 'بحث',
@@ -30,12 +30,12 @@ const TEXT = {
     ok: 'نجحت',
     ko: 'رُفضت',
     empty: 'لا توجد عمليات مطابقة.',
-    actions: { login_ok: 'تسجيل دخول', login_failed: 'محاولة دخول فاشلة', login_disabled: 'دخول بحساب معطّل', logout: 'خروج', shared_account_disabled: 'تعطيل الحساب المشترك', shared_account_kept: 'الإبقاء على الحساب المشترك', mfa_asked: 'كلمة مرور صحيحة، بانتظار الرمز', stream_cut: 'انقطاع بث', stream_back: 'عودة البث' } as Record<string, string>,
+    actions: { login_ok: 'تسجيل دخول', login_failed: 'محاولة دخول فاشلة', login_disabled: 'دخول بحساب معطّل', logout: 'خروج', shared_account_disabled: 'تعطيل الحساب المشترك', shared_account_used: 'استعمال حساب مشترك', shared_account_blocked: 'عملية مرفوضة: حساب مشترك للقراءة فقط', nominative_admin_created: 'إنشاء حساب مدير اسمي', activation_link_issued: 'إنشاء رابط تفعيل', account_activated: 'تفعيل حساب', shared_account_kept: 'الإبقاء على الحساب المشترك', mfa_asked: 'كلمة مرور صحيحة، بانتظار الرمز', stream_cut: 'انقطاع بث', stream_back: 'عودة البث' } as Record<string, string>,
   },
   en: {
     title: 'Audit log',
     intro: 'Every sensitive action on the platform: who signed in, who scheduled a recording, who published on the portal, who changed a watch, exported data or changed accounts. Passwords and content are never recorded.',
-    cats: { login: 'Sign-in', recording: 'Recordings', portal: 'Public portal', watch: 'Watches', export: 'Exports & reports', users: 'Accounts & permissions', sources: 'Broadcast sources', settings: 'Settings', other: 'Other' } as Record<string, string>,
+    cats: { login: 'Sign-in', recording: 'Recordings', portal: 'Public portal', watch: 'Watches', export: 'Exports & reports', users: 'Accounts & permissions', sources: 'Broadcast sources', settings: 'Settings', other: 'Other', shared: '⚠ Shared accounts' } as Record<string, string>,
     all: 'All categories',
     actor: 'Account',
     q: 'Search',
@@ -49,7 +49,7 @@ const TEXT = {
     ok: 'OK',
     ko: 'Refused',
     empty: 'No matching action.',
-    actions: { login_ok: 'Sign-in', login_failed: 'Failed sign-in', login_disabled: 'Sign-in on disabled account', logout: 'Sign-out', shared_account_disabled: 'Shared account disabled', shared_account_kept: 'Shared account kept', mfa_asked: 'Password OK, waiting for code', stream_cut: 'Stream cut', stream_back: 'Stream back' } as Record<string, string>,
+    actions: { login_ok: 'Sign-in', login_failed: 'Failed sign-in', login_disabled: 'Sign-in on disabled account', logout: 'Sign-out', shared_account_disabled: 'Shared account disabled', shared_account_used: 'Shared account used', shared_account_blocked: 'Refused: shared account is read-only', nominative_admin_created: 'Named admin account created', activation_link_issued: 'Activation link issued', account_activated: 'Account activated', shared_account_kept: 'Shared account kept', mfa_asked: 'Password OK, waiting for code', stream_cut: 'Stream cut', stream_back: 'Stream back' } as Record<string, string>,
   },
 }
 
@@ -152,9 +152,12 @@ export function AuditLog() {
             </thead>
             <tbody>
               {data.rows.map((r, k) => (
-                <tr key={k}>
+                <tr key={k} className={r.shared ? 'sa-row--shared' : undefined}>
                   <td>{when(r.t)}</td>
-                  <td dir="ltr">{r.actor || '—'}</td>
+                  <td dir="ltr">
+                    {r.actor || '—'}
+                    {r.shared && <span className="sa-tag is-bad">{lang === 'ar' ? 'حساب مشترك' : 'Shared account'}</span>}
+                  </td>
                   <td>
                     <span className="sa-tag">{t.cats[r.category] ?? r.category}</span>
                   </td>

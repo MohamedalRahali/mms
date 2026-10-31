@@ -17,12 +17,19 @@ import { isNetwork } from '../lib/listing'
 /** Fiabilité de la source, sur toutes les fiches (presse comprise, audit v4) : élevée, moyenne ou non confirmée */
 function ReliabilityMark({ level }: { level?: NewsItem['reliability'] }) {
   const ar = useI18n().lang === 'ar'
-  if (level !== 'high' && level !== 'low' && level !== 'medium') return null
-  const label =
-    level === 'high' ? (ar ? 'موثوقية عالية' : 'High reliability') : level === 'medium' ? (ar ? 'موثوقية متوسطة' : 'Medium reliability') : ar ? 'مصدر غير مؤكد' : 'Unverified source'
+  // Quatre niveaux (audit v5) : agence ou média établi, média en ligne, compte social identifié, compte anonyme
+  const LABEL: Record<string, [string, string, string]> = {
+    high: ['✓', 'موثوقية عالية', 'High reliability'],
+    medium: ['◐', 'موثوقية متوسطة', 'Medium reliability'],
+    social: ['◔', 'حساب اجتماعي معروف', 'Identified social account'],
+    low: ['?', 'مصدر غير مؤكد', 'Unverified source'],
+  }
+  const l = level && LABEL[level]
+  if (!l) return null
+  const label = ar ? l[1] : l[2]
   return (
     <span className={`news-rel news-rel--${level}`} title={label}>
-      {level === 'high' ? '✓' : level === 'medium' ? '◐' : '?'} <span className="news-rel__label">{label}</span>
+      {l[0]} <span className="news-rel__label">{label}</span>
     </span>
   )
 }

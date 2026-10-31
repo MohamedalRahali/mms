@@ -26,6 +26,10 @@ export type Watch = {
   filters?: Record<string, string>
   createdBy?: string
   blockedRecipients?: string[]
+  // Audit v5 : sans destinataire, doublon désactivé, période réparée (ancienne date de fin)
+  noRecipients?: boolean
+  duplicateOf?: string
+  previousTo?: string
   // Réglages d'alerte (canaux, seuil, gravité, suivi) ; absents sur les veilles créées avant
   alert?: WatchAlert
   pending?: number

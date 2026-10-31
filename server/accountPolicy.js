@@ -1,7 +1,8 @@
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { closeSessions, readUsers, writeUsers } from './auth.js'
-import { recordAudit } from './auditTrail.js'
+import { closeSessions, hashPassword, readUsers, writeUsers } from './auth.js'
+import { isSharedAccount, recordAudit } from './auditTrail.js'
 
 /**
  * Comptes partagés (audit produit v4, constat 2) : l'adresse commune du prestataire (aroundexpressions@gmail.com)
@@ -108,6 +109,8 @@ export function startAccountPolicy(superDir) {
   migFile = path.join(superDir, 'migrations.json')
   const run = () => {
     try {
+      const seeded = seedNominativeAdmin()
+      if (seeded.created) console.log(`Compte administrateur nominatif créé (activation à faire) : ${seeded.created}`)
       const r = applySharedAccountPolicy()
       if (r.disabled?.length) console.log(`Comptes partagés désactivés : ${r.disabled.join(', ')}`)
       else if (!r.done && r.reason) console.warn(`Compte partagé gardé actif : ${r.reason}`)
@@ -122,3 +125,129 @@ export function startAccountPolicy(superDir) {
 
 export const migrationsFileFor = (superDir) => path.join(superDir, 'migrations.json')
 export const _setMigFile = (f) => (migFile = f)
+
+/* ---------------------------------------------------------------- audit produit v5, constat 2 */
+
+/**
+ * Compte partagé en LECTURE SEULE dès qu'un autre compte administrateur (nominatif, non désactivé) existe : il ne peut
+ * plus lancer d'enregistrement, modifier le portail, les veilles, les droits… (toute écriture refusée, SHARED_READONLY).
+ * Personne n'est verrouillé dehors : la lecture reste permise, les utilisateurs du client (w.farhat@npdc.gov.ly…) ne
+ * sont pas concernés, et la console Super Admin garde tous les droits. MMS_KEEP_SHARED=1 suspend la règle.
+ * Chaque usage du compte partagé est inscrit au journal d'audit (au plus une ligne de lecture par 10 minutes),
+ * signalé en rouge dans le journal et la console Super Admin.
+ */
+const WRITE_OK = [/^\/auth\//, /^\/support\b/, /^\/feedback$/, /^\/platform\/activity$/, /^\/face\/(probe|verify)$/]
+export function otherActiveAdmin(users = readUsers()) {
+  return users.find((u) => !isSharedAccount(u.email) && !u.disabled && roleOf(u) === 'admin') || null
+}
+export const sharedReadOnly = (email, users = readUsers()) => process.env.MMS_KEEP_SHARED !== '1' && isSharedAccount(email) && Boolean(otherActiveAdmin(users))
+
+const lastSeen = new Map()
+export function sharedGate(req, res, next) {
+  const email = req.user?.email
+  if (!isSharedAccount(email)) return next()
+  const now = Date.now()
+  const write = req.method !== 'GET' && req.method !== 'HEAD'
+  if (!write && now - (lastSeen.get(email) || 0) > 10 * 60_000) {
+    lastSeen.set(email, now)
+    recordAudit({ actor: email, role: req.user.role, ip: req.ip, category: 'login', action: 'shared_account_used', target: req.path.slice(0, 120) })
+  }
+  if (write && !WRITE_OK.some((re) => re.test(req.path)) && sharedReadOnly(email)) {
+    req.auditAction = 'shared_account_blocked'
+    return res.status(403).json({ error: 'SHARED_READONLY' })
+  }
+  next()
+}
+
+/**
+ * Compte administrateur nominatif créé par migration (réversible : le Super Admin peut le désactiver) — sans mot de
+ * passe en clair : empreinte aléatoire inutilisable jusqu'à l'activation, par un lien à usage unique (7 jours) que le
+ * Super Admin génère dans sa console. Sauvegarde de users.json avant l'ajout.
+ */
+const SEED_KEY = 'nominative-admin-v5'
+export const SEED_ADMIN = () => ({
+  email: String(process.env.MMS_SEED_ADMIN_EMAIL || 'belgacem.ounissi@aroundexpressions.com').trim().toLowerCase(),
+  name: process.env.MMS_SEED_ADMIN_NAME || 'Belgacem Ounissi',
+})
+export function seedNominativeAdmin(now = new Date()) {
+  if (process.env.MMS_SEED_ADMIN === '0') return { done: false, reason: 'DISABLED' }
+  const mig = readMig()
+  if (mig[SEED_KEY]?.done) return { done: true, already: true }
+  const { email, name } = SEED_ADMIN()
+  const users = readUsers()
+  if (users.some((u) => String(u.email).toLowerCase() === email)) {
+    mig[SEED_KEY] = { done: true, at: now.toISOString(), existed: true }
+    writeMig(mig)
+    return { done: true, existed: true }
+  }
+  try {
+    if (migFile) {
+      fs.mkdirSync(path.dirname(migFile), { recursive: true })
+      fs.writeFileSync(path.join(path.dirname(migFile), `users-avant-${SEED_KEY}.json`), JSON.stringify({ users }, null, 2), { mode: 0o600 })
+    }
+  } catch (err) {
+    console.error('Sauvegarde users.json :', err.message)
+    return { done: false, reason: 'BACKUP_FAILED' }
+  }
+  users.push({
+    email,
+    username: email.split('@')[0],
+    name,
+    role: 'admin',
+    ...hashPassword(crypto.randomBytes(32).toString('hex')),
+    pendingActivation: true,
+    createdAt: now.toISOString(),
+    createdBy: `migration ${SEED_KEY}`,
+  })
+  writeUsers(users)
+  recordAudit({ actor: 'system', category: 'users', action: 'nominative_admin_created', target: email, detail: 'activation par lien à usage unique (console Super Admin)' })
+  mig[SEED_KEY] = { done: true, at: now.toISOString(), email }
+  writeMig(mig)
+  return { done: true, created: email }
+}
+
+const ACTIVATION_MS = 7 * 86_400_000
+const sha = (t) => crypto.createHash('sha256').update(String(t)).digest('hex')
+
+/** Nouveau lien d'activation (ou de mot de passe à définir) : seule l'empreinte du jeton est gardée */
+export function issueActivation(email, by = '', now = Date.now()) {
+  const users = readUsers()
+  const u = users.find((x) => String(x.email).toLowerCase() === String(email).toLowerCase())
+  if (!u) throw Object.assign(new Error('NOT_FOUND'), { code: 'NOT_FOUND', status: 404 })
+  const token = crypto.randomBytes(32).toString('base64url')
+  u.activation = { hash: sha(token), exp: now + ACTIVATION_MS, by: String(by).slice(0, 120) }
+  writeUsers(users)
+  recordAudit({ actor: by ? `superadmin:${by}` : 'system', category: 'users', action: 'activation_link_issued', target: u.email })
+  return { token, exp: new Date(now + ACTIVATION_MS).toISOString() }
+}
+
+/** Activation : mot de passe choisi par la personne (10 caractères au moins), lien consommé */
+export function activateAccount(token, password, now = Date.now()) {
+  const fail = (code, status = 400) => Object.assign(new Error(code), { code, status })
+  if (typeof token !== 'string' || token.length < 20 || token.length > 100) throw fail('BAD_TOKEN')
+  if (typeof password !== 'string' || password.length < 10 || password.length > 1000) throw fail('TOO_SHORT')
+  const users = readUsers()
+  const h = Buffer.from(sha(token))
+  const u = users.find((x) => typeof x.activation?.hash === 'string' && x.activation.hash.length === 64 && crypto.timingSafeEqual(Buffer.from(x.activation.hash), h))
+  if (!u) throw fail('BAD_TOKEN', 404)
+  if (u.activation.exp < now) throw fail('EXPIRED', 410)
+  if (password.toLowerCase() === String(u.email).toLowerCase() || password.toLowerCase() === String(u.username || '').toLowerCase()) throw fail('WEAK')
+  Object.assign(u, hashPassword(password), { passwordChangedAt: new Date(now).toISOString(), activatedAt: new Date(now).toISOString() })
+  delete u.activation
+  delete u.pendingActivation
+  writeUsers(users)
+  closeSessions(u.email)
+  recordAudit({ actor: u.email, role: u.role, category: 'users', action: 'account_activated', target: u.email })
+  return { email: u.email }
+}
+
+/** État pour la console Super Admin */
+export function sharedPolicyState(users = readUsers()) {
+  const shared = users.filter((u) => isSharedAccount(u.email)).map((u) => ({ email: u.email, disabled: Boolean(u.disabled), readOnly: sharedReadOnly(u.email, users) }))
+  const seed = users.find((u) => String(u.email).toLowerCase() === SEED_ADMIN().email)
+  return {
+    shared,
+    otherAdmin: otherActiveAdmin(users)?.email || '',
+    seed: seed ? { email: seed.email, pending: Boolean(seed.pendingActivation), linkActive: Boolean(seed.activation && seed.activation.exp > Date.now()), mfa: Boolean(seed.totp?.secret) } : null,
+  }
+}

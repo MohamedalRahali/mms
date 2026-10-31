@@ -4,6 +4,7 @@ import { type Flux, type NewsItem, type NewsResponse, useFetch } from '../lib/ne
 import { useI18n } from '../lib/i18n'
 import { useAlerts, useFavorites } from '../lib/prefs'
 import { canDo, useAuth } from '../lib/auth'
+import { AiProvider } from './AiProvider'
 
 /** Bandeau orange « mises à jour disponibles », avec compte à rebours, comme NewsRadar */
 export function UpdateToast({ onReload }: { onReload: () => void }) {
@@ -295,6 +296,7 @@ export function AiAnalysis({ flux }: { flux: Flux | '' }) {
   return (
     <>
       <PageHead title={t.aiTitle} intro={t.aiIntro} />
+      <AiProvider />
       <div className="news-filters">
         <select value={days} onChange={(e) => setDays(e.target.value)} aria-label="period">
           <option value="1">{t.last24}</option>

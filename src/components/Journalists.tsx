@@ -33,7 +33,7 @@ const TEXT = {
     empty: 'لا توجد نتائج. تُبنى القاعدة من توقيعات المقالات: تظهر الأسماء مع وصول مقالات موقّعة.',
     prev: 'السابق',
     next: 'التالي',
-    rel: { high: 'موثوقية عالية', medium: 'موثوقية متوسطة', low: 'غير مؤكد' } as Record<string, string>,
+    rel: { high: 'موثوقية عالية', medium: 'موثوقية متوسطة', social: 'حساب اجتماعي معروف', low: 'غير مؤكد' } as Record<string, string>,
   },
   en: {
     title: 'Journalists & media',
@@ -53,7 +53,7 @@ const TEXT = {
     empty: 'No result. The base is built from bylines: names appear as signed articles arrive.',
     prev: 'Previous',
     next: 'Next',
-    rel: { high: 'High reliability', medium: 'Medium reliability', low: 'Unverified' } as Record<string, string>,
+    rel: { high: 'High reliability', medium: 'Medium reliability', social: 'Identified social account', low: 'Unverified' } as Record<string, string>,
   },
 }
 

@@ -1,3 +1,4 @@
+import { categoryKey } from './classify.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import express from 'express'
@@ -473,7 +474,7 @@ export function options(items) {
     }
     return [...m.entries()].map(([name, n]) => ({ name, count: n })).sort((a, b) => b.count - a.count)
   }
-  return { types: count(typeOf), langs: count((it) => it.lang), categories: count((it) => it.category), sources: count((it) => it.origin).slice(0, 600) }
+  return { types: count(typeOf), langs: count((it) => it.lang), categories: count(categoryKey), sources: count((it) => it.origin).slice(0, 600) }
 }
 
 export function feedState(items) {

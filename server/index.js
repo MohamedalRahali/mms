@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import { aiBadge, aiDisclosure } from './aiDisclosure.js'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -21,7 +22,8 @@ import { briefingConf, briefingKey, briefingWithSummary, sendBriefing, setBriefi
 import { imageRoute, initImages, withImages } from './images.js'
 import { mountSuperAdmin } from './superadmin.js'
 import { auditMiddleware, initAuditTrail } from './auditTrail.js'
-import { startAccountPolicy } from './accountPolicy.js'
+import { activateAccount, sharedGate, sharedReadOnly, startAccountPolicy } from './accountPolicy.js'
+import { isSharedAccount } from './auditTrail.js'
 import { mountJournalists } from './journalists.js'
 import { initReviewValidation, mountReviewValidation } from './reviewValidation.js'
 import { backupStatus, startBackups } from './backups.js'
@@ -47,6 +49,8 @@ import { mountGeo } from './geo.js'
 import { mountCatalog } from './catalog.js'
 import { canSendAlert, initAlertFlow, mountAlertFlow, openWatchAlert, withFlow } from './alertFlow.js'
 import { intlRegion } from './themes.js'
+import { categoryCounts, fineCategory } from './classify.js'
+import { splitReview } from './review.js'
 import { SOCIAL_CHANNELS, dedupeKeyer, uniqueItems } from './dedupe.js'
 import { initEntities, libyaRelevant, norm as normName, onEntitiesChange, regionOf, regionStats, resolveEntities } from './entities.js'
 import { initPinboards, mountPinboards, pinnedKeys } from './pinboards.js'
@@ -86,8 +90,6 @@ function toDay(iso) {
   return d
 }
 
-/** Thème fin : « دولي » découpé par zone (international.europe, international.maghreb…), les autres inchangés */
-const fineCategory = (it) => (it.category === 'international' ? `international.${it.intl || 'other'}` : it.category)
 
 function counts(items, key) {
   const map = new Map()
@@ -226,7 +228,27 @@ app.get('/api/auth/me', (req, res) => {
   const user = currentUser(req)
   if (!user) return res.status(401).json({ error: 'AUTH' })
   const raw = readUsers().find((u) => u.email === user.email)
-  res.json({ user: { ...user, avatar: avatarUrl(user.email), perms: permsOf(user), mfa: mfaStateOf(raw), face: faceStateOf(user.email, sessionOf(req)?.session) } })
+  // Compte partagé (audit v5) : signalé dans l'interface, en lecture seule dès qu'un autre administrateur existe
+  const shared = isSharedAccount(user.email) ? { shared: true, readOnly: sharedReadOnly(user.email) } : {}
+  res.json({ user: { ...user, ...shared, avatar: avatarUrl(user.email), perms: permsOf(user), mfa: mfaStateOf(raw), face: faceStateOf(user.email, sessionOf(req)?.session) } })
+})
+// Activation d'un compte créé sans mot de passe (lien à usage unique généré dans la console Super Admin, audit v5)
+const activationTries = new Map()
+app.post('/api/auth/activate', express.json({ limit: '2kb' }), (req, res) => {
+  const ip = String(req.ip || '')
+  const t = activationTries.get(ip) || { n: 0, at: Date.now() }
+  if (Date.now() - t.at > 15 * 60_000) Object.assign(t, { n: 0, at: Date.now() })
+  if (t.n >= 10) return res.status(429).json({ error: 'LOCKED' })
+  t.n++
+  activationTries.set(ip, t)
+  try {
+    const r = activateAccount(req.body?.token, req.body?.password)
+    req.auditActor = r.email
+    req.auditAction = 'account_activated'
+    res.json({ ok: true, email: r.email })
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.code || 'FAILED' })
+  }
 })
 
 // Référentiel des entités : variantes d'un même acteur fusionnées, médias jamais comptés comme acteurs
@@ -360,6 +382,8 @@ mountFace(app)
 // Droits par profil : modules (pages) et actions (boutons) permis, réglés dans la console Super Admin.
 // Les profils de base reproduisent les anciens droits par rôle (lecture pour tous, création pour les analystes,
 // envois programmés et sources de diffusion pour les administrateurs). Chaque refus est journalisé.
+// Compte partagé en lecture seule dès qu'un administrateur nominatif existe ; chaque usage journalisé (audit v5)
+app.use('/api', sharedGate)
 app.use(
   '/api',
   permissionGate((req, why) =>
@@ -739,10 +763,7 @@ function statsData(q) {
     broadcasts: found.reduce((n, it) => n + it.broadcasts, 0),
     perDay,
     flux: counts(found, 'flux'),
-    categories: counts(
-      found.map((it) => ({ fine: fineCategory(it) })),
-      'fine',
-    ),
+    categories: categoryCounts(found),
     sources: counts(found, 'origin').slice(0, 10),
     channels: counts(found, 'channel'),
     media: counts(found, 'media').filter((m) => m.name),
@@ -776,7 +797,10 @@ app.get('/api/report', (req, res) => {
   const dayItems = scoped.filter((it) => toDay(it.date) === day).sort((a, b) => a.date.localeCompare(b.date))
   // Revue de presse : un même fait repris par plusieurs médias n'apparaît qu'une fois (« also » : les autres sources)
   const unique = dedupeStories(dayItems)
-  res.json({ day, available, items: unique, total: dayItems.length, merged: dayItems.length - unique.length, demo })
+  // Audit v5 : dépêches et médias d'un côté, messages des réseaux sociaux de l'autre ; comptes anonymes, forums et
+  // commentaires hors de la revue officielle (comptés à part) ; fiabilité selon le type de source
+  const split = splitReview(unique)
+  res.json({ day, available, items: split.media, social: split.social, excluded: split.excluded, total: dayItems.length, merged: dayItems.length - unique.length, demo })
 })
 
 // Analyse intelligente : GET lit le résultat en mémoire, POST le génère avec Claude
@@ -788,6 +812,8 @@ function aiScope(q) {
   return { items: found, days, key: `${q.flux || 'all'}|${days}|${lastUpdate}|${found.length}`, fluxLabel: FLUX_LABEL[q.flux] || 'Mosaïque FM et Libye' }
 }
 let aiRunning = false
+// Fournisseur et offre d'IA réellement utilisés (audit v5, constat 1) : écran IA, FAQ
+app.get('/api/ai/providers', (req, res) => res.json({ badge: aiBadge(req.query.lang), ...aiDisclosure(req.query.lang) }))
 app.get('/api/ai/analysis', (req, res) => {
   const scope = aiScope(req.query)
   res.json({ enabled: aiEnabled(), count: scope.items.length, running: aiRunning, result: cached(scope.key) })

@@ -22,7 +22,7 @@ function useList<T>(path: string) {
 }
 
 /** Pays (code ISO) et portée d'une source, modifiables sur place */
-const RELIABILITY: Record<string, string> = { high: 'موثوق', medium: 'متوسط', low: 'غير مؤكد' }
+const RELIABILITY: Record<string, string> = { high: 'موثوق', medium: 'متوسط', social: 'حساب اجتماعي معروف', low: 'غير مؤكد' }
 
 export function SourceMetaCell({
   name,

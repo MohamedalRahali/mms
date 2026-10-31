@@ -103,26 +103,61 @@ export function setSourceMeta(name, value) {
 
 export const sourceMetaOf = (name) => meta[name] || null
 
-export const RELIABILITY = ['high', 'medium', 'low']
-// Réseaux sociaux : niveau moyen par défaut (comptes officiels et anonymes s'y côtoient, au Super Admin de trancher)
+// Quatre niveaux (audit v5) : agence ou média établi > média en ligne > compte social identifié > compte anonyme ou
+// non vérifié. « social » se place entre « medium » et « low ».
+export const RELIABILITY = ['high', 'medium', 'social', 'low']
+const SOCIAL = new Set(['x', 'twitter', 'bluesky', 'facebook', 'instagram', 'telegram', 'tiktok', 'mastodon', 'youtube', 'linkedin', 'threads'])
+// Forums, blogs et commentaires : non vérifiés par nature
 const LOW_CHANNELS = new Set(['reddit', 'blog', 'forum', 'comment'])
 // Agences de presse et services publics d'information (fiabilité élevée par défaut, modifiable par le Super Admin)
 const HIGH_HOSTS = ['reuters.com', 'apnews.com', 'afp.com', 'bbc.com', 'bbc.co.uk', 'dw.com', 'france24.com', 'rfi.fr', 'ansa.it', 'aa.com.tr', 'lana.ly', 'lana-news.ly', 'un.org', 'unsmil.unmissions.org']
-/** Fiabilité d'une source : réglage du Super Admin, sinon déduite (site officiel, réseau social, média) */
-export function reliabilityOf(it) {
+// Chaînes et médias établis reconnaissables sur les réseaux (compte officiel d'un média = compte identifié de confiance)
+const KNOWN_MEDIA = /الجزيرة|jazeera|العربية|arabiya|الحدث|hadath|سكاي نيوز|sky ?news|france ?24|فرانس ?24|bbc|بي بي سي|\bdw\b|reuters|رويترز|\bafp\b|\bap\b|الوسط|wasat|الأحرار|ahrar|\b218\b|الوطنية|wataniya|الرسمية|rasmia|النبأ|nabaa|libya ?observer|libya ?herald|libya ?review|العربي الجديد|alaraby|الشرق الأوسط|aawsat|anadolu|الأناضول|وكالة|agency|news agency/i
+
+/**
+ * Compte social anonyme : pseudonyme sans nom réel — pseudo par défaut à 6 chiffres ou plus (« @Muratti39803483 »),
+ * soulignés en tête ou en fin (« @__Ghost__007_ »), mots d'anonymat (ghost, anon, shadow, مجهول…), ou poignée seule
+ * faite surtout de chiffres et de symboles. Sans nombre d'abonnés ni badge vérifié dans les données, ce sont les seuls
+ * indices fiables ; un compte d'un média connu ou un nom à plusieurs mots n'est jamais anonyme.
+ */
+export function anonymousHandle(name) {
+  const raw = String(name || '').trim()
+  if (!raw) return true
+  if (KNOWN_MEDIA.test(raw)) return false
+  const handle = raw.replace(/^@/, '').split(/\s*[·|(]\s*/)[0]
+  // Nom affiché à plusieurs mots (« Mohamed Ali », « وزارة الخارجية ») : identifié
+  if (/\s/.test(handle) && /\p{L}{2,}\s+\p{L}{2,}/u.test(handle)) return false
+  if (/\d{6,}/.test(handle)) return true
+  if (/^_|_$|__/.test(handle)) return true
+  if (/ghost|anon|shadow|incognito|unknown|\bfake|مجهول|شبح|متخفي/i.test(handle)) return true
+  const letters = (handle.match(/\p{L}/gu) || []).length
+  return letters < Math.max(3, handle.length * 0.5)
+}
+
+/** Type de source : agency, established, online, social, anonymous, forum (indice de fiabilité, revue de presse) */
+export function sourceTier(it) {
   const set = meta[it?.origin]?.reliability
-  if (set) return set
   let host = ''
   try {
     host = new URL(it?.url || '').hostname.toLowerCase()
   } catch {
     host = ''
   }
-  if (/(^|\.)gov(\.[a-z]{2})?$|\.gov\.|(^|\.)gouv\./.test(host)) return 'high'
-  // Presse : agences de presse et services publics d'information reconnus → élevée ; autres médias → moyenne
-  if (HIGH_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) return 'high'
-  if (LOW_CHANNELS.has(it?.channel) || ['forum', 'comment'].includes(it?.media)) return 'low'
-  return 'medium'
+  if (/(^|\.)gov(\.[a-z]{2})?$|\.gov\.|(^|\.)gouv\./.test(host) || HIGH_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) return 'agency'
+  if (LOW_CHANNELS.has(it?.channel) || ['forum', 'comment'].includes(it?.media)) return 'forum'
+  if (SOCIAL.has(it?.channel)) return set === 'high' || KNOWN_MEDIA.test(it?.origin || '') ? 'social' : anonymousHandle(it?.origin) ? 'anonymous' : 'social'
+  // Médias établis : TV, radio, presse, ou site du catalogue de la veille (sources.yaml, choisi à la main)
+  if (['tv', 'radio', 'press', 'presse'].includes(it?.channel) || readCatalog().has(it?.origin || '') || KNOWN_MEDIA.test(it?.origin || '')) return 'established'
+  return 'online'
+}
+
+const TIER_LEVEL = { agency: 'high', established: 'high', online: 'medium', social: 'social', anonymous: 'low', forum: 'low' }
+
+/** Fiabilité d'une source : réglage du Super Admin, sinon déduite du type de source (sourceTier) */
+export function reliabilityOf(it) {
+  const set = meta[it?.origin]?.reliability
+  if (set) return set
+  return TIER_LEVEL[sourceTier(it)] || 'medium'
 }
 export const reliabilityIsSet = (origin) => Boolean(meta[origin]?.reliability)
 

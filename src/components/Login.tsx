@@ -88,6 +88,8 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const [error, setError] = useState('')
   // Double authentification active sur le compte : deuxième étape (code à 6 chiffres)
   const [ticket, setTicket] = useState('')
+  // Lien d'activation (?activate=…) : la personne choisit son mot de passe (audit v5)
+  const [activate, setActivate] = useState(() => new URLSearchParams(window.location.search).get('activate') || '')
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -160,7 +162,17 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
       </section>
 
       <main className="mms-login__main">
-        {ticket ? (
+        {activate ? (
+          <Activate
+            token={activate}
+            lang={lang}
+            onDone={(email) => {
+              window.history.replaceState(null, '', window.location.pathname)
+              setActivate('')
+              setLogin(email)
+            }}
+          />
+        ) : ticket ? (
           <MfaCode ticket={ticket} lang={lang} onLogin={onLogin} onBack={() => setTicket('')} />
         ) : (
         <form className="mms-login__card" onSubmit={submit}>
@@ -235,5 +247,66 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
         </p>
       </main>
     </div>
+  )
+}
+
+/** Activation d'un compte créé sans mot de passe : lien à usage unique, mot de passe de 10 caractères au moins */
+function Activate({ token, lang, onDone }: { token: string; lang: 'ar' | 'en'; onDone: (email: string) => void }) {
+  const ar = lang === 'ar'
+  const [pw, setPw] = useState('')
+  const [pw2, setPw2] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [done, setDone] = useState('')
+  const ERR: Record<string, string> = ar
+    ? { BAD_TOKEN: 'الرابط غير صالح أو استُعمل من قبل. اطلب رابطاً جديداً من المسؤول.', EXPIRED: 'انتهت صلاحية الرابط (7 أيام). اطلب رابطاً جديداً من المسؤول.', TOO_SHORT: 'كلمة المرور قصيرة: 10 أحرف على الأقل.', WEAK: 'كلمة المرور لا يجب أن تكون البريد أو اسم المستخدم.', LOCKED: 'محاولات كثيرة، أعد المحاولة بعد 15 دقيقة.', MISMATCH: 'كلمتا المرور غير متطابقتين.', FAILED: 'تعذّر التفعيل.' }
+    : { BAD_TOKEN: 'This link is invalid or already used. Ask an administrator for a new one.', EXPIRED: 'This link has expired (7 days). Ask an administrator for a new one.', TOO_SHORT: 'Password too short: at least 10 characters.', WEAK: 'The password must not be your email or username.', LOCKED: 'Too many attempts, retry in 15 minutes.', MISMATCH: 'The two passwords differ.', FAILED: 'Activation failed.' }
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setError('')
+    if (pw !== pw2) return setError(ERR.MISMATCH)
+    setBusy(true)
+    try {
+      const res = await fetch('/api/auth/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, password: pw }) })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'FAILED')
+      setDone(json.email)
+    } catch (err) {
+      setError(ERR[(err as Error).message] ?? ERR.FAILED)
+    } finally {
+      setBusy(false)
+    }
+  }
+  if (done)
+    return (
+      <div className="mms-login__card">
+        <h2>{ar ? 'تم تفعيل الحساب' : 'Account activated'}</h2>
+        <p className="mms-login__intro">{ar ? 'سجّل الدخول الآن بكلمة مرورك، ثم فعّل التحقق بخطوتين.' : 'Sign in now with your password, then turn on two-factor authentication.'}</p>
+        <button type="button" className="mms-login__submit" onClick={() => onDone(done)}>
+          {ar ? 'تسجيل الدخول' : 'Sign in'}
+        </button>
+      </div>
+    )
+  return (
+    <form className="mms-login__card" onSubmit={submit}>
+      <h2>{ar ? 'تفعيل الحساب' : 'Activate your account'}</h2>
+      <p className="mms-login__intro">{ar ? 'اختر كلمة مرور (10 أحرف على الأقل). الرابط صالح لمرة واحدة.' : 'Choose a password (at least 10 characters). This link works once.'}</p>
+      <label className="mms-login__field">
+        <span>{ar ? 'كلمة المرور الجديدة' : 'New password'}</span>
+        <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" dir="ltr" minLength={10} required autoFocus />
+      </label>
+      <label className="mms-login__field">
+        <span>{ar ? 'تأكيد كلمة المرور' : 'Confirm password'}</span>
+        <input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} autoComplete="new-password" dir="ltr" minLength={10} required />
+      </label>
+      {error && (
+        <p className="mms-login__error" role="alert">
+          {error}
+        </p>
+      )}
+      <button type="submit" className="mms-login__submit" disabled={busy}>
+        {ar ? 'تفعيل' : 'Activate'}
+      </button>
+    </form>
   )
 }

@@ -10,7 +10,8 @@ import path from 'node:path'
  */
 
 let file = ''
-let policy = { domains: ['npdc.gov.ly'] }
+const CLIENT_DOMAINS = ['npdc.gov.ly']
+let policy = { domains: [...CLIENT_DOMAINS] }
 const listeners = new Set()
 
 const cleanDomain = (d) =>
@@ -25,7 +26,8 @@ export function initMailPolicy(dir) {
   try {
     const saved = JSON.parse(fs.readFileSync(file, 'utf8'))
     const domains = (saved.domains || []).map(cleanDomain).filter((d) => DOMAIN_RE.test(d))
-    if (domains.length) policy = { domains }
+    // Domaine du client toujours autorisé (audit v5 : destinataires @npdc.gov.ly refusés dans les veilles)
+    if (domains.length) policy = { domains: [...new Set([...domains, ...CLIENT_DOMAINS])] }
   } catch {
     /* règle par défaut */
   }
@@ -37,7 +39,7 @@ export const onMailPolicyChange = (fn) => listeners.add(fn)
 export function setMailPolicy(p) {
   const domains = [...new Set((Array.isArray(p?.domains) ? p.domains : String(p?.domains || '').split(/[\s,;،]+/)).map(cleanDomain).filter((d) => DOMAIN_RE.test(d)))].slice(0, 30)
   if (!domains.length) throw Object.assign(new Error('NO_DOMAIN'), { code: 'NO_DOMAIN', status: 400 })
-  policy = { domains }
+  policy = { domains: [...new Set([...domains, ...CLIENT_DOMAINS])] }
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(file, JSON.stringify({ ...policy, savedAt: new Date().toISOString() }, null, 2))
   for (const fn of listeners) fn()

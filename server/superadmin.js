@@ -7,7 +7,9 @@ import { closeSessions, currentUser, hashPassword, readUsers, ROLES, setAuthList
 import { getItems, setHidden } from './store.js'
 import { keyStatus } from './keys.js'
 import { aiStatus, aiUsage, setGeminiPaid } from './ai.js'
-import { auditSummary, mountAuditTrail } from './auditTrail.js'
+import { aiDisclosure, aiDisclosureMarkdown } from './aiDisclosure.js'
+import { auditSummary, isSharedAccount, mountAuditTrail } from './auditTrail.js'
+import { issueActivation, sharedPolicyState } from './accountPolicy.js'
 import { mountPermissionsAdmin, permsOf, profileExists } from './permissions.js'
 import { initBrand, mountClientAdmin } from './clientAdmin.js'
 import { sourceHealth } from './sourceHealth.js'
@@ -192,6 +194,9 @@ function userRow(u, fails) {
     sessions: userSessions(u.email).length,
     fails: fails.get(lc(u.email)) || 0,
     note: notes[lc(u.email)]?.text || '',
+    // Compte partagé (signalé en rouge) et compte en attente d'activation (audit v5)
+    shared: isSharedAccount(u.email),
+    pending: Boolean(u.pendingActivation),
   }
 }
 
@@ -481,6 +486,8 @@ export function mountSuperAdmin(app, root) {
       // Moteurs d'IA : réutilisation des données, clé Gemini gratuite détectée (audit v4)
       aiStatus: aiStatus(),
       audit: auditSummary(),
+      // Comptes partagés : lecture seule, compte nominatif à activer (audit v5)
+      accounts: sharedPolicyState(),
     })
   })
 
@@ -606,6 +613,19 @@ export function mountSuperAdmin(app, root) {
     if (u.disabled || req.body?.password || req.body?.resetMfa) closeSessions(u.email)
     audit(req, 'user_update', u.email, changes.join(', '))
     res.json({ ok: true })
+  })
+
+  // Lien d'activation à usage unique (7 jours) : la personne choisit elle-même son mot de passe (audit v5)
+  sa.post('/users/:email/activation', (req, res) => {
+    try {
+      const { token, exp } = issueActivation(lc(req.params.email), req.sa.u)
+      const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'mearsaad.com').split(',')[0].trim()
+      const proto = req.secure || req.headers['x-forwarded-proto'] === 'https' || !/^(localhost|127\.)/.test(host) ? 'https' : 'http'
+      audit(req, 'user_activation_link', lc(req.params.email))
+      res.json({ link: `${proto}://${host}/?activate=${token}`, exp })
+    } catch (err) {
+      fail(res, err.status || 400, err.code || 'FAILED')
+    }
   })
 
   sa.post('/users/:email/logout', (req, res) => {
@@ -861,6 +881,9 @@ export function mountSuperAdmin(app, root) {
     audit(req, 'ai_gemini_paid', '', s.geminiPaid ? 'on' : 'off')
     res.json({ settings: s, status: aiStatus() })
   })
+
+  /* ---- Fournisseurs d'IA pour la note de sécurité (audit v5, constat 1) */
+  sa.get('/ai-disclosure', (req, res) => res.json({ ...aiDisclosure(req.query.lang), markdown: aiDisclosureMarkdown(req.query.lang) }))
 
   /* ---- الإعدادات */
   sa.get('/settings', (_req, res) => res.json({ settings, audit: all('audit').slice(-300).reverse().map((a) => ({ ...a, t: iso(a.t), country: countryOf(a.ip) })) }))

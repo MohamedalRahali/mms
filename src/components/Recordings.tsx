@@ -71,6 +71,11 @@ type Data = {
     target?: { hours: number; costPerDay: number; costPerMonth: number };
     hoursPerDay?: number | null;
     maxTotal?: number;
+    totalHours?: number | null;
+    remainingHours?: number | null;
+    capHours?: number | null;
+    maxHours?: number | null;
+    targetHours?: number;
   };
   veille: { maj: string | null };
   admin?: boolean;
@@ -171,7 +176,7 @@ const TEXT = {
     approx: "التوقيت تقريبي",
     notRecordable: "لا يوجد رابط بث يمكن تسجيله",
     availableNow: "متاح الآن",
-    ytBlocked: "غير متاح: يوتيوب يرفض الخادم حالياً (يجب تجديد ملف الكوكيز)",
+    ytBlocked: "غير متاح حالياً (المصدر يرفض الاتصال؛ الفريق التقني على علم)",
     errors: {
       PAST: "هذه الفترة بدأت قبل أكثر من دقيقتين. البث المباشر لا يتيح الرجوع إلى الماضي (دقيقة إلى أربع دقائق فقط حسب الفحص)، لذا لا يمكن تسجيل فترة مضت.",
       pastSlots: (s: string) =>
@@ -185,10 +190,10 @@ const TEXT = {
         `في هذه الفترة تُسجَّل ${f} قنوات ضمن الفترات الثابتة المسائية، والحد الأقصى للرصد ${n} تسجيلات في الوقت نفسه. اختر فترة أخرى.`,
       BAD_PART: (m: string) => `أدخل مبلغاً بين 0 و${m} $.`,
       BUDGET: (e: string, r: string) =>
-        `التكلفة التقديرية ${e} $ تتجاوز المتبقي من سقف هذا الشهر (${r} $).`,
+        e === "?" ? "مدة التسجيل تتجاوز حصة التفريغ المتبقية اليوم. اختر مدة أقصر أو اطلب من المسؤول رفع الحصة." : `التكلفة التقديرية ${e} $ تتجاوز المتبقي من سقف هذا الشهر (${r} $).`,
       NOT_RECORDABLE: "هذه القناة لا تملك رابط بث يمكن تسجيله.",
       YOUTUBE_BLOCKED:
-        "هذه القناة تُسجَّل عبر يوتيوب، ويوتيوب يرفض الخادم حالياً (التحقق من أنك لست روبوتاً). اختر قناة متاحة الآن، أو جدّد ملف الكوكيز على الخادم.",
+        "هذه القناة غير متاحة للتسجيل حالياً لأن مصدرها يرفض الاتصال. اختر قناة متاحة الآن؛ الفريق التقني على علم.",
       UNAVAILABLE: "هذه القناة غير متاحة الآن.",
       NO_CHANNEL: "القناة غير موجودة.",
       BAD_RANGE: "يجب أن تكون النهاية بعد البداية.",
@@ -305,7 +310,7 @@ const TEXT = {
     notRecordable: "No recordable stream",
     availableNow: "available now",
     ytBlocked:
-      "unavailable: YouTube is currently refusing the server (cookies file must be renewed)",
+      "unavailable right now (the source refuses the connection; the technical team is aware)",
     errors: {
       PAST: "This period started more than 2 minutes ago. Live streams cannot be rewound (1 to 4 minutes at most, as tested), so a past period cannot be recorded.",
       pastSlots: (s: string) =>
@@ -321,10 +326,10 @@ const TEXT = {
         `${f} channels are already recorded in the fixed evening slots at that time, and the monitoring records at most ${n} at once. Choose another period.`,
       BAD_PART: (m: string) => `Enter an amount between 0 and $${m}.`,
       BUDGET: (e: string, r: string) =>
-        `The estimated cost ($${e}) exceeds what is left of this month's cap ($${r}).`,
+        e === "?" ? "This recording exceeds today's remaining transcription allowance. Choose a shorter duration or ask an administrator to raise it." : `The estimated cost ($${e}) exceeds what is left of this month's cap ($${r}).`,
       NOT_RECORDABLE: "This channel has no recordable stream.",
       YOUTUBE_BLOCKED:
-        "This channel is recorded through YouTube, and YouTube is currently refusing the server (bot check). Pick a channel available now, or renew the cookies file on the server.",
+        "This channel cannot be recorded right now because its source refuses the connection. Pick a channel available now; the technical team is aware.",
       UNAVAILABLE: "This channel is not available right now.",
       NO_CHANNEL: "Unknown channel.",
       BAD_RANGE: "The end must be after the start.",
@@ -376,10 +381,10 @@ function veilleMessage(t: (typeof TEXT)["ar"], raw?: string) {
 }
 
 /** Administrateurs (action « diffusion ») : détail technique et coûts en dollars ; les autres voient un message clair */
-const useIsAdmin = () => {
-  const auth = useAuth();
-  return auth?.user?.role === "admin" || canDo(auth?.user, "diffusion");
-};
+// Audit v5 : détail technique et coûts réservés à la console Super Admin, même pour l'administrateur du client ;
+// le serveur ne les envoie plus (MMS_SHOW_TECH=1 pour dépanner : il renvoie alors admin = true)
+let techShown = false;
+const useIsAdmin = () => techShown;
 
 function VeilleNote({ raw, className }: { raw?: string; className: string }) {
   const t = useText();
@@ -421,7 +426,7 @@ function errorText(t: (typeof TEXT)["ar"], e: Err, limits?: Data["limits"]) {
     case "PARALLEL":
       return E.PARALLEL(e.max ?? limits?.maxParallel ?? 3);
     case "BUDGET":
-      return E.BUDGET(String(e.estimate ?? "?"), String(e.remaining ?? "?"));
+      return E.BUDGET(techShown ? String(e.estimate ?? "?") : "?", String(e.remaining ?? "?"));
     case "CAPTURES":
       return E.CAPTURES(e.max ?? limits?.maxCaptures ?? 6, e.fixed ?? 0);
     case "BAD_PART":
@@ -692,6 +697,43 @@ function BudgetSplit({
 }) {
   const t = useText();
   const ar = useI18n().lang === "ar";
+  // Sans montant en dollars (audit v5) : le serveur n'envoie que des heures d'audio
+  if (budget.totalHours !== undefined && budget.totalHours !== null) return <BudgetHours budget={budget} onSaved={onSaved} />;
+  return <BudgetSplitUsd budget={budget} onSaved={onSaved} t={t} ar={ar} />;
+}
+
+/** Plafond de transcription en heures d'audio par jour (administrateur du client) */
+function BudgetHours({ budget, onSaved }: { budget: Data["budget"]; onSaved: () => void }) {
+  const ar = useI18n().lang === "ar";
+  const [hours, setHours] = useState(String(budget.totalHours ?? ""));
+  const [msg, setMsg] = useState("");
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    const res = await fetch("/api/recordings/budget", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hours: Number(hours) }) });
+    setMsg(res.ok ? (ar ? "تم الحفظ." : "Saved.") : ar ? `الحد الأقصى ${budget.maxHours ?? ""} ساعة يومياً.` : `Maximum ${budget.maxHours ?? ""} hours per day.`);
+    if (res.ok) onSaved();
+  }
+  return (
+    <details className="rec-card rec-split-box">
+      <summary>{ar ? "حصة التفريغ اليومية" : "Daily transcription allowance"}</summary>
+      <form className="rec-split rec-total" onSubmit={save}>
+        <label>
+          <span>{ar ? "ساعات الصوت المفرَّغة يومياً (كل القنوات)" : "Hours of audio transcribed per day (all channels)"}</span>
+          <input type="number" min={0} max={budget.maxHours ?? undefined} step={1} value={hours} onChange={(e) => setHours(e.target.value)} dir="ltr" />
+        </label>
+        <p className="ld-hint">
+          {ar ? `الهدف: ${budget.targetHours ?? 24} ساعة على الأقل يومياً. المتبقي اليوم: ${budget.remainingHours ?? "—"} ساعة.` : `Target: at least ${budget.targetHours ?? 24} hours a day. Left today: ${budget.remainingHours ?? "—"} h.`}
+        </p>
+        <button type="submit" className="news-btn news-btn--ghost">
+          {ar ? "حفظ" : "Save"}
+        </button>
+        {msg && <p className="news-status">{msg}</p>}
+      </form>
+    </details>
+  );
+}
+
+function BudgetSplitUsd({ budget, onSaved, t, ar }: { budget: Data["budget"]; onSaved: () => void; t: ReturnType<typeof useText>; ar: boolean }) {
   const [part, setPart] = useState(String(budget.cap));
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const total = budget.totalSet ?? budget.total ?? 65 / 31;
@@ -1219,7 +1261,7 @@ export function Recordings({ channel }: { channel?: string }) {
           <p className="rec-form__est">
             <b>{t.fromTo(hhmm(start), hhmm(end))}</b> · {t.duration} :{" "}
             <b>{t.min(minutes)}</b>
-            {data.admin !== false && (
+            {data.admin === true && (
               <>
                 {" "}
                 · {t.estimate} : <b>≈ {cost.toFixed(3)} $</b> ·{" "}
@@ -1266,6 +1308,7 @@ export function Recordings({ channel }: { channel?: string }) {
       {data && !can && tab === "record" && (
         <p className="news-status">{t.readOnly}</p>
       )}
+      {data && ((techShown = data.admin === true), null)}
       {data &&
         !channel &&
         tab === "record" &&

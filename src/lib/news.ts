@@ -49,7 +49,8 @@ export type NewsItem = {
   country?: string
   reach?: number
   // Fiabilité de la source (réglage du Super Admin, sinon déduite) : affichée sur la carte et dans les rapports
-  reliability?: 'high' | 'medium' | 'low'
+  reliability?: 'high' | 'medium' | 'social' | 'low'
+  sourceTier?: string
   intl?: string
   processed?: { by: string; at: string } | null
   similar?: SimilarItem[]

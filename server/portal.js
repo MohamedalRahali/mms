@@ -9,6 +9,7 @@
  * public court, pas d'indexation des pages de détail sans lien.
  */
 
+import { categoryKey } from './classify.js'
 import { portalSelection, portalSite, publishedOf, typeOf, TYPES } from './portalFeed.js'
 
 const httpUrl = (u) => (/^https?:\/\/[^\s"'<>]+$/i.test(String(u || '')) ? String(u) : '')
@@ -87,7 +88,7 @@ export function portalNews(items, q = {}, selection = null) {
     pages,
     items: found.slice((page - 1) * size, page * size).map((it) => portalItem(it, pinned.has(it.id))),
     facets: {
-      categories: count('category'),
+      categories: count(categoryKey),
       sources: count('origin').slice(0, 40),
       langs: count('lang'),
       types: count(typeOf).sort((a, b) => TYPES.indexOf(a.name) - TYPES.indexOf(b.name)),

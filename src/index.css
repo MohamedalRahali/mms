@@ -4280,6 +4280,10 @@ img.mms-user__avatar--img {
   background: color-mix(in srgb, var(--ink-soft) 12%, transparent);
   color: var(--ink-soft);
 }
+.news-rel--social {
+  background: rgba(70, 120, 200, 0.14);
+  color: light-dark(#2d5a9a, #9cbcf0);
+}
 .news-mini .news-rel__label {
   display: none;
 }
@@ -4819,3 +4823,30 @@ img.mms-user__avatar--img {
     height: 28px;
   }
 }
+
+/* Fournisseur d'IA réellement utilisé (audit v5, constat 1) */
+.ai-provider {
+  margin: 0.4rem 0 0.8rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid light-dark(#d9dee6, rgba(255, 255, 255, 0.12));
+  background: light-dark(#f6f8fb, rgba(255, 255, 255, 0.04));
+  font-size: 0.88rem;
+}
+.ai-provider p { margin: 0; }
+.ai-provider--warn { border-color: #c0392b; background: light-dark(#fdecea, rgba(192, 57, 43, 0.16)); }
+.ai-provider__link { background: none; border: 0; padding: 0; color: var(--accent, #1f6feb); cursor: pointer; text-decoration: underline; font: inherit; }
+.ai-provider__details { margin-top: 0.6rem; display: grid; gap: 0.4rem; overflow-x: auto; }
+.ai-provider__table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.ai-provider__table th, .ai-provider__table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid light-dark(#e3e7ee, rgba(255, 255, 255, 0.08)); text-align: start; vertical-align: top; }
+.ai-provider__term { display: inline-block; margin-inline-end: 0.5rem; font-size: 0.78rem; }
+@media (max-width: 640px) {
+  .ai-provider__table thead { display: none; }
+  .ai-provider__table tr { display: grid; padding: 0.4rem 0; border-bottom: 1px solid light-dark(#e3e7ee, rgba(255, 255, 255, 0.08)); }
+  .ai-provider__table td { border: 0; padding: 0.1rem 0; }
+}
+.mms-note--danger { background: light-dark(#fdecea, rgba(192, 57, 43, 0.18)); color: light-dark(#8e1f14, #f3b3ab); border-inline-start: 4px solid #c0392b; margin-bottom: 0.8rem; }
+
+/* Revue de presse : rubriques médias / réseaux sociaux (audit v5) */
+.mms-report__part { margin: 1.2rem 0 0.4rem; font-size: 1.05rem; border-bottom: 2px solid var(--line, #d9dee6); padding-bottom: 0.25rem; }
+.mms-report__note { font-size: 0.85rem; opacity: 0.8; }

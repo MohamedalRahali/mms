@@ -166,7 +166,55 @@ function save() {
 
 const publicWatch = (w) => {
   const { notified, ...rest } = w
-  return { ...rest, status: statusOf(w), notifiedCount: notified.length }
+  // Veille sans destinataire (ni e-mail ni Telegram) : signalée dans la liste (audit v5)
+  const noRecipients = !(w.recipients || []).length && !(telegramReady() && alertOf(w).channels.includes('telegram'))
+  return { ...rest, status: statusOf(w), notifiedCount: notified.length, noRecipients }
+}
+
+/**
+ * Réparation des veilles programmées (audit produit v5, constat 6) — une seule fois, sauvegarde avant :
+ * - le formulaire proposait « jusqu'à demain » par défaut : les veilles créées ainsi couvraient un seul jour
+ *   (25/10 → 25/10) et passaient « terminées ». Une veille dont la période fait un jour au plus devient glissante
+ *   (sans date de fin) ; l'ancienne date est gardée (previousTo) pour revenir en arrière ;
+ * - les alertes ne repartent que pour les nouvelles actualités (notifyAfter), pas pour tout l'historique ;
+ * - doublons (même nom, mêmes mots et filtres) : la plus ancienne est gardée, les autres sont DÉSACTIVÉES (jamais
+ *   supprimées) et marquées duplicateOf.
+ */
+export function repairWatchesV5(now = new Date()) {
+  const marker = path.join(path.dirname(file), 'watches-reparation-v5.json')
+  if (!file || fs.existsSync(marker)) return null
+  if (fs.existsSync(file)) fs.copyFileSync(file, path.join(path.dirname(file), 'watches.avant-audit-v5.json'))
+  const day = (d) => Date.parse(`${d}T12:00:00Z`)
+  const repaired = []
+  for (const w of watches) {
+    if (w.to && DAY_RE.test(w.from) && DAY_RE.test(w.to) && day(w.to) - day(w.from) <= 86_400_000) {
+      w.previousTo = w.to
+      w.to = null
+      w.notifyAfter = now.toISOString()
+      w.repairedV5 = now.toISOString()
+      repaired.push(w.id)
+    }
+  }
+  const groups = new Map()
+  for (const w of watches) {
+    if (!w.enabled) continue
+    const key = `${normalize(w.name || '')}|${watchSignature(w)}`
+    groups.set(key, [...(groups.get(key) || []), w])
+  }
+  const duplicates = []
+  for (const list of groups.values()) {
+    if (list.length < 2) continue
+    list.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
+    for (const w of list.slice(1)) {
+      w.enabled = false
+      w.duplicateOf = list[0].id
+      w.disabledReason = 'doublon (audit v5) : désactivée, pas supprimée'
+      duplicates.push(w.id)
+    }
+  }
+  save()
+  fs.writeFileSync(marker, JSON.stringify({ at: now.toISOString(), repaired, duplicates }, null, 1))
+  return { repaired, duplicates }
 }
 
 export const listWatches = () => watches.map(publicWatch)
@@ -258,7 +306,8 @@ export function mergeWatches(ids, by = '', name = '') {
 /** Veille déjà active qui surveille la même chose (mêmes mots, filtres, veille et fin de période), ou null */
 export function duplicateOf(candidate) {
   const sig = watchSignature(candidate)
-  const same = watches.find((w) => w.enabled && statusOf(w) !== 'finished' && watchSignature(w) === sig)
+  const sigNoEnd = (w) => watchSignature({ ...w, to: null })
+  const same = watches.find((w) => w.enabled && statusOf(w) !== 'finished' && (watchSignature(w) === sig || sigNoEnd(w) === sigNoEnd(candidate)))
   return same ? { id: same.id, name: same.name, createdBy: same.createdBy || '', status: statusOf(same) } : null
 }
 
@@ -564,7 +613,7 @@ export async function runWatches() {
       const sent = new Set(watch.notified)
       const found = []
       for (const it of items) {
-        if (!inScope(watch, it) || sent.has(itemKey(it))) continue
+        if (!inScope(watch, it) || sent.has(itemKey(it)) || (watch.notifyAfter && it.date < watch.notifyAfter)) continue
         const hits = watchHits(watch, it, texts.get(it.id))
         if (hits) found.push({ it, hits })
       }
@@ -658,6 +707,12 @@ export function applyMailPolicyToWatches() {
 export function startWatches(dataDir) {
   file = path.join(dataDir, 'watches.json')
   load()
+  try {
+    const r = repairWatchesV5()
+    if (r) console.log(`Veilles réparées (audit v5) : ${r.repaired.length} rendues glissantes, ${r.duplicates.length} doublons désactivés`)
+  } catch (err) {
+    console.error('Réparation des veilles :', err.message)
+  }
   applyMailPolicyToWatches()
   onMailPolicyChange(applyMailPolicyToWatches)
   // MMS relit ses données toutes les 30 s ; la veille repasse toutes les 5 min, et dès qu'il y a du nouveau

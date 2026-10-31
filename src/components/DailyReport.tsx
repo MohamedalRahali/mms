@@ -62,7 +62,11 @@ export function DailyReport({ flux, initialDay = '' }: { flux: Flux | ''; initia
   const { t } = i
   const auth = useAuth()
   const [day, setDay] = useState(initialDay)
-  const { data, error, loading } = useFetch<Report & { total?: number; merged?: number }>(`/api/report?day=${day}${flux ? `&flux=${flux}` : ''}`)
+  const { data, error, loading } = useFetch<Report & { total?: number; merged?: number; social?: NewsItem[]; excluded?: number }>(`/api/report?day=${day}${flux ? `&flux=${flux}` : ''}`)
+  const ar = i.lang === 'ar'
+  const REL: Record<string, string> = ar
+    ? { high: 'موثوقية عالية', medium: 'موثوقية متوسطة', social: 'حساب معروف', low: 'غير مؤكد' }
+    : { high: 'high reliability', medium: 'medium reliability', social: 'identified account', low: 'unverified' }
 
   const groups = new Map<string, NewsItem[]>()
   for (const it of data?.items ?? []) groups.set(it.category, [...(groups.get(it.category) ?? []), it])
@@ -103,8 +107,16 @@ export function DailyReport({ flux, initialDay = '' }: { flux: Flux | ''; initia
               {data.demo && t.reportDemo}
               {Boolean(data.merged) && (i.lang === 'ar' ? ` · ${i.num(data.merged ?? 0)} تكرار مدمج` : ` · ${i.num(data.merged ?? 0)} duplicates merged`)}
             </p>
+            {Boolean(data.excluded) && (
+              <p className="mms-report__note">
+                {ar
+                  ? `${i.num(data.excluded ?? 0)} منشوراً من حسابات مجهولة أو منتديات أو تعليقات غير مدرجة في المراجعة الرسمية.`
+                  : `${i.num(data.excluded ?? 0)} posts from anonymous accounts, forums or comments are left out of the official review.`}
+              </p>
+            )}
             <ReviewValidation day={data.day} count={data.items.length} />
           </header>
+          {data.items.length > 0 && <h3 className="mms-report__part">{ar ? 'الوكالات ووسائل الإعلام' : 'Wires and media'}</h3>}
           {ordered.map(([category, items]) => (
             <section key={category} className="mms-report__group">
               <h3>
@@ -120,6 +132,7 @@ export function DailyReport({ flux, initialDay = '' }: { flux: Flux | ''; initia
                     {it.summary && <p dir="auto">{it.summary}</p>}
                     <p className="mms-report__src">
                       {it.origin} · {i.channel(it.channel)}
+                      {it.reliability && ` · ${REL[it.reliability] ?? it.reliability}`}
                       {it.broadcasts > 1 && ` · ${t.broadcastShort(it.broadcasts)}`}
                       {(it as NewsItem & { also?: { origin: string }[] }).also?.length
                         ? ` · ${i.lang === 'ar' ? 'نشرته أيضاً' : 'also in'}: ${[...new Set((it as NewsItem & { also: { origin: string }[] }).also.map((a) => a.origin))].join('، ')}`
@@ -130,6 +143,27 @@ export function DailyReport({ flux, initialDay = '' }: { flux: Flux | ''; initia
               </ul>
             </section>
           ))}
+          {/* Réseaux sociaux : rubrique séparée, comptes identifiés seulement (audit v5) */}
+          {Boolean(data.social?.length) && (
+            <section className="mms-report__group mms-report__group--social">
+              <h3 className="mms-report__part">
+                {ar ? 'منشورات الشبكات الاجتماعية' : 'Social media posts'} <span>({data.social!.length})</span>
+              </h3>
+              <ul>
+                {data.social!.map((it) => (
+                  <li key={it.id}>
+                    <p className="mms-report__line">
+                      <b>{i.time(it.date)}</b>
+                      <strong dir="auto">{it.title}</strong>
+                    </p>
+                    <p className="mms-report__src">
+                      {it.origin} · {i.channel(it.channel)} · {REL[it.reliability ?? 'social']}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </article>
       )}
     </>

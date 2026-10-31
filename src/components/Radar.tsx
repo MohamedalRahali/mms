@@ -86,7 +86,7 @@ function Explain({ kind, id, hours, flux }: { kind: 'story' | 'topic'; id: strin
         {state === 'loading' ? x.explaining : x.why}
       </button>
       {state === 'error' && <p className="news-status news-status--error">{x.explainError}</p>}
-      {state === 'nokey' && <p className="news-status">{i.lang === 'ar' ? 'التحليل الذكي غير مفعّل (مفتاح الذكاء الاصطناعي غير مضبوط).' : 'AI analysis is not enabled (no AI key configured).'}</p>}
+      {state === 'nokey' && <p className="news-status">{i.t.aiNoKey}</p>}
     </>
   )
 }

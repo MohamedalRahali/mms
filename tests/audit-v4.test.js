@@ -198,7 +198,11 @@ test("erreurs : jamais le message brut d'un outil pour les non-administrateurs",
   const [r] = redactErrors([{ id: 'a', erreur: 'yt-dlp: ERROR https://github.com/yt-dlp/yt-dlp/issues' }])
   assert.equal(/github|yt-dlp/.test(r.erreur), false)
   assert.equal(isAdminReq({ user: { role: 'viewer' }, perms: { actions: [] } }), false)
+  // Audit v5 (constat 7) : détail technique réservé au Super Admin, même pour l'administrateur du client
+  assert.equal(isAdminReq({ user: { role: 'admin' } }), false)
+  process.env.MMS_SHOW_TECH = '1'
   assert.equal(isAdminReq({ user: { role: 'admin' } }), true)
+  delete process.env.MMS_SHOW_TECH
 })
 
 test('conservation : audio des fiches alertées gardé, entrées de plus de 90 jours retirées', async () => {

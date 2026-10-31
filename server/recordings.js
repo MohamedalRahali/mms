@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import express from 'express'
-import { isAdminReq, redactErrors } from './redact.js'
+import { hoursOnly, isAdminReq, redactErrors } from './redact.js'
 import { fileURLToPath } from 'node:url'
 import { passagesOf } from './broadcast.js'
 import { liveSources } from './live.js'
@@ -380,7 +380,10 @@ export function mountRecordings(app) {
       const channels = recordableChannels().map(({ stream, ...c }) => c)
       // Non-administrateurs : codes d'erreur lisibles seulement ; « admin » dit à l'interface d'afficher les coûts
       const admin = isAdminReq(req)
-      return { items: admin ? items : redactErrors(items), channels: admin ? channels : redactErrors(channels), limits: LIMITS, budget: budgetOf(list, st, now), veille: { maj: st?.maj || null }, admin }
+      // Sans détail technique : erreurs en codes, budget en heures d'audio, ni coût ni plafond en dollars (audit v5)
+      const budget = budgetOf(list, st, now)
+      const clean = (xs) => redactErrors(xs).map(({ cout, estimate, ...rest }) => rest)
+      return { items: admin ? items : clean(items), channels: admin ? channels : redactErrors(channels), limits: admin ? LIMITS : { ...LIMITS, costPerMinute: undefined, defaultPart: undefined, maxDailyTotal: undefined }, budget: admin ? budget : { ...hoursOnly(budget), cap: 0, remaining: 0, total: 0 }, veille: { maj: st?.maj || null }, admin }
     }),
   )
 
@@ -401,6 +404,11 @@ export function mountRecordings(app) {
     express.json({ limit: '1kb' }),
     wrap((req) => {
       // { total } : plafond total du jour (toutes chaînes) ; { part } : part des demandes dans ce plafond
+      // { hours } : même plafond exprimé en heures d'audio (application client, sans montant en dollars — audit v5)
+      if (req.body?.hours !== undefined) {
+        const total = setTotal(Math.round(Number(req.body.hours) * 60 * LIMITS.costPerMinute * 1000) / 1000)
+        return { hours: Math.round((total / (60 * LIMITS.costPerMinute)) * 10) / 10 }
+      }
       if (req.body?.total !== undefined) return { total: setTotal(req.body.total) }
       return { part: setPart(req.body?.part) }
     }),

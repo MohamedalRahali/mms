@@ -344,7 +344,8 @@ type Dash = {
   keys?: { mms: KeyRow[]; libye: KeyRow[] | null }
   aiUsage?: { month: string; current: Record<string, UsageRow>; total: Record<string, UsageRow> }
   aiStatus?: AiStatus
-  audit?: { total: number; last7: Record<string, number>; actors: string[]; intact: boolean }
+  audit?: { total: number; last7: Record<string, number>; actors: string[]; intact: boolean; shared?: { count: number; last: { t: string; action: string; actor: string } | null; accounts: string[] } }
+  accounts?: { shared: { email: string; disabled: boolean; readOnly: boolean }[]; otherAdmin: string; seed: { email: string; pending: boolean; linkActive: boolean; mfa: boolean } | null }
 }
 type AiStatus = {
   main: string
@@ -409,6 +410,52 @@ function AiEngines({ s: initial }: { s: AiStatus }) {
     </Card>
   )
 }
+/** Comptes partagés (audit v5) : usage signalé en rouge, lecture seule, compte nominatif à activer par lien */
+function SharedAccounts({ a, usage }: { a: NonNullable<Dash['accounts']>; usage?: NonNullable<Dash['audit']>['shared'] }) {
+  const [link, setLink] = useState<{ link: string; exp: string } | null>(null)
+  const { msg, act } = useAct()
+  if (!a.shared.length && !a.seed) return null
+  return (
+    <Card title="الحسابات المشتركة والحساب الاسمي">
+      {usage && usage.count > 0 && (
+        <p className="sa-error" role="alert">
+          ⚠ استُعمل حساب مشترك {usage.count} مرة خلال 7 أيام ({usage.accounts.join('، ')})
+          {usage.last && ` — آخر عملية: ${usage.last.action} في ${fmtDate(usage.last.t)}`}. كل عملية بحساب مشترك لا تُنسب إلى شخص بعينه.
+        </p>
+      )}
+      <ul className="sa-list">
+        {a.shared.map((s) => (
+          <li key={s.email}>
+            <span dir="ltr">{s.email}</span>{' '}
+            <span className={s.disabled ? 'sa-tag' : s.readOnly ? 'sa-tag is-warn' : 'sa-tag is-bad'}>{s.disabled ? 'معطّل' : s.readOnly ? 'قراءة فقط' : 'نشط بكامل الصلاحيات'}</span>
+          </li>
+        ))}
+        {a.seed && (
+          <li>
+            الحساب الاسمي <span dir="ltr">{a.seed.email}</span>{' '}
+            <span className={a.seed.pending ? 'sa-tag is-warn' : 'sa-tag is-ok'}>{a.seed.pending ? 'بانتظار التفعيل' : 'مفعّل'}</span>{' '}
+            {!a.seed.pending && <span className={a.seed.mfa ? 'sa-tag is-ok' : 'sa-tag is-warn'}>{a.seed.mfa ? 'التحقق بخطوتين مفعّل' : 'التحقق بخطوتين غير مفعّل'}</span>}{' '}
+            {a.seed.pending && (
+              <button type="button" className="sa-btn" onClick={() => act(async () => setLink(await api<{ link: string; exp: string }>(`/users/${encodeURIComponent(a.seed!.email)}/activation`, 'POST')))}>
+                إنشاء رابط التفعيل
+              </button>
+            )}
+          </li>
+        )}
+      </ul>
+      {link && (
+        <p>
+          رابط لمرة واحدة، صالح حتى {fmtDate(link.exp)} — يُرسل لصاحب الحساب فقط ليختار كلمة مروره:{' '}
+          <input className="sa-input" dir="ltr" readOnly value={link.link} onFocus={(e) => e.currentTarget.select()} style={{ width: '100%' }} />
+        </p>
+      )}
+      {msg && <p className="sa-muted">{msg}</p>}
+      <p className="sa-muted">
+        الحساب المشترك يصبح للقراءة فقط ما دام يوجد مدير آخر غير معطّل، ويُعطَّل نهائياً (دون حذف) عندما يفعّل مدير اسمي التحقق بخطوتين. مستخدمو العميل غير معنيين. تعليق القاعدة: MMS_KEEP_SHARED=1.
+      </p>
+    </Card>
+  )
+}
 type KeyRow = { name: string; set: boolean; budget?: number }
 type UsageRow = { runs: number; input: number; output: number; cost: number }
 
@@ -433,6 +480,7 @@ function Dashboard({ onUser }: { onUser: (e: string) => void }) {
         {d.audit && <Kpi label="سجل التدقيق" value={d.audit.intact ? `${fmtNum(d.audit.total)} · سليم` : 'سلسلة مكسورة'} tone={d.audit.intact ? 'ok' : 'bad'} />}
       </div>
       {d.aiStatus && <AiEngines s={d.aiStatus} />}
+      {d.accounts && <SharedAccounts a={d.accounts} usage={d.audit?.shared} />}
 
       <Card title="المتصلون الآن">
         {d.online.length ? (
@@ -568,7 +616,7 @@ function Dashboard({ onUser }: { onUser: (e: string) => void }) {
 
 /* ---------------------------------------------------------------- المستخدمون */
 
-type UserRow = { email: string; name: string; role: string; profile?: string; profileName?: string; disabled: boolean; mfa?: boolean; createdAt: string | null; online: boolean; lastSeen: string | null; lastIp: string; country: string; sessions: number; fails: number; note: string }
+type UserRow = { email: string; name: string; role: string; profile?: string; profileName?: string; disabled: boolean; shared?: boolean; pending?: boolean; mfa?: boolean; createdAt: string | null; online: boolean; lastSeen: string | null; lastIp: string; country: string; sessions: number; fails: number; note: string }
 const FILTERS: [string, string][] = [
   ['all', 'الكل'],
   ['online', 'متصل'],
@@ -719,7 +767,11 @@ function Team({ onUser }: { onUser: (e: string) => void }) {
                       onChange={(id) => run(() => api(path(u.email), 'PATCH', { profile: id }).then(() => loadCatalog(true)), id ? 'تم إسناد ملف الصلاحيات.' : 'عاد الحساب إلى صلاحيات دوره.')}
                     />
                   </td>
-                  <td>{u.disabled ? <span className="sa-tag is-bad">معطّل</span> : u.online ? <span className="sa-tag is-ok">متصل</span> : <span className="sa-tag">مفعّل</span>}</td>
+                  <td>
+                    {u.disabled ? <span className="sa-tag is-bad">معطّل</span> : u.online ? <span className="sa-tag is-ok">متصل</span> : <span className="sa-tag">مفعّل</span>}
+                    {u.shared && <span className="sa-tag is-bad">حساب مشترك</span>}
+                    {u.pending && <span className="sa-tag is-warn">بانتظار التفعيل</span>}
+                  </td>
                   <td>
                     <div className="sa-row">
                       <button type="button" className="sa-btn sa-btn--ghost" onClick={() => setReset({ email: u.email, password: '' })}>

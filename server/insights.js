@@ -1,6 +1,7 @@
 import { compileQuery, searchText } from './query.js'
 import { sourceSplit, uniqueItems } from './dedupe.js'
-import { collectionStart } from './history.js'
+import { collectionStartDay, coveredDays } from './history.js'
+import { categoryCounts } from './classify.js'
 import { normalize } from './watches.js'
 import { countList, findSpikes } from './intel.js'
 import { dedupeStories } from './radar.js'
@@ -114,30 +115,46 @@ function pair(cur, prev, limit = 12) {
 }
 
 /**
- * Jours de chaque période couverts par la collecte (début des données = fiche la plus ancienne). Quand la période
- * précédente n'est couverte qu'en partie, la comparaison se fait à jours égaux : moyenne par jour couvert.
+ * Jours de chaque période réellement couverts par la collecte (server/history.js coveredDays : un jour de montée en
+ * charge ou de reprise d'historique clairsemée ne compte que pour la part du volume habituel qu'il atteint). Quand la
+ * période précédente n'est couverte qu'en partie, la comparaison se fait à jours égaux : moyenne par jour couvert.
  */
 export function coverageOf(items, days, now = Date.now()) {
-  // Début de la collecte à plein régime (server/history.js), pas l'article le plus ancien
-  const start = collectionStart(items) ?? now
-  const span = (a, b) => Math.max(0, Math.min(b - Math.max(a, start), b - a)) / DAY_MS
-  const current = Math.round(span(now - days * DAY_MS, now) * 10) / 10
-  const previous = Math.round(span(now - 2 * days * DAY_MS, now - days * DAY_MS) * 10) / 10
-  return { days, current, previous, partial: previous < days - 0.5 }
+  const r1 = (x) => Math.round(x * 10) / 10
+  const current = r1(coveredDays(items, now - days * DAY_MS, now, now))
+  const previous = r1(coveredDays(items, now - 2 * days * DAY_MS, now - days * DAY_MS, now))
+  const start = collectionStartDay(items, now)
+  return { days, current, previous, partial: previous < days - 0.5, since: start }
 }
+
+// Base minimale : sous 5, pas de pourcentage ; sous 20, pas de multiplicateur (×16 sur 10 articles ne veut rien dire)
+export const MIN_BASE = 5
+export const MIN_BASE_MULTIPLIER = 20
 
 /**
  * Variation en % juste : la valeur précédente ramenée aux mêmes jours couverts que la période en cours.
- * null : pas de comparaison possible ; 'new' : base trop petite (moins de 5 ou moins d'un jour couvert).
+ * null : pas de comparaison possible ; 'new' : base trop petite (moins de 5, moins d'un jour couvert, ou hausse de
+ * plus de 100 % sur une base de moins de 20).
  */
 export function fairChange(cur, prev, cov) {
   // Période précédente couverte à moins de moitié : par défaut, % calculé sur la moyenne par jour des jours couverts
-  // (depuis le début de la collecte à plein régime, base indiquée à l'écran) ; MMS_PCT_PARTIAL=hide : « جديد » à la place
+  // (base indiquée à l'écran) ; MMS_PCT_PARTIAL=hide : « جديد » à la place
   if (!cov || cov.previous < 1 || cov.current <= 0) return cur ? 'new' : null
   if (process.env.MMS_PCT_PARTIAL === 'hide' && cov.previous < cov.days / 2) return cur ? 'new' : null
   const base = prev * (cov.current / cov.previous)
-  if (base < 5) return cur ? 'new' : null
-  return Math.round(((cur - base) / base) * 100)
+  if (base < MIN_BASE) return cur ? 'new' : null
+  const pct = Math.round(((cur - base) / base) * 100)
+  if (pct > 100 && base < MIN_BASE_MULTIPLIER) return 'new'
+  return pct
+}
+
+/** Phrase « la période précédente ne couvre que X jours » (page, rapport exécutif, exports), ou '' */
+export function coverageNote(cov, lang = 'ar') {
+  if (!cov?.partial) return ''
+  const x = Math.round(cov.previous * 10) / 10
+  return lang === 'en'
+    ? `The previous period only covers ${x} of ${cov.days} days (collection complete since ${cov.since || '—'}): changes compare daily averages of covered days.`
+    : `الفترة السابقة لا تغطي إلا ${x} يوم من ${cov.days} (التغطية كاملة منذ ${cov.since || '—'}): النسب تقارن المتوسط اليومي للأيام المغطاة.`
 }
 
 /** Période en cours (days derniers jours) contre la même durée juste avant */
@@ -156,7 +173,8 @@ export function comparePeriods(items, days) {
     coverage: coverageOf(items, days, now),
     current: profile(cur),
     previous: profile(prev),
-    categories: pair(counts(uCur, 'category'), counts(uPrev, 'category')),
+    // Même classification que l'analyse et le portail (server/classify.js) : « دولي » découpé par zone
+    categories: pair(categoryCounts(uCur), categoryCounts(uPrev)),
     sources: pair(counts(cur, 'origin'), counts(prev, 'origin')),
     channels: pair(counts(cur, 'channel'), counts(prev, 'channel')),
     people: pair(countList(uCur, 'people', 30), countList(uPrev, 'people', 30)),
@@ -190,6 +208,7 @@ export function buildBriefing(items, days) {
     current: cmp.current,
     previous: cmp.previous,
     coverage: cmp.coverage,
+    coverageNote: { ar: coverageNote(cmp.coverage, 'ar'), en: coverageNote(cmp.coverage, 'en') },
     change: fairChange(cmp.current.total, cmp.previous.total, cmp.coverage),
     categories: cmp.categories.slice(0, 6),
     people: cmp.people.slice(0, 6),
@@ -210,6 +229,8 @@ export function briefingFacts(b) {
   const tp = b.previous.tones
   return [
     `Période : ${b.days} derniers jours. ${b.current.total} actualités (période précédente : ${b.previous.total}), ${b.current.sources} sources.`,
+    // Couverture partielle : l'IA ne doit pas présenter une hausse qui vient du démarrage de la collecte
+    b.coverage?.partial ? `ATTENTION : la période précédente n'est couverte par la collecte que sur ${Math.round(b.coverage.previous * 10) / 10} jours sur ${b.days} ; ne présente aucune hausse ou baisse globale comme un fait, compare seulement des moyennes par jour.` : '',
     `Tonalité : positif ${t.positive}, neutre ${t.neutral}, négatif ${t.negative} (avant : ${tp.positive} / ${tp.neutral} / ${tp.negative}).`,
     `Thèmes : ${b.categories.map(row).join(' ; ')}.`,
     `Personnalités : ${b.people.map(row).join(' ; ')}.`,

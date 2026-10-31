@@ -1019,3 +1019,7 @@ textarea.sa-input {
     box-shadow: none;
   }
 }
+
+/* Compte partagé dans le journal d'audit (audit v5) */
+.sa-row--shared td { background: rgba(192, 57, 43, 0.12); }
+.sa-row--shared td:first-child { box-shadow: inset 3px 0 0 #c0392b; }

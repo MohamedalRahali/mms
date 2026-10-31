@@ -633,6 +633,14 @@ export default function App() {
                   </aside>
 
                   <main className="mms-main">
+                    {/* Compte partagé (audit v5) : aucune action ne peut être attribuée à une personne */}
+                    {auth?.user?.shared && (
+                      <p className="mms-note mms-note--danger" role="alert">
+                        {lang === 'ar'
+                          ? `حساب مشترك${auth.user.readOnly ? ' للقراءة فقط' : ''}: كل عملية بهذا الحساب تُسجَّل وتظهر باللون الأحمر لدى الإدارة. استعملوا حساباً اسمياً.`
+                          : `Shared account${auth.user.readOnly ? ' (read-only)' : ''}: every action is logged and flagged in red to administrators. Please use a named account.`}
+                      </p>
+                    )}
                     {/* Bouton « رجوع » : toujours vers les tableaux de bord (demande du client) ; le retour du navigateur garde
                         l'historique page par page */}
                     {shown !== 'dashboard' && (

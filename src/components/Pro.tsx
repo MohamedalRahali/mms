@@ -473,6 +473,7 @@ type Briefing = {
   current: Profile
   previous: Profile
   coverage?: Coverage
+  coverageNote?: { ar: string; en: string }
   change: number | 'new' | null
   categories: Pair[]
   people: Pair[]
@@ -536,6 +537,9 @@ function ScheduleForm() {
   return (
     <section className="mms-panel mms-schedule mms-noprint">
       <h3>{p.brSchedule}</h3>
+      {form.enabled && !recipients.trim() && !(form.telegram && form.telegramReady) && (
+        <p className="news-status news-status--error">{p.brNoRecipients}</p>
+      )}
       <label className="mms-check">
         <input type="checkbox" checked={form.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
         {p.brEnabled}
@@ -676,6 +680,7 @@ export function ExecutiveBriefing({ flux }: { flux: Flux | '' }) {
               </p>
             )}
           </header>
+          {data.coverageNote?.[i.lang === 'en' ? 'en' : 'ar'] && <p className="mms-note">{data.coverageNote[i.lang === 'en' ? 'en' : 'ar']}</p>}
           <div className="mms-stats">
             <Stat index={0} label={p.cmpTotal} cur={data.current.total} prev={data.previous.total} />
             <Stat index={1} label={p.cmpSources} cur={data.current.sources} prev={data.previous.sources} />

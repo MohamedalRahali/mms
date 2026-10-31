@@ -58,7 +58,7 @@ function WatchForm({ onCreated }: { onCreated: () => void }) {
   const [flux, setFlux] = useState<Flux | ''>('')
   const [from, setFrom] = useState(today())
   const [to, setTo] = useState(tomorrow())
-  const [permanent, setPermanent] = useState(false)
+  const [permanent, setPermanent] = useState(true)
   const [recipients, setRecipients] = useState('')
   const [alert, setAlert] = useState(DEFAULT_ALERT)
   const [visibility, setVisibility] = useState<WatchVisibility>('team')
@@ -268,6 +268,21 @@ function WatchRow({ watch, onChange, onOpen, nameOf }: { watch: Watch; onChange:
           </>
         )}
       </p>
+      {watch.enabled && watch.noRecipients && (
+        <p className="news-status news-status--error">
+          {i.lang === 'ar' ? '⚠ لا مستلم لهذا الرصد: لن يُرسل أي تنبيه. أضيفوا بريداً (مثلاً ‎@npdc.gov.ly) أو فعّلوا Telegram.' : '⚠ This watch has no recipient: no alert will be sent. Add an email (e.g. @npdc.gov.ly) or turn on Telegram.'}
+        </p>
+      )}
+      {watch.duplicateOf && (
+        <p className="mms-watch__meta">
+          {i.lang === 'ar' ? 'نسخة مكررة (معطّلة دون حذف) من' : 'Duplicate (disabled, not deleted) of'}: <b dir="auto">{nameOf(watch.duplicateOf)}</b>
+        </p>
+      )}
+      {watch.previousTo && (
+        <p className="mms-watch__meta">
+          {i.lang === 'ar' ? `أصبح الرصد مستمراً (كان محصوراً في يوم واحد حتى ${watch.previousTo}).` : `Now a rolling watch (it was limited to one day, until ${watch.previousTo}).`}
+        </p>
+      )}
       {watch.mergedInto && (
         <p className="mms-watch__meta">
           {i.lang === 'ar' ? 'مدمج في' : 'Merged into'}: <b dir="auto">{nameOf(watch.mergedInto)}</b>
