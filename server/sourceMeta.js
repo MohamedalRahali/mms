@@ -153,11 +153,38 @@ export function sourceTier(it) {
 
 const TIER_LEVEL = { agency: 'high', established: 'high', online: 'medium', social: 'social', anonymous: 'low', forum: 'low' }
 
-/** Fiabilité d'une source : réglage du Super Admin, sinon déduite du type de source (sourceTier) */
+/*
+ * Plateformes ouvertes (audit v6 : « Medium · Libya » affiché « موثوقية عالية ») : n'importe qui peut y publier.
+ * Une source qui y est hébergée ne dépasse jamais « متوسطة » (publication, blog) ni « حساب » (compte d'un réseau
+ * ouvert : Bluesky, Mastodon, Reddit, Tumblr…), même réglée plus haut ou trouvée dans le catalogue de la veille.
+ */
+const OPEN_HOSTS = ['medium.com', 'substack.com', 'blogspot.com', 'blogger.com', 'wordpress.com', 'tumblr.com', 'reddit.com', 'bsky.app', 'bsky.social', 'mastodon.social', 'mastodon.online', 'wixsite.com', 'weebly.com', 'over-blog.com', 'quora.com', 'telegra.ph', 'livejournal.com', 'ghost.io', 'hashnode.dev', 'tistory.com']
+const OPEN_ACCOUNT_HOSTS = ['tumblr.com', 'reddit.com', 'bsky.app', 'bsky.social', 'mastodon.social', 'mastodon.online', 'quora.com']
+const OPEN_NAME = /\b(medium|substack|blogspot|blogger|wordpress|tumblr|reddit|bluesky|mastodon)\b|ميديوم|منتدى|منتديات|\bforums?\b/i
+const hostOf = (url) => {
+  try {
+    return new URL(url || '').hostname.toLowerCase().replace(/^www\./, '')
+  } catch {
+    return ''
+  }
+}
+const onHost = (host, list) => list.some((h) => host === h || host.endsWith(`.${h}`))
+/** Plafond de fiabilité d'une plateforme ouverte : 'medium' (publication), 'social' (compte), ou '' (pas une plateforme ouverte) */
+export function openPlatformCap(it) {
+  const host = hostOf(it?.url)
+  const mastodon = /(^|\.)mastodon\.|(^|\.)mstdn\./.test(host)
+  if (onHost(host, OPEN_ACCOUNT_HOSTS) || mastodon || ['bluesky', 'mastodon', 'reddit', 'tumblr'].includes(it?.channel)) return 'social'
+  if (onHost(host, OPEN_HOSTS) || OPEN_NAME.test(it?.origin || '')) return 'medium'
+  return ''
+}
+const LEVEL_RANK = { high: 0, medium: 1, social: 2, low: 3 }
+
+/** Fiabilité d'une source : réglage du Super Admin, sinon déduite du type de source (sourceTier) ; plafonnée sur les plateformes ouvertes */
 export function reliabilityOf(it) {
   const set = meta[it?.origin]?.reliability
-  if (set) return set
-  return TIER_LEVEL[sourceTier(it)] || 'medium'
+  const level = set || TIER_LEVEL[sourceTier(it)] || 'medium'
+  const cap = openPlatformCap(it)
+  return cap && LEVEL_RANK[level] < LEVEL_RANK[cap] ? cap : level
 }
 export const reliabilityIsSet = (origin) => Boolean(meta[origin]?.reliability)
 

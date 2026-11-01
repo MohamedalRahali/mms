@@ -47,6 +47,58 @@ export function plausibleName(raw) {
   return words.every((w) => /^[\p{L}][\p{L}'’.-]*$/u.test(w) && (w.replace(/[.'’-]/g, '').length >= 2 || /^\p{Lu}\.$/u.test(w)))
 }
 
+/*
+ * Audit v6 (constat 3 : 180 fiches dont des fragments et des institutions, « شؤون المرور والترخيص بمديرية »,
+ * « السجل المدني حي الأندلس », « النائب العام », « إلى إقرار البرلمان في ») : seuls les noms de personnes plausibles
+ * restent. Mots d'institutions, de titres et de fragments comparés après retrait des préfixes (و، ف، ب، ل، ك، ال) ;
+ * prépositions en tête ou en fin ; « ال » sur tous les mots (« السجل المدني ») ; mots d'institutions en latin.
+ */
+const AR_EXCLUDED = new Set(
+  (
+    'مديريه شؤون سجل مدني حي نائب عام برلمان اقرار وزاره وزارات وزير مجلس هيئه مصلحه اداره مكتب جهاز بلديه مؤسسه شركه مصرف بنك جامعه لجنه قسم مركز مرور ترخيص ' +
+    'حكومه رئاسه رئيس ديوان محكمه نيابه امن شرطه جيش كتيبه قوات اتحاد نادي منظمه جمعيه نقابه سفاره قنصليه وكاله اذاعه قناه صحيفه موقع ' +
+    // Titres (les mots qui sont aussi des prénoms, رائد، بيان، هلال، سعادة، الحاج, sont laissés de côté)
+    'دكتور سيد سيده شيخ مستشار لواء عقيد عميد مقدم نقيب استاذ مهندس معالي فخامه ' +
+    'مدينه منطقه شارع طريق مستشفي مدرسه كليه معهد ميناء مطار فرع عمليات خدمات تحقيقات اخبار تقرير ' +
+    'ليبيا طرابلس بنغازي مصراته سبها الاندلس'
+  ).split(/\s+/),
+)
+const PREPOSITIONS = new Set(['الي', 'إلى', 'في', 'من', 'على', 'علي', 'عن', 'مع', 'بين', 'حول', 'او', 'و'].map((w) => norm(w)))
+const LATIN_EXCLUDED = /\b(ministry|ministers?|office|council|agency|department|bank|company|corporation|university|committee|cent(er|re)|authority|municipality|government|association|foundation|institute|organi[sz]ation|press|news|media|radio|tv|channel|network|group|services?|court|police|embassy|parliament|union|club|libya|tripoli|benghazi|observer|herald|review|update|of|the|and|for)\b/i
+const strip = (w) => {
+  let x = norm(w)
+  const out = [x]
+  if (/^[وفبلك]/.test(x) && x.length > 3) out.push((x = x.slice(1)))
+  if (x.startsWith('ال') && x.length > 3) out.push(x.slice(2))
+  if (x.startsWith('لل') && x.length > 3) out.push(x.slice(2))
+  return out
+}
+
+/**
+ * Raison du rejet d'un nom (audit v6), ou '' s'il est plausible : 'format' (pas un nom complet), 'institution' (mot
+ * d'institution, de titre ou de lieu), 'fragment' (préposition en tête ou en fin), 'articles' (« ال » sur tous les mots).
+ */
+export function nameRejection(raw) {
+  const a = String(raw || '').replace(/\s+/g, ' ').trim()
+  if (!plausibleName(a)) return 'format'
+  const words = a.split(' ')
+  if (/[\p{Script=Arabic}]/u.test(a)) {
+    const n = words.map(norm)
+    if (PREPOSITIONS.has(n[0]) || PREPOSITIONS.has(n[n.length - 1])) return 'fragment'
+    if (words.some((w) => strip(w).some((x) => AR_EXCLUDED.has(x)))) return 'institution'
+    if (n.every((w) => w.startsWith('ال'))) return 'articles'
+    return ''
+  }
+  if (LATIN_EXCLUDED.test(a)) return 'institution'
+  // Nom latin : chaque mot commence par une majuscule (particules courtes permises : al, el, ben, bin, de, van…)
+  if (!words.every((w) => /^\p{Lu}/u.test(w) || /^(al|el|ben|bin|abu|abd|de|da|di|del|van|von|le|la)$/i.test(w))) return 'format'
+  return ''
+}
+
+// Seuils d'une fiche de journaliste : au moins 2 signatures et un média identifié (audit v6)
+export const MIN_SIGNATURES = 2
+const unknownOutlet = (o) => !String(o || '').trim() || /^(unknown|inconnu|غير معروف|—|-)$/i.test(String(o).trim())
+
 /** Signature trouvée dans le texte quand le flux n'en donne pas (« بقلم: … », « كتب … », « By … ») */
 export function bylineOf(it) {
   const text = `${it.summary || ''} ${it.text || ''}`.slice(0, 600)
@@ -88,15 +140,19 @@ export function directory(items, now = Date.now()) {
     if (it.date > p.last) p.last = it.date
     p.byMonth[month(it.date)] = (p.byMonth[month(it.date)] || 0) + 1
   }
+  const all = [...people.values()]
+    .map((p) => ({
+      ...p,
+      libyan: p.lyCount * 2 >= p.count,
+      outlets: [...p.outlets.entries()].filter(([name]) => !unknownOutlet(name)).sort((x, y) => y[1] - x[1]).map(([name, count]) => ({ name, count })),
+      themes: [...p.themes.entries()].sort((x, y) => y[1] - x[1]).slice(0, 4).map(([name, count]) => ({ name, count })),
+    }))
+    .map((p) => ({ ...p, rejected: nameRejection(p.name) || (p.count < MIN_SIGNATURES ? 'signatures' : !p.outlets.length ? 'outlet' : '') }))
+    .sort((x, y) => y.count - x.count)
   const data = {
-    journalists: [...people.values()]
-      .map((p) => ({
-        ...p,
-        libyan: p.lyCount * 2 >= p.count,
-        outlets: [...p.outlets.entries()].sort((x, y) => y[1] - x[1]).map(([name, count]) => ({ name, count })),
-        themes: [...p.themes.entries()].sort((x, y) => y[1] - x[1]).slice(0, 4).map(([name, count]) => ({ name, count })),
-      }))
-      .sort((x, y) => y.count - x.count),
+    // Fiches rejetées masquées, jamais supprimées (rien n'est stocké) : comptées, et listées avec la raison pour l'admin
+    journalists: all.filter((p) => !p.rejected).map(({ rejected, ...p }) => p),
+    excluded: all.filter((p) => p.rejected).map((p) => ({ name: p.name, reason: p.rejected, count: p.count, outlets: p.outlets.slice(0, 3) })),
     media: [...media.values()].map((m) => ({ ...m, channels: [...m.channels], authors: [...m.authors].slice(0, 50) })).sort((x, y) => y.count - x.count),
   }
   memo = { items, at: now, data }
@@ -104,7 +160,7 @@ export function directory(items, now = Date.now()) {
 }
 
 /** Liste filtrée (type, recherche, libyens seulement), paginée */
-export function directoryList(items, { kind = 'journalist', q = '', libyan = '1', page = 1, size = 30 } = {}) {
+export function directoryList(items, { kind = 'journalist', q = '', libyan = '1', page = 1, size = 30 } = {}, { admin = false } = {}) {
   const d = directory(items)
   const needle = norm(q).slice(0, 100)
   let list = kind === 'media' ? d.media : d.journalists
@@ -117,7 +173,9 @@ export function directoryList(items, { kind = 'journalist', q = '', libyan = '1'
     total: list.length,
     page: p,
     pages,
-    counts: { journalists: d.journalists.length, libyanJournalists: d.journalists.filter((x) => x.libyan).length, media: d.media.length, libyanMedia: d.media.filter((x) => x.libyan).length },
+    counts: { journalists: d.journalists.length, libyanJournalists: d.journalists.filter((x) => x.libyan).length, media: d.media.length, libyanMedia: d.media.filter((x) => x.libyan).length, excluded: d.excluded.length },
+    // Liste des noms écartés avec la raison : administrateurs seulement
+    ...(admin && kind === 'journalist' ? { excluded: d.excluded.slice(0, 500) } : {}),
     rows: list.slice((p - 1) * n, p * n).map(({ byMonth, lyCount, ...x }) => x),
   }
 }
@@ -166,7 +224,7 @@ export function directoryEntry(items, kind, name, now = Date.now()) {
 }
 
 export function mountJournalists(app, { getItems }) {
-  app.get('/api/journalists', (req, res) => res.json(directoryList(getItems().items, req.query)))
+  app.get('/api/journalists', (req, res) => res.json(directoryList(getItems().items, req.query, { admin: (req.user?.role || 'admin') === 'admin' })))
   app.get('/api/journalists/entry', (req, res) => {
     const kind = req.query.kind === 'media' ? 'media' : 'journalist'
     const e = directoryEntry(getItems().items, kind, String(req.query.name || '').slice(0, 200))

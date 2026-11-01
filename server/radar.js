@@ -191,6 +191,26 @@ export function isFragment(key, label = key) {
   return FRAGMENT_HEADS.has(normalize(first))
 }
 
+/*
+ * Bruit religieux (audit v6 : « الدولية للقرآن » marqué « جديد ») : concours et cercles de récitation du Coran, Awqaf,
+ * prêches. Un sujet est écarté des sujets émergents si son libellé en relève, ou si la plupart de ses fiches en
+ * parlent. Les fiches restent dans le fil et les recherches.
+ */
+// Formes normalisées, sans « ال » (« للقرآن » doit aussi correspondre)
+// « مسابقة » et « حفظه » seuls sont trop ambigus (concours sportif, « il l'a gardé ») : seulement avec le Coran
+const RELIGIOUS = ['قران', 'قرءان', 'تحفيظ', 'حفظه كتاب الله', 'حفظ كتاب الله', 'اوقاف', 'تلاوه', 'ترتيل', 'تجويد', 'مصحف', 'كتاتيب', 'خطبه الجمعه', 'شوون الاسلاميه', 'مولد النبوي', 'quran', 'koran', 'awqaf']
+const religiousText = (t) => {
+  const n = normalize(t)
+  return RELIGIOUS.some((w) => n.includes(w))
+}
+export function isReligiousNoise(label, docs = []) {
+  if (religiousText(label)) return true
+  const list = [...docs]
+  if (!list.length) return false
+  const hits = list.filter((it) => religiousText(`${it.title} ${it.summary || ''}`)).length
+  return hits / list.length >= 0.6
+}
+
 /**
  * Sujets dont la fréquence explose : documents de la fenêtre récente comparés à la moyenne par fenêtre
  * équivalente des 7 jours précédents. Un sujet doit apparaître dans au moins 3 fiches et 2 sources.
@@ -225,6 +245,7 @@ export function emergingTopics(items, { hours = 24, now = Date.now(), limit = 15
   for (const s of stats.values()) {
     if (s.recent < 3 || s.sources.size < 2) continue
     if (isFragment(s.key, [...s.labels.entries()].sort((a, b) => b[1] - a[1])[0][0])) continue
+    if (isReligiousNoise([...s.labels.entries()].sort((a, b) => b[1] - a[1])[0][0], s.docs)) continue
     const avg = s.base / slots
     const growth = (s.recent + 1) / (avg + 1)
     if (growth < 2) continue

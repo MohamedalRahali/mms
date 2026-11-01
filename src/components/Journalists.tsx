@@ -10,7 +10,8 @@ import { PageHead } from './Extras'
 
 type Kind = 'journalist' | 'media'
 type Row = { name: string; kind: Kind; count: number; first: string; last: string; libyan?: boolean; themes?: { name: string; count: number }[]; outlets?: { name: string; count: number }[]; channels?: string[]; authors?: string[]; reliability?: string }
-type List = { total: number; page: number; pages: number; counts: { journalists: number; libyanJournalists: number; media: number; libyanMedia?: number }; rows: Row[] }
+type Excluded = { name: string; reason: string; count: number }
+type List = { total: number; page: number; pages: number; counts: { journalists: number; libyanJournalists: number; media: number; libyanMedia?: number; excluded?: number }; rows: Row[]; excluded?: Excluded[] }
 type Brief = { id: string; title: string; origin: string; date: string; url: string }
 type Entry = Row & { published: Brief[]; publishedTotal: number; citations: Brief[]; citationsTotal: number; citedBy: string[]; timeline: { months: string[]; published: Record<string, number>; cited: Record<string, number> } }
 
@@ -34,6 +35,9 @@ const TEXT = {
     prev: 'السابق',
     next: 'التالي',
     rel: { high: 'موثوقية عالية', medium: 'موثوقية متوسطة', social: 'حساب اجتماعي معروف', low: 'غير مؤكد' } as Record<string, string>,
+    excluded: (n: number) => `مستبعدة: ${n}`,
+    excludedHint: 'أسماء لا تبدو أسماء أشخاص (مؤسسات، ألقاب، أجزاء جمل) أو بأقل من توقيعين أو دون وسيلة معروفة: مخفية وليست محذوفة.',
+    reasons: { format: 'ليس اسماً كاملاً', institution: 'مؤسسة أو لقب أو مكان', fragment: 'جزء من جملة', articles: 'عبارة وليست اسماً', signatures: 'أقل من توقيعين', outlet: 'وسيلة غير معروفة' } as Record<string, string>,
   },
   en: {
     title: 'Journalists & media',
@@ -54,6 +58,9 @@ const TEXT = {
     prev: 'Previous',
     next: 'Next',
     rel: { high: 'High reliability', medium: 'Medium reliability', social: 'Identified social account', low: 'Unverified' } as Record<string, string>,
+    excluded: (n: number) => `Excluded: ${n}`,
+    excludedHint: 'Names that do not look like people (institutions, titles, sentence fragments), with fewer than two bylines or no known outlet: hidden, not deleted.',
+    reasons: { format: 'Not a full name', institution: 'Institution, title or place', fragment: 'Sentence fragment', articles: 'Phrase, not a name', signatures: 'Fewer than two bylines', outlet: 'Unknown outlet' } as Record<string, string>,
   },
 }
 
@@ -106,6 +113,21 @@ export function Journalists() {
           </label>
         )}
       </div>
+      {kind === 'journalist' && (data?.counts.excluded ?? 0) > 0 && (
+        <details className="jr-excluded">
+          <summary title={t.excludedHint}>{t.excluded(data!.counts.excluded!)}</summary>
+          <p className="news-status">{t.excludedHint}</p>
+          {data?.excluded && (
+            <ul>
+              {data.excluded.map((x) => (
+                <li key={x.name}>
+                  <span dir="auto">{x.name}</span> <small>· {t.reasons[x.reason] ?? x.reason} · {x.count}</small>
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
+      )}
       {data && data.rows.length === 0 && <p className="news-status">{t.empty}</p>}
       <div className="jr-grid">
         {data?.rows.map((r) => (
