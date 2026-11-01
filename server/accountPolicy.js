@@ -251,3 +251,61 @@ export function sharedPolicyState(users = readUsers()) {
     seed: seed ? { email: seed.email, pending: Boolean(seed.pendingActivation), linkActive: Boolean(seed.activation && seed.activation.exp > Date.now()), mfa: Boolean(seed.totp?.secret) } : null,
   }
 }
+
+/* ---------------------------------------------------------------- audit produit v6, constat 1 */
+
+/**
+ * Comptes du prestataire (audit v6) : l'audit a vu le même membre de l'équipe se connecter avec des adresses de
+ * domaines différents (…@aroundexpressions.com, …@atos.ai) en plus du compte partagé. Inventaire en LECTURE SEULE pour
+ * la console Super Admin et `node server/users.js prestataire` : adresse, domaine, nature du compte, dernière
+ * connexion, et pour un compte désactivé, les actions réussies après sa désactivation (il ne doit y en avoir aucune).
+ * Rien n'est modifié ici : la décision de garder ou désactiver une adresse revient au client.
+ * MMS_PROVIDER_DOMAINS : domaines du prestataire (par défaut aroundexpressions.com, atos.ai).
+ */
+export const providerDomains = () => list(process.env.MMS_PROVIDER_DOMAINS, 'aroundexpressions.com,atos.ai')
+const domainOf = (email) => String(email || '').toLowerCase().split('@')[1] || ''
+const localOf = (email) => String(email || '').toLowerCase().split('@')[0] || ''
+
+/** Nature d'un compte : shared (adresse commune), provider (nominatif du prestataire), client */
+export function accountKind(email, users = []) {
+  const e = String(email || '').toLowerCase()
+  const domain = domainOf(e)
+  if (isSharedAccount(e)) return { kind: 'shared', domain, nominative: false }
+  const provider = providerDomains()
+  if (provider.includes(domain)) return { kind: 'provider', domain, nominative: true }
+  // Même personne (même identifiant avant @) qu'un compte du prestataire, sur un autre domaine
+  const twin = users.some((u) => provider.includes(domainOf(u.email)) && localOf(u.email) === localOf(e) && String(u.email).toLowerCase() !== e)
+  return twin ? { kind: 'provider', domain, nominative: true, twin: true } : { kind: 'client', domain, nominative: true }
+}
+
+/** Inventaire des comptes du prestataire (partagés compris), à partir de users.json et du journal d'audit */
+export function providerAccounts(users = readUsers(), rows = []) {
+  const out = []
+  for (const u of users) {
+    const k = accountKind(u.email, users)
+    if (k.kind === 'client') continue
+    const email = String(u.email).toLowerCase()
+    const mine = rows.filter((r) => String(r.actor || '').toLowerCase() === email)
+    const logins = mine.filter((r) => r.action === 'login_ok')
+    const since = u.disabled && u.disabledAt ? u.disabledAt : ''
+    const after = since ? mine.filter((r) => r.t > since && Number(r.status) < 400 && r.action !== 'login_disabled') : []
+    const sameLocal = users.filter((x) => localOf(x.email) === localOf(email) && String(x.email).toLowerCase() !== email).map((x) => x.email)
+    out.push({
+      email: u.email,
+      domain: k.domain,
+      kind: k.kind,
+      role: roleOf(u),
+      disabled: Boolean(u.disabled),
+      disabledAt: u.disabledAt || null,
+      mfa: Boolean(u.totp?.secret),
+      pending: Boolean(u.pendingActivation),
+      lastLogin: logins.length ? logins[logins.length - 1].t : null,
+      lastAction: mine.length ? mine[mine.length - 1].t : null,
+      actions7d: mine.filter((r) => r.t >= new Date(Date.now() - 7 * 86_400_000).toISOString()).length,
+      // Compte désactivé : actions réussies après la désactivation (attendu : 0)
+      afterDisabled: since ? { count: after.length, last: after.length ? after[after.length - 1].t : null } : null,
+      sameLocal,
+    })
+  }
+  return out.sort((a, b) => String(b.lastLogin || '').localeCompare(String(a.lastLogin || '')))
+}

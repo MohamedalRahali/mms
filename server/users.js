@@ -9,6 +9,7 @@ import fs from 'node:fs'
  *   node server/users.js list
  *   node server/users.js add <email> [nom affiché] [--role=viewer|analyst|admin]
  *   node server/users.js remove <email>
+ *   node server/users.js prestataire   (comptes du prestataire : domaine, dernière connexion, usage après désactivation ; lecture seule)
  */
 
 const dataDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'data')
@@ -24,6 +25,15 @@ function ask(question) {
 
 if (cmd === 'list') {
   for (const u of users) console.log(`${u.email}\t${u.name || ''}\t${u.role || 'admin'}`)
+} else if (cmd === 'prestataire') {
+  // Lecture seule (audit v6) : rien n'est modifié, journal d'audit lu en entier
+  const { providerAccounts } = await import('./accountPolicy.js')
+  let audit = []
+  try {
+    audit = fs.readFileSync(path.join(dataDir, 'audit-trail.jsonl'), 'utf8').split('
+').filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
+  } catch {}
+  console.log(JSON.stringify(providerAccounts(users, audit), null, 1))
 } else if (cmd === 'add' && email) {
   // --role=… : rôle du compte (sans option : administrateur, comme les comptes créés avant les rôles)
   const roleArg = rest.find((a) => a.startsWith('--role='))
@@ -39,5 +49,5 @@ if (cmd === 'list') {
   writeUsers(users.filter((u) => u.email.toLowerCase() !== email.toLowerCase()))
   console.log(`Compte supprimé : ${email}`)
 } else {
-  console.log('Usage : node server/users.js list | add <email> [nom] | remove <email>')
+  console.log('Usage : node server/users.js list | prestataire | add <email> [nom] | remove <email>')
 }

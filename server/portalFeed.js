@@ -51,7 +51,7 @@ export const DEFAULT_CONFIG = Object.freeze({
 })
 
 let file = ''
-let state = { config: { ...DEFAULT_CONFIG }, published: {}, pins: {}, excluded: {}, updatedBy: '', updatedAt: '', history: [], validators: [] }
+let state = { config: { ...DEFAULT_CONFIG }, published: {}, pins: {}, excluded: {}, updatedBy: '', updatedAt: '', history: [], validators: [], launch: { date: '', by: '', at: '' } }
 let logFile = ''
 let pubLog = [] // dernières lignes du journal des publications, les plus récentes d'abord
 const MAX_LOG = 2000
@@ -146,6 +146,31 @@ export function mayValidate(email) {
   const v = state.validators || []
   return !v.length || v.includes(String(email || '').toLowerCase())
 }
+/**
+ * Lancement du portail (audit v6, constat 12) : date prévue fixée par un administrateur du client, et liste de
+ * contrôle (validateurs désignés, fiches publiées, date). Rien n'est publié ni ouvert automatiquement : l'écran
+ * prépare la décision, que le client prend.
+ */
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
+export const portalLaunch = () => ({ date: '', by: '', at: '', ...(state.launch || {}) })
+export function setLaunch(date, by) {
+  const d = String(date || '').trim()
+  if (d && (!DAY_RE.test(d) || Number.isNaN(Date.parse(d)))) throw fail('BAD_DATE', 400)
+  state.launch = { date: d, by: String(by || '').slice(0, 120), at: new Date().toISOString() }
+  state.history = [{ by: state.launch.by, at: state.launch.at, what: `launch ${d || '-'}` }, ...state.history].slice(0, MAX_HISTORY)
+  save()
+  return portalLaunch()
+}
+/** Liste de contrôle avant lancement */
+export function launchChecklist(published = Object.keys(state.published || {}).length) {
+  const l = portalLaunch()
+  return [
+    { key: 'validators', ok: (state.validators || []).length > 0 },
+    { key: 'published', ok: published >= 10, value: published },
+    { key: 'date', ok: Boolean(l.date) },
+  ]
+}
+
 export const publicPortalUrl = () => {
   const env = String(process.env.PUBLIC_URL || '').replace(/\/$/, '')
   return `${!env || /localhost|127\.0\.0\.1/.test(env) ? 'https://mearsaad.com' : env}/portal`
@@ -164,6 +189,7 @@ export function initPortalFeed(dataDir) {
     updatedAt: String(s.updatedAt || ''),
     history: Array.isArray(s.history) ? s.history.slice(0, MAX_HISTORY) : [],
     validators: cleanValidators(s.validators),
+    launch: s.launch && typeof s.launch === 'object' ? { date: String(s.launch.date || ''), by: String(s.launch.by || ''), at: String(s.launch.at || '') } : { date: '', by: '', at: '' },
   }
   // Épingles sans publication (ancien mode automatique) : retirées, une fiche épinglée doit être publiée
   for (const id of Object.keys(state.pins)) if (!state.published[id]) delete state.pins[id]
@@ -519,6 +545,8 @@ export function feedState(items) {
     manualOnly: true,
     validators: portalValidators(),
     publicUrl: publicPortalUrl(),
+    launch: portalLaunch(),
+    checklist: launchChecklist(),
     published: marks(state.published),
     pins: marks(state.pins),
     excluded: marks(state.excluded),
@@ -530,7 +558,7 @@ export function feedState(items) {
   }
 }
 
-export function mountPortalFeed(app, { getItems }) {
+export function mountPortalFeed(app, { getItems, candidates = () => [] }) {
   const wrap = (fn) => (req, res) => {
     try {
       res.json(fn(req))
@@ -563,6 +591,22 @@ export function mountPortalFeed(app, { getItems }) {
     wrap((req) => {
       if (req.user?.role !== 'admin') throw fail('FORBIDDEN', 403)
       return { validators: setValidators(req.body?.validators, req.user?.email) }
+    }),
+  )
+  // Comptes pouvant être désignés validateurs (droit de publication, nominatifs) et date de lancement : administrateurs
+  app.get(
+    '/api/portal-feed/candidates',
+    wrap((req) => {
+      if (req.user?.role !== 'admin') throw fail('FORBIDDEN', 403)
+      return { candidates: candidates() }
+    }),
+  )
+  app.put(
+    '/api/portal-feed/launch',
+    express.json({ limit: '1kb' }),
+    wrap((req) => {
+      if (req.user?.role !== 'admin') throw fail('FORBIDDEN', 403)
+      return { launch: setLaunch(req.body?.date, req.user?.email), checklist: launchChecklist() }
     }),
   )
   app.post(

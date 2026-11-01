@@ -151,10 +151,15 @@ export function mountLive(app) {
           if (direct) return { ...base, mode: 'audio', src: c.flux }
           // Flux officiel réservé au lecteur du site de la chaîne : on renvoie vers ce site
           const site = c.flux && c.referer ? c.referer : undefined
+          // Flux de secours lisibles dans le navigateur (`flux_alternatifs` de sources.yaml, audit v6) : utilisés quand
+          // YouTube n'a pas de direct en cours, pour ne pas afficher « لا يوجد بث مباشر الآن » alors qu'un flux marche
+          const alt = (Array.isArray(c.flux_alternatifs) ? c.flux_alternatifs : []).map((a) => (typeof a === 'string' ? a : a?.flux)).find((u) => /^https:\/\/.+\.m3u8(\?|$)/i.test(String(u || '')))
           if (c.youtube) {
             const yt = await youtubeState(c.youtube)
+            if (alt && yt.live !== true) return { ...base, mode: 'hls', src: alt, fallback: 'youtube' }
             return { ...base, mode: 'youtube', src: c.youtube, site, ...yt }
           }
+          if (alt) return { ...base, mode: 'hls', src: alt }
           return { ...base, mode: 'none', site, reason: c.referer ? 'referer' : 'nosource' }
         }),
     )

@@ -49,6 +49,8 @@ type FeedState = {
   options: { types: Count[]; langs: Count[]; categories: Count[]; sources: Count[] }
   validators?: string[]
   publicUrl?: string
+  launch?: { date: string; by: string; at: string }
+  checklist?: { key: 'validators' | 'published' | 'date'; ok: boolean; value?: number }[]
 }
 type Row = {
   id: string
@@ -1010,26 +1012,55 @@ function PublishEditor({ row, t, onDone, onCancel }: { row: Row; t: T; onDone: (
 
 export default PortalFeed
 
-/** Adresse publique du portail et validateurs désignés (audit v5, constat 13) */
+/**
+ * Adresse publique du portail et validateurs désignés (audit v5, constat 13), date de lancement et liste de contrôle
+ * (audit v6, constat 12) : les validateurs se choisissent parmi les comptes nominatifs ayant le droit de publication.
+ * L'écran prépare la décision ; rien n'est ouvert ni publié automatiquement.
+ */
 function PortalAdminBox({ st }: { st: FeedState }) {
   const i = useI18n()
   const ar = i.lang === 'ar'
   const isAdmin = useAuth()?.user?.role === 'admin'
-  const [list, setList] = useState((st.validators ?? []).join(', '))
+  const [list, setList] = useState<string[]>(st.validators ?? [])
+  const [cands, setCands] = useState<{ email: string; name: string; role: string }[]>([])
+  const [extra, setExtra] = useState('')
+  const [date, setDate] = useState(st.launch?.date ?? '')
+  const [checks, setChecks] = useState(st.checklist ?? [])
   const [msg, setMsg] = useState('')
-  async function save() {
-    const res = await fetch('/api/portal-feed/validators', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ validators: list.split(/[\s,;،]+/).filter(Boolean) }),
-    })
+  useEffect(() => {
+    if (!isAdmin) return
+    fetch('/api/portal-feed/candidates')
+      .then((r) => (r.ok ? r.json() : { candidates: [] }))
+      .then((j) => setCands(j.candidates ?? []))
+      .catch(() => setCands([]))
+  }, [isAdmin])
+  async function put(url: string, body: unknown) {
+    const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const json = await res.json().catch(() => ({}))
-    if (res.ok) {
-      setList((json.validators ?? []).join(', '))
-      setMsg(ar ? 'تم الحفظ.' : 'Saved.')
-    } else setMsg(ar ? 'تعذّر الحفظ.' : 'Could not save.')
+    setMsg(res.ok ? (ar ? 'تم الحفظ.' : 'Saved.') : ar ? 'تعذّر الحفظ.' : 'Could not save.')
+    return res.ok ? json : null
   }
+  async function saveValidators() {
+    const all = [...list, ...extra.split(/[\s,;،]+/).filter(Boolean)]
+    const json = await put('/api/portal-feed/validators', { validators: all })
+    if (json) {
+      setList(json.validators ?? [])
+      setExtra('')
+      setChecks((c) => c.map((x) => (x.key === 'validators' ? { ...x, ok: (json.validators ?? []).length > 0 } : x)))
+    }
+  }
+  async function saveDate() {
+    const json = await put('/api/portal-feed/launch', { date })
+    if (json) setChecks(json.checklist ?? checks)
+  }
+  const toggle = (e: string) => setList((l) => (l.includes(e) ? l.filter((x) => x !== e) : [...l, e]))
   const url = st.publicUrl || 'https://mearsaad.com/portal'
+  const label = {
+    validators: ar ? 'مدقّق واحد على الأقل معيَّن' : 'At least one validator designated',
+    published: ar ? '10 أخبار منشورة على الأقل' : 'At least 10 published items',
+    date: ar ? 'تاريخ الإطلاق محدَّد' : 'Launch date set',
+  }
+  const ready = checks.length > 0 && checks.every((c) => c.ok)
   return (
     <section className="pf-admin">
       <p>
@@ -1040,16 +1071,51 @@ function PortalAdminBox({ st }: { st: FeedState }) {
       </p>
       <p>
         {ar ? 'مدقّقو البوابة (من يوافق على النشر): ' : 'Portal validators (who approve publishing): '}
-        <b dir="ltr">{st.validators?.length ? st.validators.join(', ') : ar ? 'كل من يملك صلاحية النشر' : 'anyone with the publishing permission'}</b>
+        <b dir="ltr">{list.length ? list.join(', ') : ar ? 'لم يُعيَّن أحد بعد — كل من يملك صلاحية النشر' : 'none designated yet — anyone with the publishing permission'}</b>
       </p>
+      <p>
+        {ar ? 'تاريخ الإطلاق: ' : 'Launch date: '}
+        <b>{st.launch?.date || date || (ar ? 'بانتظار قرار العميل' : 'awaiting the client’s decision')}</b>
+      </p>
+      {checks.length > 0 && (
+        <ul className="pf-admin__checks">
+          {checks.map((c) => (
+            <li key={c.key} className={c.ok ? 'is-ok' : 'is-todo'}>
+              {c.ok ? '✓' : '○'} {label[c.key]}
+              {c.key === 'published' && c.value != null ? ` (${c.value})` : ''}
+            </li>
+          ))}
+          <li className={ready ? 'is-ok' : 'is-todo'}>
+            <b>{ready ? (ar ? 'جاهزة للإطلاق' : 'Ready to launch') : ar ? 'غير جاهزة بعد' : 'Not ready yet'}</b>
+          </li>
+        </ul>
+      )}
       {isAdmin && (
-        <p className="pf-admin__edit">
-          <input value={list} onChange={(e) => setList(e.target.value)} dir="ltr" placeholder="name@npdc.gov.ly, …" aria-label={ar ? 'مدققو البوابة' : 'Portal validators'} />
-          <button type="button" className="news-btn news-btn--ghost" onClick={save}>
-            {ar ? 'تعيين المدققين' : 'Set validators'}
-          </button>
-          {msg && <small>{msg}</small>}
-        </p>
+        <>
+          {cands.length > 0 && (
+            <fieldset className="pf-admin__cands">
+              <legend>{ar ? 'اختر المدققين (حسابات اسمية لها صلاحية النشر):' : 'Choose validators (named accounts with the publishing permission):'}</legend>
+              {cands.map((c) => (
+                <label key={c.email}>
+                  <input type="checkbox" checked={list.includes(c.email)} onChange={() => toggle(c.email)} /> {c.name} <span dir="ltr">({c.email})</span>
+                </label>
+              ))}
+            </fieldset>
+          )}
+          <p className="pf-admin__edit">
+            <input value={extra} onChange={(e) => setExtra(e.target.value)} dir="ltr" placeholder="name@npdc.gov.ly, …" aria-label={ar ? 'مدققون آخرون' : 'Other validators'} />
+            <button type="button" className="news-btn news-btn--ghost" onClick={saveValidators}>
+              {ar ? 'تعيين المدققين' : 'Set validators'}
+            </button>
+          </p>
+          <p className="pf-admin__edit">
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label={ar ? 'تاريخ الإطلاق' : 'Launch date'} />
+            <button type="button" className="news-btn news-btn--ghost" onClick={saveDate}>
+              {ar ? 'حفظ تاريخ الإطلاق' : 'Save launch date'}
+            </button>
+            {msg && <small>{msg}</small>}
+          </p>
+        </>
       )}
     </section>
   )

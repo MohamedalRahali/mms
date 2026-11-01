@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useI18n } from '../lib/i18n'
 import { PageHead } from './Extras'
+import { SecurityNoteView } from './SecurityNoteView'
 
 /**
  * مركز المساعدة (audit produit v4, constat 16) : guide par page, questions fréquentes, dépannage, glossaire et
@@ -18,6 +19,7 @@ const HELP: Record<'ar' | 'en', { intro: string; search: string; none: string; g
     links: [
       ['?view=watch', 'إنشاء رصد'],
       ['?view=media-broadcast', 'التلفزيون والإذاعة'],
+      ['?view=help#security-note', 'ملاحظة الأمان'],
     ],
     groups: [
       {
@@ -45,7 +47,7 @@ const HELP: Record<'ar' | 'en', { intro: string; search: string; none: string; g
         title: 'الأسئلة الشائعة',
         topics: [
           { q: 'لماذا لا أرى بعض الصفحات أو الأزرار؟', a: ['الصلاحيات تُحدَّد حسب ملفك (مدير، محلل، قارئ أو ملف مخصص). اطلب من المدير تعديلها.'] },
-          { q: 'هل تُستعمل بياناتنا لتدريب الذكاء الاصطناعي؟', a: ['لا. يعمل محرك مرصاد للذكاء الاصطناعي بعرض تجاري مدفوع لا تُستخدم فيه بياناتكم للتدريب.', 'لا يُرسل إلا نص الأخبار المرصودة وسؤال المستخدم، دون كلمات مرور أو بيانات حسابات. تفاصيل التعاقد ومدة الاحتفاظ ومنطقة المعالجة متاحة عند الطلب في إطار التعاقد.'] },
+          { q: 'هل تُستعمل بياناتنا لتدريب الذكاء الاصطناعي؟', a: ['لا. « محرك مرصاد » اسم منتجنا وليس مزوّداً: يعمل عبر واجهات برمجية مدفوعة بعقود تجارية تنص شروطها على عدم استخدام الطلبات والردود للتدريب.', 'لا يُرسل إلا نص الأخبار المرصودة وسؤال المستخدم، وصوت البث العام للتفريغ، دون كلمات مرور أو بيانات حسابات.', 'لكل استعمال: مدة الاحتفاظ لدى المزوّد (30 أو 55 يوماً على الأكثر حسب الاستعمال) ومنطقة المعالجة (الولايات المتحدة أساساً) في جدول « ملاحظة الأمان » أسفل هذه الصفحة.'] },
           { q: 'من يرى ما أفعله؟', a: ['مديرو المنصة يطّلعون على « سجل التدقيق »: الدخول، التسجيلات، النشر، الرصد، التصدير، الحسابات.'] },
           { q: 'منذ متى البيانات متوفرة؟', a: ['تظهر « بيانات منذ » أعلى الصفحات. استرجاع الأرشيف (حتى 12 شهراً) يتم تدريجياً من أرشيفات الأخبار العامة.'] },
         ],
@@ -75,6 +77,7 @@ const HELP: Record<'ar' | 'en', { intro: string; search: string; none: string; g
     links: [
       ['?view=watch', 'Create a watch'],
       ['?view=media-broadcast', 'TV & radio'],
+      ['?view=help#security-note', 'Security note'],
     ],
     groups: [
       {
@@ -102,7 +105,7 @@ const HELP: Record<'ar' | 'en', { intro: string; search: string; none: string; g
         title: 'FAQ',
         topics: [
           { q: 'Why can’t I see some pages or buttons?', a: ['Permissions depend on your profile (administrator, analyst, viewer or custom). Ask an administrator.'] },
-          { q: 'Is our data used to train AI?', a: ['No. The Mearsaad AI engine runs on a paid commercial offer under which your data is not used for training.', 'Only the monitored news text and the user question are sent, never passwords or account data. Contract details, retention and processing region are available on request as part of the contract.'] },
+          { q: 'Is our data used to train AI?', a: ['No. « Mearsaad AI engine » is our product name, not a provider: it runs on paid APIs under commercial contracts whose terms state that prompts and outputs are not used for training.', 'Only the monitored news text and the user question, and public broadcast audio for transcription, are sent; never passwords or account data.', 'For each use: retention at the provider (30 or 55 days at most depending on the use) and processing region (mainly United States) in the « Security note » table at the bottom of this page.'] },
           { q: 'Who can see what I do?', a: ['Platform administrators read the « Audit log »: sign-ins, recordings, publishing, watches, exports, accounts.'] },
           { q: 'Since when is data available?', a: ['« Data since » is shown at the top of pages. Back-filling the archive (up to 12 months) runs gradually from public news archives.'] },
         ],
@@ -163,6 +166,7 @@ export function HelpCenter() {
           ))}
         </section>
       ))}
+      {!q.trim() && <SecurityNoteView />}
     </div>
   )
 }

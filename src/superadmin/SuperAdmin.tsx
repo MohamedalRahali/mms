@@ -346,6 +346,7 @@ type Dash = {
   aiStatus?: AiStatus
   audit?: { total: number; last7: Record<string, number>; actors: string[]; intact: boolean; shared?: { count: number; last: { t: string; action: string; actor: string } | null; accounts: string[] } }
   accounts?: { shared: { email: string; disabled: boolean; readOnly: boolean }[]; otherAdmin: string; seed: { email: string; pending: boolean; linkActive: boolean; mfa: boolean } | null }
+  providers?: ProviderRow[]
 }
 type AiStatus = {
   main: string
@@ -456,6 +457,72 @@ function SharedAccounts({ a, usage }: { a: NonNullable<Dash['accounts']>; usage?
     </Card>
   )
 }
+type ProviderRow = {
+  email: string
+  domain: string
+  kind: 'shared' | 'provider'
+  role: string
+  disabled: boolean
+  disabledAt: string | null
+  mfa: boolean
+  pending: boolean
+  lastLogin: string | null
+  lastAction: string | null
+  actions7d: number
+  afterDisabled: { count: number; last: string | null } | null
+  sameLocal: string[]
+}
+/** Comptes du prestataire (audit v6) : nominatif ou partagé, domaine, dernière connexion, usage après désactivation */
+function ProviderAccounts({ rows }: { rows: ProviderRow[] }) {
+  if (!rows.length) return null
+  const domains = new Set(rows.filter((r) => !r.disabled).map((r) => r.domain))
+  const leak = rows.filter((r) => r.afterDisabled && r.afterDisabled.count > 0)
+  return (
+    <Card title="حسابات المزوّد (الفريق التقني)" wide>
+      {leak.length > 0 && (
+        <p className="sa-error" role="alert">
+          ⚠ عمليات ناجحة بعد التعطيل: {leak.map((r) => `${r.email} (${r.afterDisabled!.count})`).join('، ')}
+        </p>
+      )}
+      {domains.size > 1 && <p className="sa-muted">⚠ حسابات نشطة للمزوّد على {domains.size} نطاقات مختلفة: {[...domains].join('، ')}. القرار في الإبقاء عليها أو تعطيلها يعود إلى العميل.</p>}
+      <table className="sa-table">
+        <thead>
+          <tr>
+            <th>الحساب</th>
+            <th>النطاق</th>
+            <th>النوع</th>
+            <th>الحالة</th>
+            <th>آخر دخول</th>
+            <th>عمليات (7 أيام)</th>
+            <th>بعد التعطيل</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.email} className={r.kind === 'shared' ? 'sa-row--shared' : undefined}>
+              <td dir="ltr">
+                {r.email}
+                {r.sameLocal.length > 0 && <div className="sa-muted">= {r.sameLocal.join(', ')}</div>}
+              </td>
+              <td dir="ltr">{r.domain}</td>
+              <td>
+                <span className={r.kind === 'shared' ? 'sa-tag is-bad' : 'sa-tag is-ok'}>{r.kind === 'shared' ? 'حساب مشترك' : 'حساب اسمي للمزوّد'}</span>
+              </td>
+              <td>
+                <span className={r.disabled ? 'sa-tag' : 'sa-tag is-warn'}>{r.disabled ? `معطّل منذ ${r.disabledAt ? fmtDate(r.disabledAt) : '—'}` : r.pending ? 'بانتظار التفعيل' : 'نشط'}</span>{' '}
+                {!r.disabled && !r.pending && <span className={r.mfa ? 'sa-tag is-ok' : 'sa-tag is-bad'}>{r.mfa ? 'خطوتان' : 'دون خطوتين'}</span>}
+              </td>
+              <td>{r.lastLogin ? fmtDate(r.lastLogin) : '—'}</td>
+              <td>{r.actions7d}</td>
+              <td>{r.afterDisabled ? <span className={r.afterDisabled.count ? 'sa-tag is-bad' : 'sa-tag is-ok'}>{r.afterDisabled.count ? `${r.afterDisabled.count} عملية` : 'لا شيء'}</span> : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="sa-muted">قراءة فقط: لا يُغيَّر أي حساب من هنا. النطاقات المعتبرة للمزوّد: MMS_PROVIDER_DOMAINS.</p>
+    </Card>
+  )
+}
 type KeyRow = { name: string; set: boolean; budget?: number }
 type UsageRow = { runs: number; input: number; output: number; cost: number }
 
@@ -481,6 +548,7 @@ function Dashboard({ onUser }: { onUser: (e: string) => void }) {
       </div>
       {d.aiStatus && <AiEngines s={d.aiStatus} />}
       {d.accounts && <SharedAccounts a={d.accounts} usage={d.audit?.shared} />}
+      {d.providers && <ProviderAccounts rows={d.providers} />}
 
       <Card title="المتصلون الآن">
         {d.online.length ? (
@@ -616,12 +684,13 @@ function Dashboard({ onUser }: { onUser: (e: string) => void }) {
 
 /* ---------------------------------------------------------------- المستخدمون */
 
-type UserRow = { email: string; name: string; role: string; profile?: string; profileName?: string; disabled: boolean; shared?: boolean; pending?: boolean; mfa?: boolean; createdAt: string | null; online: boolean; lastSeen: string | null; lastIp: string; country: string; sessions: number; fails: number; note: string }
+type UserRow = { email: string; name: string; role: string; profile?: string; profileName?: string; disabled: boolean; shared?: boolean; pending?: boolean; kind?: 'shared' | 'provider' | 'client'; domain?: string; mfa?: boolean; createdAt: string | null; online: boolean; lastSeen: string | null; lastIp: string; country: string; sessions: number; fails: number; note: string }
 const FILTERS: [string, string][] = [
   ['all', 'الكل'],
   ['online', 'متصل'],
   ['npdc', 'NPDC'],
   ['gmail', 'Gmail'],
+  ['provider', 'المزوّد'],
   ['other', 'نطاقات أخرى'],
   ['admins', 'المدراء'],
   ['disabled', 'معطّل'],
@@ -770,6 +839,7 @@ function Team({ onUser }: { onUser: (e: string) => void }) {
                   <td>
                     {u.disabled ? <span className="sa-tag is-bad">معطّل</span> : u.online ? <span className="sa-tag is-ok">متصل</span> : <span className="sa-tag">مفعّل</span>}
                     {u.shared && <span className="sa-tag is-bad">حساب مشترك</span>}
+                    {u.kind === 'provider' && <span className="sa-tag is-warn" title={u.domain}>حساب اسمي · المزوّد ({u.domain})</span>}
                     {u.pending && <span className="sa-tag is-warn">بانتظار التفعيل</span>}
                   </td>
                   <td>

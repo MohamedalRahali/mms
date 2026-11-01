@@ -723,3 +723,8 @@
 .pf-admin p { margin: 0; }
 .pf-admin__edit { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
 .pf-admin__edit input { flex: 1 1 16rem; min-width: 0; padding: 0.35rem 0.5rem; }
+.pf-admin__checks { margin: 0; padding-inline-start: 1rem; display: grid; gap: 0.15rem; list-style: none; }
+.pf-admin__checks .is-ok { color: var(--ok, #1e8e3e); }
+.pf-admin__checks .is-todo { color: var(--muted, #6b7280); }
+.pf-admin__cands { border: 1px dashed var(--line, #d9dee6); border-radius: 6px; padding: 0.4rem 0.6rem; display: grid; gap: 0.2rem; }
+.pf-admin__cands label { overflow-wrap: anywhere; }

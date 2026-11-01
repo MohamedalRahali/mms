@@ -7,9 +7,11 @@ import { closeSessions, currentUser, hashPassword, readUsers, ROLES, setAuthList
 import { getItems, setHidden } from './store.js'
 import { keyStatus } from './keys.js'
 import { aiStatus, aiUsage, setGeminiPaid } from './ai.js'
-import { aiDisclosure, aiDisclosureMarkdown } from './aiDisclosure.js'
-import { auditSummary, isSharedAccount, mountAuditTrail } from './auditTrail.js'
-import { issueActivation, sharedPolicyState } from './accountPolicy.js'
+import { AI_DISCLOSURE_MODES, aiDisclosure, aiDisclosureMarkdown, vertexReadiness } from './aiDisclosure.js'
+import { securityNote } from './securityNote.js'
+import { backupStatus } from './backups.js'
+import { auditRows, auditSummary, isSharedAccount, mountAuditTrail } from './auditTrail.js'
+import { accountKind, issueActivation, providerAccounts, sharedPolicyState } from './accountPolicy.js'
 import { mountPermissionsAdmin, permsOf, profileExists } from './permissions.js'
 import { initBrand, mountClientAdmin } from './clientAdmin.js'
 import { sourceHealth } from './sourceHealth.js'
@@ -176,8 +178,9 @@ function failsSince(from) {
   return { byLogin, byIp }
 }
 
-function userRow(u, fails) {
+function userRow(u, fails, all = []) {
   const seen = lastSeenOf(u.email)
+  const k = accountKind(u.email, all)
   return {
     email: u.email,
     name: u.name || u.email,
@@ -197,6 +200,9 @@ function userRow(u, fails) {
     // Compte partagé (signalé en rouge) et compte en attente d'activation (audit v5)
     shared: isSharedAccount(u.email),
     pending: Boolean(u.pendingActivation),
+    // Compte nominatif du prestataire / adresse partagée / compte du client, et domaine (audit v6)
+    kind: k.kind,
+    domain: k.domain,
   }
 }
 
@@ -224,6 +230,9 @@ function deriveActivity(req, user, ip) {
 }
 
 /* ---------------------------------------------------------------- montage */
+
+/** Fournisseurs d'IA nommés ou non dans l'application client (réglage Super Admin, « neutral » par défaut) */
+export const aiDisclosureMode = () => (settings.aiDisclosure === 'named' ? 'named' : 'neutral')
 
 export function mountSuperAdmin(app, root) {
   dir = path.join(root, 'data', 'superadmin')
@@ -488,6 +497,8 @@ export function mountSuperAdmin(app, root) {
       audit: auditSummary(),
       // Comptes partagés : lecture seule, compte nominatif à activer (audit v5)
       accounts: sharedPolicyState(),
+      // Comptes du prestataire : domaines, dernière connexion, usage après désactivation (audit v6, lecture seule)
+      providers: providerAccounts(readUsers(), auditRows()),
     })
   })
 
@@ -496,8 +507,9 @@ export function mountSuperAdmin(app, root) {
     const { byLogin } = failsSince(Date.now() - 30 * 86_400_000)
     const q = lc(req.query.q)
     const f = String(req.query.filter || 'all')
-    const rows = readUsers()
-      .map((u) => userRow(u, byLogin))
+    const all = readUsers()
+    const rows = all
+      .map((u) => userRow(u, byLogin, all))
       .filter((u) => !q || lc(u.email).includes(q) || lc(u.name).includes(q))
       .filter(
         (u) =>
@@ -506,6 +518,7 @@ export function mountSuperAdmin(app, root) {
           (f === 'npdc' && isNpdc(u.email)) ||
           (f === 'gmail' && /@gmail\.com$/i.test(u.email)) ||
           (f === 'other' && !isNpdc(u.email) && !/@gmail\.com$/i.test(u.email)) ||
+          (f === 'provider' && u.kind !== 'client') ||
           (f === 'admins' && u.role === 'admin') ||
           (f === 'disabled' && u.disabled) ||
           (f === 'failed' && u.fails > 0),
@@ -541,7 +554,7 @@ export function mountSuperAdmin(app, root) {
     }
     const { byLogin } = failsSince(from)
     res.json({
-      user: userRow(u, byLogin),
+      user: userRow(u, byLogin, readUsers()),
       perms: permsOf({ role: roleOf(u), profile: u.profile }),
       noteAt: notes[email]?.at || null,
       sessions: userSessions(u.email).map((s) => ({ ...s, at: s.at ? iso(s.at) : null, expires: iso(s.expires), country: countryOf(s.ip), device: deviceOf(s.ua) })),
@@ -883,19 +896,27 @@ export function mountSuperAdmin(app, root) {
   })
 
   /* ---- Fournisseurs d'IA pour la note de sécurité (audit v5, constat 1) */
-  sa.get('/ai-disclosure', (req, res) => res.json({ ...aiDisclosure(req.query.lang), markdown: aiDisclosureMarkdown(req.query.lang) }))
+  sa.get('/ai-disclosure', (req, res) =>
+    res.json({ ...aiDisclosure(req.query.lang), markdown: aiDisclosureMarkdown(req.query.lang), clientMode: aiDisclosureMode(), vertex: vertexReadiness(process.env, (f) => fs.existsSync(f)) }),
+  )
+  // Note de sécurité complète (fournisseurs nommés), même source que celle de l'application client (audit v6)
+  sa.get('/security-note', (req, res) => res.json(securityNote(req.query.lang, { mode: 'named', backups: backupStatus() })))
 
   /* ---- الإعدادات */
   sa.get('/settings', (_req, res) => res.json({ settings, audit: all('audit').slice(-300).reverse().map((a) => ({ ...a, t: iso(a.t), country: countryOf(a.ip) })) }))
   sa.put('/settings', (req, res) => {
     const a = req.body?.announcement
     const m = req.body?.maintenance
-    const before = { a: JSON.stringify(settings.announcement), m: JSON.stringify(settings.maintenance) }
+    const ai = req.body?.aiDisclosure
+    const before = { a: JSON.stringify(settings.announcement), m: JSON.stringify(settings.maintenance), ai: aiDisclosureMode() }
+    // Fournisseurs d'IA dans l'application client (audit v6) : « neutral » (sans nom, décision du 31/10) ou « named »
+    if (AI_DISCLOSURE_MODES.includes(ai)) settings.aiDisclosure = ai
     if (a) settings.announcement = { on: Boolean(a.on), text: String(a.text || '').slice(0, 500), level: ['info', 'warning', 'danger'].includes(a.level) ? a.level : 'info' }
     if (m) settings.maintenance = { on: Boolean(m.on), message: String(m.message || '').slice(0, 500) }
     writeJson('settings.json', settings)
     if (JSON.stringify(settings.announcement) !== before.a) audit(req, 'announcement', settings.announcement.on ? 'on' : 'off', settings.announcement.text)
     if (JSON.stringify(settings.maintenance) !== before.m) audit(req, 'maintenance', settings.maintenance.on ? 'on' : 'off', settings.maintenance.message)
+    if (aiDisclosureMode() !== before.ai) audit(req, 'ai_disclosure', '', aiDisclosureMode())
     res.json({ settings })
   })
 

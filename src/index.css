@@ -4857,3 +4857,52 @@ img.mms-user__avatar--img {
 .audit-client th, .audit-client td { padding: 0.4rem 0.55rem; border-bottom: 1px solid var(--line, #d9dee6); text-align: start; vertical-align: top; }
 .audit-client tr.is-shared td { background: rgba(192, 57, 43, 0.12); }
 .mms-tag--kept { background: rgba(46, 125, 50, 0.14); color: light-dark(#2e6b31, #9fd6a2); }
+
+/* Fiche IA et note de sécurité côté client (audit v6, constats 3 et 11) */
+.ai-disclosure__box {
+  margin-block: 0.4rem 0.8rem;
+  font-size: 0.9rem;
+}
+.ai-disclosure__box > summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.ai-disclosure .table-scroll {
+  overflow-x: auto;
+  max-inline-size: 100%;
+}
+.ai-disclosure__table {
+  border-collapse: collapse;
+  inline-size: 100%;
+  min-inline-size: 36rem;
+  font-size: 0.86rem;
+}
+.ai-disclosure__table th,
+.ai-disclosure__table td {
+  border-block-end: 1px solid var(--line);
+  padding: 0.35rem 0.5rem;
+  text-align: start;
+  vertical-align: top;
+}
+.ai-disclosure__table tr.is-warn {
+  color: var(--danger, #c0392b);
+}
+.security-note__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.security-note h4 {
+  margin: 0.7rem 0 0.3rem;
+  font-size: 0.95rem;
+}
+@media print {
+  .help-center > :not(.security-note) {
+    display: none !important;
+  }
+  .security-note__head button {
+    display: none;
+  }
+}

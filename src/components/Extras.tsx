@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { AiDisclosureDetails } from './SecurityNoteView'
 import { NewsCard } from './NewsCard'
 import { type Flux, type NewsItem, type NewsResponse, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
@@ -295,6 +296,7 @@ export function AiAnalysis({ flux }: { flux: Flux | '' }) {
   return (
     <>
       <PageHead title={t.aiTitle} intro={t.aiIntro} />
+      <AiDisclosureDetails />
       <div className="news-filters">
         <select value={days} onChange={(e) => setDays(e.target.value)} aria-label="period">
           <option value="1">{t.last24}</option>

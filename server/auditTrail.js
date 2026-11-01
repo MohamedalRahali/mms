@@ -250,3 +250,6 @@ export function mountClientAuditTrail(app) {
   // Lecture seule : aucune modification ni suppression, quel que soit le rôle
   app.all(/^\/api\/audit-trail(\/.*)?$/, (req, res) => res.status(403).json({ error: req.user?.role === 'admin' ? 'READ_ONLY' : 'FORBIDDEN' }))
 }
+
+/** Toutes les lignes en mémoire (lecture seule) : inventaire des comptes du prestataire (audit v6) */
+export const auditRows = () => rows

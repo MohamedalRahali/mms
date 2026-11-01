@@ -190,3 +190,90 @@ export function aiDisclosureMarkdown(lang = 'ar', status = aiStatus()) {
   lines.push(d.sent, '', `_${d.noCert}_`)
   return lines.join('\n')
 }
+
+/* ---------------------------------------------------------------- audit produit v6, constat 3 */
+
+/**
+ * Fiche IA pour l'application client (écran IA, FAQ, note de sécurité). Deux modes, réglés dans la console Super Admin
+ * (settings.json, `aiDisclosure`) :
+ * - « neutral » (décision d'Around du 31/10, par défaut) : sans nom de fournisseur, mais avec les faits vérifiables
+ *   que l'audit v6 demande : nature de l'offre, clause de non-entraînement, durée de conservation chez le fournisseur,
+ *   région de traitement. Le nom et les liens vers les conditions officielles sont dans la note remise au client.
+ * - « named » : la fiche complète (fournisseur, produit, liens officiels), comme dans la console Super Admin.
+ * Aucune certification n'est affirmée dans les deux cas.
+ */
+const NEUTRAL = {
+  claude: {
+    offer: { ar: 'واجهة برمجية مدفوعة بعقد تجاري مع مزوّد نماذج لغوية كبرى', en: 'Paid API under a commercial contract with a major language-model provider' },
+    noReuse: { ar: 'تنصّ الشروط التجارية للمزوّد على عدم استخدام الطلبات والردود لتدريب نماذجه.', en: 'The provider’s commercial terms state that prompts and outputs are not used to train its models.' },
+    retention: PROVIDERS.claude.retention,
+    region: { ar: 'الولايات المتحدة أساساً (بنية المزوّد)؛ لا إقامة بيانات أوروبية أو خليجية مضبوطة.', en: 'Mainly United States (provider infrastructure); no EU or Gulf data residency configured.' },
+  },
+  gemini: {
+    offer: { ar: 'خدمة سحابية مدفوعة (فوترة مفعّلة)', en: 'Paid cloud service (billing enabled)' },
+    noReuse: { ar: 'في الخدمة المدفوعة لا تُستخدم الطلبات والردود لتحسين منتجات المزوّد.', en: 'On the paid service, prompts and responses are not used to improve the provider’s products.' },
+    retention: { ar: 'يحتفظ المزوّد بالطلبات والردود 55 يوماً لكشف إساءة الاستخدام فقط.', en: 'The provider keeps prompts and responses for 55 days, only to detect abuse.' },
+    region: { ar: 'غير مضمونة (بنية المزوّد العالمية).', en: 'Not guaranteed (provider global infrastructure).' },
+  },
+  vertex: {
+    offer: { ar: 'خدمة سحابية مؤسسية مدفوعة', en: 'Paid enterprise cloud service' },
+    noReuse: { ar: 'لا تُستخدم بيانات العميل لتدريب النماذج دون إذن مسبق.', en: 'Customer data is not used to train models without prior permission.' },
+    retention: { ar: 'تخزين مؤقت في الذاكرة حتى 24 ساعة، ويمكن طلب عدم الاحتفاظ إطلاقاً.', en: 'In-memory caching for up to 24 hours; zero data retention can be requested.' },
+    region: null,
+  },
+  openai: {
+    offer: { ar: 'واجهة برمجية مدفوعة لتفريغ الصوت', en: 'Paid speech-to-text API' },
+    noReuse: { ar: 'لا تُستخدم بيانات الواجهة البرمجية للتدريب افتراضياً.', en: 'API data is not used for training by default.' },
+    retention: { ar: 'تُحفظ الطلبات 30 يوماً على الأكثر لمراقبة إساءة الاستخدام ثم تُحذف.', en: 'Requests are kept for up to 30 days for abuse monitoring, then deleted.' },
+    region: { ar: 'الولايات المتحدة افتراضياً.', en: 'United States by default.' },
+  },
+  local: { offer: PROVIDERS.local.offer, noReuse: PROVIDERS.local.noReuse, retention: PROVIDERS.local.retention, region: PROVIDERS.local.region },
+}
+
+export const AI_DISCLOSURE_MODES = ['neutral', 'named']
+
+export function aiClientDisclosure(lang = 'ar', mode = 'neutral', status = aiStatus()) {
+  const full = aiDisclosure(lang, status)
+  const l = full.lang
+  const en = l === 'en'
+  if (mode === 'named') return { ...full, mode: 'named' }
+  const pick = (v) => (v && typeof v === 'object' ? v[l] : v) || ''
+  const rows = full.rows.map((r) => {
+    const n = NEUTRAL[r.id] || NEUTRAL.local
+    return {
+      use: r.use,
+      useLabel: r.useLabel,
+      id: '',
+      vendor: en ? 'Mearsaad AI engine' : 'محرك مرصاد للذكاء الاصطناعي',
+      product: '',
+      offer: r.warning ? pick(PROVIDERS.gemini.offerFree).replace(/Google/g, en ? 'the provider' : 'المزوّد') : pick(n.offer),
+      noReuse: r.warning ? '' : pick(n.noReuse),
+      retention: pick(n.retention),
+      region: r.id === 'vertex' ? pick(vertexRegion()) : pick(n.region),
+      terms: [],
+      warning: Boolean(r.warning),
+    }
+  })
+  return {
+    lang: l,
+    mode: 'neutral',
+    rows,
+    sent: full.sent,
+    noCert: full.noCert,
+    named: en
+      ? '« Mearsaad AI engine » is our product name, not a provider. The providers’ names and the links to their official terms are listed in the security note handed to the client (tender files), on request.'
+      : '« محرك مرصاد » اسم منتجنا وليس مزوّداً. أسماء المزوّدين وروابط شروطهم الرسمية مذكورة في ملاحظة الأمان المسلّمة للعميل (ملفات طلبات العروض) عند الطلب.',
+    checked: full.checked,
+  }
+}
+
+/** Ce qui manque pour traiter en Europe (Milan) ou dans le Golfe (Dammam) avec Vertex AI — console Super Admin */
+export function vertexReadiness(env = process.env, exists = () => false) {
+  const missing = []
+  if (!env.MMS_VERTEX_PROJECT) missing.push('MMS_VERTEX_PROJECT')
+  if (!env.MMS_VERTEX_LOCATION || env.MMS_VERTEX_LOCATION === 'global') missing.push('MMS_VERTEX_LOCATION (europe-west8 | me-central2)')
+  const cred = env.GOOGLE_APPLICATION_CREDENTIALS
+  if (!cred) missing.push('GOOGLE_APPLICATION_CREDENTIALS')
+  else if (!exists(cred)) missing.push(`fichier du compte de service absent : ${cred}`)
+  return { ready: missing.length === 0, missing, location: env.MMS_VERTEX_LOCATION || '', main: env.MMS_AI_PROVIDER === 'vertex' }
+}

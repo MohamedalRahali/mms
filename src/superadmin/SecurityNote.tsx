@@ -3,64 +3,45 @@ import { LangToggle } from './AuditLog'
 import { api } from './api'
 
 /**
- * ملاحظة الأمان (audit produit v4, constat 10) : la note de sécurité d'une page — hébergement, chiffrement, 2FA, IA,
- * rôles, journal, exports, sauvegardes — lisible dans la console Super Admin (déplacée de l'application client le 30/10) et téléchargeable en fichier texte (même contenu).
+ * ملاحظة الأمان (audit produit v4 constat 10, v6 constat 11) : la note de sécurité d'une page — hébergement,
+ * chiffrement, 2FA, IA, rôles, journal, exports, sauvegardes. Même source que la note de l'application client
+ * (server/securityNote.js) ; ici les fournisseurs d'IA sont toujours nommés. Téléchargeable en Markdown, imprimable.
+ * Réglage : fournisseurs nommés ou non dans l'application client (décision commerciale, « neutral » par défaut),
+ * et ce qui manque pour traiter en Europe ou dans le Golfe avec Vertex AI.
  */
 
-type Section = [string, string[]]
-
-export const SECURITY_NOTE: Record<'ar' | 'en', { title: string; intro: string; sections: Section[]; file: string }> = {
-  ar: {
-    title: 'ملاحظة الأمان',
-    intro: 'ملخص من صفحة واحدة لطريقة حماية المنصة وبياناتكم، لملفات طلبات العروض (آخر تحديث: 31/10/2026). وقائع مأخوذة من إعدادات المنصة فقط.',
-    file: 'ملاحظة-الأمان-مرصاد.md',
-    sections: [
-      ['الاستضافة', ['خادم افتراضي خاص (VPS لدى OVH) مخصص للمنصة، بنظام Ubuntu، خلف nginx؛ مركز البيانات في كندا (كيبيك، حسب الموقع الجغرافي لعنوان IP الخادم).', 'النفاذ عبر HTTPS فقط على النطاق mearsaad.com، مع تحويل النطاق القديم.', 'البيانات (الحسابات، الرصد، اللوحات، التسجيلات والتفريغات) تبقى على هذا الخادم.']],
-      ['التشفير', ['النقل: TLS (HTTPS) لكل الصفحات وواجهة البرمجة، بشهادة Let’s Encrypt تتجدد تلقائياً.', 'كلمات المرور: بصمة scrypt مملّحة، لا تُحفظ أبداً كنص.', 'روابط المشاركة ومفاتيح الواجهة البرمجية: تُحفظ بصمتها فقط.', 'المفاتيح السرية (الذكاء الاصطناعي، البريد، Telegram): في ملف ‎.env على الخادم، خارج الشيفرة وخارج Git.', 'التخزين: بيانات بصمة الوجه مشفّرة (AES)؛ باقي البيانات على قرص الخادم دون تشفير إضافي على مستوى التطبيق.']],
-      ['التحقق بخطوتين', ['رموز TOTP من تطبيق المصادقة مع رموز احتياطية لمرة واحدة، إلزامية لكل الحسابات.', '« تذكرني » غير مفعّل افتراضياً: الجلسة القصيرة هي القاعدة.', 'قفل مؤقت بعد المحاولات الفاشلة، لكل حساب ولكل عنوان IP.']],
-      ['الذكاء الاصطناعي', ['يُرسل للذكاء الاصطناعي نص الأخبار المرصودة وسؤال المستخدم فقط، دون كلمات مرور أو بيانات حسابات.', 'المزوّدون الفعليون وعروضهم ومدة الاحتفاظ ومنطقة المعالجة: انظر الجدول أدناه (يُقرأ من إعدادات الخادم).', 'إذا كان مفتاح Gemini في العرض المجاني تُنبَّه الإدارة فوراً في لوحة الإشراف.', 'حصة 60 طلباً في الساعة لكل حساب.']],
-      ['الأدوار والصلاحيات', ['ثلاثة ملفات أساسية: مدير، محلل، قارئ، مع ملفات مخصصة لكل وحدة وزر.', 'تُفحص الصلاحيات على الخادم في كل طلب، وليس في الواجهة فقط.', 'حسابات اسمية لكل شخص، بما في ذلك فريق مزوّد الخدمة؛ الحساب المشترك معطّل (دون حذف).']],
-      ['سجل التدقيق', ['يُسجَّل: الدخول (الناجح والمرفوض)، التسجيلات، النشر على البوابة العامة، الرصد، التصدير والتقارير، الحسابات والصلاحيات، الإعدادات.', 'لكل سطر: التاريخ، الحساب، عنوان IP، العملية، النتيجة؛ دون كلمات مرور أو محتوى.', 'الأسطر مترابطة ببصمات SHA-256: أي تعديل أو حذف يظهر.', 'يُطّلع عليه في وحدة التحكم العليا (Super Admin) في « سجل التدقيق » ويمكن تنزيله CSV.']],
-      ['التصدير والنشر', ['التصدير (CSV، PDF، Word) لمن يملك صلاحية « تصدير » فقط، مع حماية ملفات CSV من حقن الصيغ.', 'لا يُرسل أي بريد خارج النطاقات المسموح بها.', 'البوابة العامة: نشر يدوي فقط بعد مراجعة بشرية، بعنوان وملخص معاد صياغتهما ورابط المصدر، مع سجل للنشر.']],
-      ['النسخ الاحتياطي', ['نسخة يومية تلقائية من بيانات المنصة (حسابات، صلاحيات، رصد، لوحات، بوابة، سجلات) على الخادم نفسه، تُحفظ 14 يوماً.', 'أرشيف للشيفرة قبل كل تحديث، وكل إصدار محفوظ في Git.', 'التحديثات لا تمسّ البيانات أبداً.', 'يُنصح بتفعيل النسخ الاحتياطي الخارجي لدى المستضيف (OVH) لنسخة خارج الخادم.']],
-    ],
-  },
-  en: {
-    title: 'Security note',
-    intro: 'A one-page summary of how the platform and your data are protected, for tender files (last update: 31/10/2026). Facts taken from the platform configuration only.',
-    file: 'Mearsaad-security-note.md',
-    sections: [
-      ['Hosting', ['A dedicated virtual private server (OVH VPS) running Ubuntu, behind nginx; data centre in Canada (Quebec, from the geolocation of the server IP address).', 'HTTPS only, on mearsaad.com, with the former domain redirected.', 'Data (accounts, watches, dashboards, recordings and transcripts) stays on this server.']],
-      ['Encryption', ['Transport: TLS (HTTPS) for every page and the API, with an automatically renewed Let’s Encrypt certificate.', 'Passwords: salted scrypt hash, never stored in clear.', 'Share links and API keys: only their hash is stored.', 'Secrets (AI, email, Telegram keys): in the server .env file, outside the code and Git.', 'At rest: face-recognition data is encrypted (AES); other data sits on the server disk without extra application-level encryption.']],
-      ['Two-factor authentication', ['TOTP codes from an authenticator app with one-time recovery codes, mandatory for every account.', '« Stay signed in » is unchecked by default: short sessions are the rule.', 'Temporary lock after failed attempts, per account and per IP address.']],
-      ['Artificial intelligence', ['Only the monitored news text and the user question are sent to the AI, never passwords or account data.', 'Actual providers, offers, retention and processing region: see the table below (read from the server configuration).', 'If the Gemini key is on the free tier, administrators are warned at once in the supervision console.', 'Quota of 60 requests per hour per account.']],
-      ['Roles and permissions', ['Three base profiles (administrator, analyst, viewer) plus custom profiles per module and button.', 'Permissions are checked on the server for every request, not only in the interface.', 'Named accounts for every person, including the provider team; the shared account is disabled (not deleted).']],
-      ['Audit log', ['Recorded: sign-ins (successful and refused), recordings, public-portal publications, watches, exports and reports, accounts and permissions, settings.', 'Each line: date, account, IP address, action, result; no passwords or content.', 'Lines are chained with SHA-256 hashes: any change or deletion shows.', 'It is read in the Super Admin console, under « Audit log », and can be downloaded as CSV.']],
-      ['Exports and publishing', ['Exports (CSV, PDF, Word) only for profiles with the « export » permission; CSV files are protected against formula injection.', 'No email is ever sent outside the allowed domains.', 'Public portal: manual publishing only, after human review, with a rewritten title and summary and the source link, and a publication log.']],
-      ['Backups', ['Automatic daily backup of platform data (accounts, permissions, watches, dashboards, portal, logs) on the same server, kept 14 days.', 'Code archived before every update, every version kept in Git.', 'Updates never touch the data.', 'Enabling the host (OVH) off-server backup is recommended for a copy outside the server.']],
-    ],
-  },
-}
-
 type AiRow = { use: string; useLabel: string; vendor: string; product: string; offer: string; noReuse: string; retention: string; region: string; terms: { label: string; url: string }[] }
-type AiDisclosure = { rows: AiRow[]; sent: string; noCert: string; markdown: string }
+type Note = { title: string; intro: string; file: string; sections: [string, string[]][]; ai: { rows: AiRow[]; sent: string; noCert: string }; aiTitle: string; markdown: string }
+type Disclosure = { clientMode: 'neutral' | 'named'; vertex: { ready: boolean; missing: string[]; location: string; main: boolean } }
 
 export function SecurityNote() {
   const [lang, setLang] = useState<'ar' | 'en'>('ar')
-  const [ai, setAi] = useState<AiDisclosure | null>(null)
+  const [n, setN] = useState<Note | null>(null)
+  const [d, setD] = useState<Disclosure | null>(null)
+  const [msg, setMsg] = useState('')
   useEffect(() => {
-    api<AiDisclosure>(`/ai-disclosure?lang=${lang}`).then(setAi, () => setAi(null))
+    api<Note>(`/security-note?lang=${lang}`).then(setN, () => setN(null))
+    api<Disclosure>(`/ai-disclosure?lang=${lang}`).then(setD, () => setD(null))
   }, [lang])
-  const n = SECURITY_NOTE[lang]
   const download = () => {
-    const text = [`# ${n.title}`, '', n.intro, '', ...n.sections.flatMap(([h, lines]) => [`## ${h}`, ...lines.map((l) => `- ${l}`), '']), ai?.markdown || ''].join('\r\n')
-    const url = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/markdown;charset=utf-8' }))
+    if (!n) return
+    const url = URL.createObjectURL(new Blob(['﻿' + n.markdown.replace(/\n/g, '\r\n')], { type: 'text/markdown;charset=utf-8' }))
     const a = document.createElement('a')
     a.href = url
     a.download = n.file
     a.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
+  const setMode = async (mode: 'neutral' | 'named') => {
+    try {
+      await api('/settings', 'PUT', { aiDisclosure: mode })
+      setD((x) => (x ? { ...x, clientMode: mode } : x))
+      setMsg('تم الحفظ')
+    } catch (e) {
+      setMsg(String((e as Error).message || e))
+    }
+  }
+  if (!n) return <p className="sa-muted">جارٍ التحميل…</p>
   return (
     <section className="sa-card sa-card--wide sa-secnote" dir={lang === 'ar' ? 'rtl' : 'ltr'} lang={lang}>
       <div className="sa-card__head">
@@ -75,6 +56,27 @@ export function SecurityNote() {
           </button>
         </span>
       </div>
+      {d && (
+        <div className="sa-card" dir="rtl" lang="ar">
+          <h3>أسماء مزوّدي الذكاء الاصطناعي في تطبيق العميل</h3>
+          <p className="sa-muted">
+            الوضع الحالي: <strong>{d.clientMode === 'named' ? 'المزوّدون مذكورون بالاسم مع روابط الشروط الرسمية' : 'دون أسماء (« محرك مرصاد ») مع العرض وعدم التدريب والاحتفاظ والمنطقة'}</strong>. الملاحظة أدناه تذكر الأسماء دائماً، وتُسلَّم للعميل عند الطلب.
+          </p>
+          <span className="sa-row">
+            <button type="button" className="sa-btn" disabled={d.clientMode === 'neutral'} onClick={() => setMode('neutral')}>
+              دون أسماء
+            </button>
+            <button type="button" className="sa-btn" disabled={d.clientMode === 'named'} onClick={() => setMode('named')}>
+              بالأسماء
+            </button>
+          </span>
+          {msg && <p className="sa-muted">{msg}</p>}
+          <p className="sa-muted">
+            Vertex AI (ميلانو europe-west8 أو الدمام me-central2):{' '}
+            {d.vertex.ready ? `جاهز (${d.vertex.location})${d.vertex.main ? '، المحرك الرئيسي' : '، لمهام الخلفية فقط'}` : `غير مفعّل — ينقص: ${d.vertex.missing.join('، ')}`}
+          </p>
+        </div>
+      )}
       <p className="sa-muted">{n.intro}</p>
       {n.sections.map(([h, lines]) => (
         <div key={h}>
@@ -86,24 +88,23 @@ export function SecurityNote() {
           </ul>
         </div>
       ))}
-      {ai && (
-        <div>
-          <h3>{lang === 'ar' ? 'الذكاء الاصطناعي — المزوّدون الفعليون' : 'Artificial intelligence — actual providers'}</h3>
-          <ul>
-            {ai.rows.map((r) => (
-              <li key={r.use}>
-                <strong>{r.useLabel}</strong> : {r.vendor} — {r.product} · {r.offer}. {r.noReuse} {r.retention} {lang === 'ar' ? 'المنطقة' : 'Region'}: {r.region}.{' '}
-                {r.terms.map((t) => (
-                  <a key={t.url} href={t.url} target="_blank" rel="noopener noreferrer" style={{ marginInlineEnd: '0.5rem' }}>
-                    {t.label}
-                  </a>
-                ))}
-              </li>
-            ))}
-          </ul>
-          <p className="sa-muted">{ai.noCert}</p>
-        </div>
-      )}
+      <div>
+        <h3>{lang === 'ar' ? 'الذكاء الاصطناعي — المزوّدون الفعليون' : 'Artificial intelligence — actual providers'}</h3>
+        <ul>
+          {n.ai.rows.map((r) => (
+            <li key={r.use}>
+              <strong>{r.useLabel}</strong> : {r.vendor} — {r.product} · {r.offer}. {r.noReuse} {r.retention} {lang === 'ar' ? 'المنطقة' : 'Region'}: {r.region}.{' '}
+              {r.terms.map((t) => (
+                <a key={t.url} href={t.url} target="_blank" rel="noopener noreferrer" style={{ marginInlineEnd: '0.5rem' }}>
+                  {t.label}
+                </a>
+              ))}
+            </li>
+          ))}
+        </ul>
+        <p className="sa-muted">{n.ai.sent}</p>
+        <p className="sa-muted">{n.ai.noCert}</p>
+      </div>
     </section>
   )
 }

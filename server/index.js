@@ -20,7 +20,9 @@ import { compileQuery, queryError, searchText } from './query.js'
 import { buildBriefing, comparePeriods, engagementTotals, interactions, retrieve, shareOfVoice, topEngaged } from './insights.js'
 import { briefingConf, briefingKey, briefingWithSummary, sendBriefing, setBriefingConf, startBriefing } from './briefing.js'
 import { imageRoute, initImages, withImages } from './images.js'
-import { mountSuperAdmin } from './superadmin.js'
+import { aiDisclosureMode, mountSuperAdmin } from './superadmin.js'
+import { aiClientDisclosure } from './aiDisclosure.js'
+import { securityNote } from './securityNote.js'
 import { auditMiddleware, initAuditTrail, mountClientAuditTrail } from './auditTrail.js'
 import { activateAccount, sharedGate, sharedReadOnly, startAccountPolicy } from './accountPolicy.js'
 import { isSharedAccount } from './auditTrail.js'
@@ -1170,6 +1172,13 @@ startStreamAlerts(path.join(root, 'data'), {
 startRetention(path.join(root, 'data'), { getItems, listWatches })
 app.get('/api/diffusion/cuts', (_req, res) => res.json({ cuts: currentCuts() }))
 app.get('/api/security/status', (req, res) => res.json({ backups: req.user?.role === 'admin' ? backupStatus() : { count: backupStatus().count } }))
+// Fiche IA (écran IA, FAQ) et note de sécurité téléchargeable, pour tous les comptes (audit v6, constats 3 et 11) :
+// fournisseurs nommés ou non selon le réglage de la console Super Admin ; détail des sauvegardes pour les admins
+app.get('/api/ai/disclosure', (req, res) => res.json(aiClientDisclosure(req.query.lang, aiDisclosureMode())))
+app.get('/api/security-note', (req, res) => {
+  const b = backupStatus()
+  res.json(securityNote(req.query.lang, { mode: aiDisclosureMode(), backups: req.user?.role === 'admin' ? b : { count: b.count, newest: b.newest } }))
+})
 startAccountPolicy(path.join(root, 'data', 'superadmin'))
 // الإعدادات الشخصية : photo de profil, nom, préférences, mot de passe
 initProfile(path.join(root, 'data'))
@@ -1179,7 +1188,14 @@ initItemEdits(path.join(root, 'data'), { changed: refreshSourcePolicy })
 mountItemEdits(app, { getItems, isAdmin: (u) => (u?.role || 'admin') === 'admin' })
 // Diffusion automatique sur la vitrine publique : règles, épingles, exclusions et aperçu (إدارة البوابة العامة)
 initPortalFeed(path.join(root, 'data'))
-mountPortalFeed(app, { getItems })
+mountPortalFeed(app, {
+  getItems,
+  // Validateurs possibles : comptes actifs, nominatifs, ayant le droit de publication (audit v6, constat 12)
+  candidates: () =>
+    readUsers()
+      .filter((u) => !u.disabled && !isSharedAccount(u.email) && permsOf(u).actions.includes('publish_public'))
+      .map((u) => ({ email: String(u.email).toLowerCase(), name: u.name || u.email, role: u.role || 'admin' })),
+})
 // سجل الإرسال : envois des veilles, alertes du radar, briefing et rapports
 app.get('/api/watches/history', (_req, res) => res.json({ rows: dispatchHistory() }))
 
