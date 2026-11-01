@@ -3,7 +3,7 @@
  * précédente est ramenée aux mêmes jours couverts que la période en cours (moyenne par jour couvert). Même règle que
  * le serveur (server/insights.js fairChange). 'new' : base trop petite pour un pourcentage parlant.
  */
-export type Coverage = { days: number; current: number; previous: number; partial: boolean; since?: string | null }
+export type Coverage = { days: number; current: number; previous: number; partial: boolean; since?: string | null; label?: { ar: string; en: string } }
 /** Période précédente en partie couverte : 'average' (moyenne par jour couvert, base affichée) ou 'hide' (« جديد ») */
 export const PARTIAL_MODE: 'average' | 'hide' = 'average'
 const DAY = 86_400_000
@@ -34,8 +34,15 @@ export function fairChange(cur: number, prev: number, cov: Coverage | null | und
 }
 
 /** Petite mention de la base de calcul quand la période précédente est partielle */
+// Libellé des jours couverts fourni par le serveur (insights.coveredDaysLabel) : même format partout (audit v6)
+export function coveredLabel(cov: Coverage, lang: string) {
+  if (cov.label) return lang === 'ar' ? cov.label.ar : cov.label.en
+  const x = Math.round(cov.previous * 10) / 10
+  const n = Number.isInteger(x) ? String(x) : lang === 'ar' ? x.toFixed(1).replace('.', ',') : x.toFixed(1)
+  return lang === 'ar' ? `${n} من ${cov.days} ${cov.days > 10 ? 'يوماً' : 'أيام'}` : `${n} of ${cov.days} days`
+}
 export const basisNote = (cov: Coverage | null | undefined, lang: string) =>
-  cov?.partial ? (lang === 'ar' ? `على أساس متوسط ${Math.round(cov.previous)} يوم` : `based on a ${Math.round(cov.previous)}-day average`) : ''
+  cov?.partial ? (lang === 'ar' ? `على أساس متوسط ${coveredLabel(cov, lang)}` : `based on the average of ${coveredLabel(cov, lang)}`) : ''
 
 /**
  * Affichage d'une variation : entre -100 % et +100 %, le pourcentage ; au-delà, un multiplicateur (+166 % → « ×2,7 »),

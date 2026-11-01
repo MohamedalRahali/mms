@@ -169,7 +169,10 @@ export function StatsView({ flux }: { flux: Flux | '' }) {
           <MoodPanel stats={data} />
 
           <section className="news-panel">
-            <h3>{t.categories}</h3>
+            {/* Périmètre affiché (audit v6) : la période choisie, pas toute la base comme la vitrine publique */}
+            <h3>
+              {t.categories} <small>· {days === '7' ? t.last7 : days === '90' ? t.last90 : t.last30}</small>
+            </h3>
             <HBars rows={data.categories} label={i.category} />
           </section>
 

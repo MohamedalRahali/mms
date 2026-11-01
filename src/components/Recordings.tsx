@@ -36,6 +36,8 @@ type Rec = {
   texte?: boolean;
   rasd?: string[];
   hits?: number | null;
+  // Échec ancien (> 48 h) ou suivi d'un enregistrement réussi de la même chaîne : rangé, replié (audit v6)
+  pastFailure?: "old" | "replaced";
 };
 type Channel = {
   id: string;
@@ -1073,9 +1075,12 @@ export function Recordings({ channel }: { channel?: string }) {
       setBusy(false);
     }
   }
-  const items = (data?.items ?? []).filter(
+  const scoped = (data?.items ?? []).filter(
     (r) => !channel || r.chaine === channel,
   );
+  const items = scoped.filter((r) => !r.pastFailure);
+  const ar = i.lang === "ar";
+  const pastFailures = scoped.filter((r) => r.pastFailure);
   return (
     <section className="rec">
       {!channel && (
@@ -1346,6 +1351,32 @@ export function Recordings({ channel }: { channel?: string }) {
                 />
               ))}
             </ul>
+          )}
+          {pastFailures.length > 0 && (
+            <details className="rec-past">
+              <summary>
+                {ar
+                  ? `إخفاقات سابقة (${pastFailures.length})`
+                  : `Past failures (${pastFailures.length})`}
+              </summary>
+              <p className="ld-hint">
+                {ar
+                  ? "تسجيلات فشلت منذ أكثر من 48 ساعة أو تلاها تسجيل ناجح للقناة نفسها."
+                  : "Recordings that failed more than 48 hours ago or were followed by a successful recording of the same channel."}
+              </p>
+              <ul className="rec-rows">
+                {pastFailures.map((r) => (
+                  <RecRow
+                    key={r.id}
+                    r={r}
+                    can={can}
+                    limits={data.limits}
+                    onChange={() => setTick((n) => n + 1)}
+                    onView={() => setView(r)}
+                  />
+                ))}
+              </ul>
+            </details>
           )}
         </>
       )}
