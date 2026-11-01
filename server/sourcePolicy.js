@@ -94,6 +94,9 @@ export function excludedBySource(it) {
   const o = canonicalOrigin(it.origin)
   const lo = lower(o)
   if (DEFAULT_BLOCKED.some((b) => lower(b) === lo) || policy.blocked.some((b) => lower(canonicalOrigin(b)) === lo)) return true
+  // Commentaire (audit v6) : sa « source » est le nom de son auteur, pas une chaîne ; il suit sa publication, déjà
+  // filtrée (liens de linkReactions). Le filtre des chaînes YouTube écartait ainsi 1 126 commentaires sur 1 128.
+  if (it.media === 'comment') return false
   const social = it.channel === 'reddit' || it.media === 'forum' || it.media === 'social'
   if (social && BOT_PATTERNS.some((re) => re.test(o))) return true
   if (it.channel === 'youtube' && (YOUTUBE_OFFTOPIC.test(o) || YOUTUBE_OFFTOPIC_TITLE.test(String(it.title || '')))) return true

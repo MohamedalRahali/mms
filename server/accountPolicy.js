@@ -301,6 +301,8 @@ export function providerAccounts(users = readUsers(), rows = []) {
       pending: Boolean(u.pendingActivation),
       lastLogin: logins.length ? logins[logins.length - 1].t : null,
       lastAction: mine.length ? mine[mine.length - 1].t : null,
+      // Dernière action réussie (une connexion refusée sur compte désactivé n'en est pas une)
+      lastSuccess: [...mine].reverse().find((r) => Number(r.status) < 400 && r.action !== 'login_disabled')?.t || null,
       actions7d: mine.filter((r) => r.t >= new Date(Date.now() - 7 * 86_400_000).toISOString()).length,
       // Compte désactivé : actions réussies après la désactivation (attendu : 0)
       afterDisabled: since ? { count: after.length, last: after.length ? after[after.length - 1].t : null } : null,

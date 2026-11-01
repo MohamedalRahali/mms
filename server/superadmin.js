@@ -612,6 +612,11 @@ export function mountSuperAdmin(app, root) {
       changes.push('password')
     }
     if (req.body?.disabled !== undefined) {
+      // Date de la désactivation tenue à jour (audit v6 : l'inventaire du prestataire compte les actions qui la suivent)
+      if (Boolean(req.body.disabled) !== Boolean(u.disabled)) {
+        if (req.body.disabled) u.disabledAt = new Date().toISOString()
+        else delete u.disabledAt
+      }
       u.disabled = Boolean(req.body.disabled)
       changes.push(u.disabled ? 'disabled' : 'enabled')
     }

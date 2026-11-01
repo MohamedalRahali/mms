@@ -468,6 +468,7 @@ type ProviderRow = {
   pending: boolean
   lastLogin: string | null
   lastAction: string | null
+  lastSuccess?: string | null
   actions7d: number
   afterDisabled: { count: number; last: string | null } | null
   sameLocal: string[]
@@ -493,6 +494,7 @@ function ProviderAccounts({ rows }: { rows: ProviderRow[] }) {
             <th>النوع</th>
             <th>الحالة</th>
             <th>آخر دخول</th>
+            <th>آخر عملية ناجحة</th>
             <th>عمليات (7 أيام)</th>
             <th>بعد التعطيل</th>
           </tr>
@@ -513,6 +515,7 @@ function ProviderAccounts({ rows }: { rows: ProviderRow[] }) {
                 {!r.disabled && !r.pending && <span className={r.mfa ? 'sa-tag is-ok' : 'sa-tag is-bad'}>{r.mfa ? 'خطوتان' : 'دون خطوتين'}</span>}
               </td>
               <td>{r.lastLogin ? fmtDate(r.lastLogin) : '—'}</td>
+              <td>{r.lastSuccess ? fmtDate(r.lastSuccess) : '—'}</td>
               <td>{r.actions7d}</td>
               <td>{r.afterDisabled ? <span className={r.afterDisabled.count ? 'sa-tag is-bad' : 'sa-tag is-ok'}>{r.afterDisabled.count ? `${r.afterDisabled.count} عملية` : 'لا شيء'}</span> : '—'}</td>
             </tr>

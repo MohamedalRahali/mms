@@ -130,3 +130,21 @@ test('TV (constat 4) : bulletin pas encore extrait = « en attente », pas « sa
   assert.equal(r.find((x) => x.id === 'tanasuh-tv').state, 'silent')
   assert.equal(r.find((x) => x.id === 'wasat-tv').state, 'ok')
 })
+
+test('commentaires (constat 8) : un commentaire YouTube n’est pas écarté par le filtre des chaînes (sa source est son auteur)', async () => {
+  const { excludedBySource } = await import('../server/sourcePolicy.js')
+  const comment = { media: 'comment', channel: 'youtube', origin: 'Ahmed Ali', title: 'تحية للقناة', parent: { id: 'v1' } }
+  assert.equal(excludedBySource(comment), false)
+  // La vidéo d'une chaîne hors liste reste écartée, et ses commentaires avec elle (rattachement à une fiche visible)
+  assert.equal(excludedBySource({ media: 'broadcast', channel: 'youtube', origin: 'Ahmed Ali', title: 'vlog' }), true)
+})
+
+test('comptes du prestataire : dernière action réussie, connexion refusée exclue', async () => {
+  const pol = await import('../server/accountPolicy.js')
+  const users = [{ email: 'aroundexpressions@gmail.com', role: 'admin', disabled: true, disabledAt: '2026-10-30T18:59:07.113Z' }]
+  const rows = [
+    { t: '2026-10-31T14:49:35.038Z', actor: 'aroundexpressions@gmail.com', action: 'PUT portal-feed/config', status: 200 },
+    { t: '2026-11-01T09:00:00.000Z', actor: 'aroundexpressions@gmail.com', action: 'login_disabled', status: 403 },
+  ]
+  assert.equal(pol.providerAccounts(users, rows)[0].lastSuccess, '2026-10-31T14:49:35.038Z')
+})
