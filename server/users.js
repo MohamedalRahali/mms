@@ -30,8 +30,7 @@ if (cmd === 'list') {
   const { providerAccounts } = await import('./accountPolicy.js')
   let audit = []
   try {
-    audit = fs.readFileSync(path.join(dataDir, 'audit-trail.jsonl'), 'utf8').split('
-').filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
+    audit = fs.readFileSync(path.join(dataDir, 'audit-trail.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
   } catch {}
   console.log(JSON.stringify(providerAccounts(users, audit), null, 1))
 } else if (cmd === 'add' && email) {
