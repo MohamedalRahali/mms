@@ -153,9 +153,12 @@ function counts(items, key, limit) {
 /** Fiches qui parlent du sujet : requête booléenne si elle compile, sinon recherche par mots */
 function matchSubject(items, subject) {
   if (!subject) return items
+  // Requête booléenne seulement si le sujet en a les marques (AND, OR, NOT, guillemets, parenthèses) : une phrase libre
+  // compilée exigeait tous ses mots (« في »…) et ne retenait presque rien, sans passer par le repli par mots
+  const boolean = /\b(AND|OR|NOT)\b|["()]/.test(subject)
   let match = null
   try {
-    match = compileQuery(subject)
+    match = boolean ? compileQuery(subject) : null
   } catch {
     match = null
   }
@@ -164,10 +167,13 @@ function matchSubject(items, subject) {
   // Repli (phrase libre) : les fiches qui contiennent au moins la moitié des mots significatifs du sujet
   const words = [...new Set(normalize(subject).split(/[^\p{L}\p{N}]+/u))].filter((w) => w.length > 2 && !STOP.has(w))
   if (!words.length) return items
-  const need = Math.max(1, Math.ceil(words.length / 2))
+  // Deux mots ou moins : tous exigés (« الانتخابات ليبيا » ne doit pas retenir tout ce qui cite ليبيا)
+  const need = words.length <= 2 ? words.length : Math.ceil(words.length / 2)
+  // Chaque mot passe par le moteur de recherche (racine arabe : « الانتخابات » trouve aussi « انتخابات »)
+  const tests = words.map((w) => compileQuery(w) || ((text) => text.includes(w)))
   return items.filter((it) => {
     const text = searchText(it)
-    return words.filter((w) => text.includes(w)).length >= need
+    return tests.filter((t) => t(text)).length >= need
   })
 }
 
