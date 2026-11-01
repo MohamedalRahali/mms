@@ -148,3 +148,33 @@ test('comptes du prestataire : dernière action réussie, connexion refusée exc
   ]
   assert.equal(pol.providerAccounts(users, rows)[0].lastSuccess, '2026-10-31T14:49:35.038Z')
 })
+
+test('analyse intelligente : moteur choisi (repli), résultat daté de sa période, route en tâche de fond (202) avec cause typée', async () => {
+  const http = await import('node:http')
+  const body = JSON.stringify({ choices: [{ message: { content: JSON.stringify({ synthese: 'ملخص', themes: [], a_surveiller: [] }) }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5 } })
+  const srv = http.createServer((req, res) => {
+    req.resume()
+    req.on('end', () => {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(body)
+    })
+  })
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r))
+  process.env.MMS_LLM_BASE_URL = `http://127.0.0.1:${srv.address().port}/v1`
+  try {
+    const { analyse } = await import('../server/ai.js')
+    const r = await analyse({ items: [{ title: 'خبر', origin: 'x', date: '2026-11-01T10:00:00Z', summary: '' }], key: `t-${Date.now()}`, fluxLabel: 'Libye', days: 1, flux: 'libye', provider: 'local' })
+    assert.equal(r.synthese, 'ملخص')
+    assert.equal(r.days, 1)
+    assert.equal(r.count, 1)
+  } finally {
+    srv.close()
+    delete process.env.MMS_LLM_BASE_URL
+  }
+  const idx = fs.readFileSync(path.join(import.meta.dirname, '..', 'server', 'index.js'), 'utf8')
+  assert.match(idx, /res\.status\(202\)\.json\(\{ running: true \}\)/)
+  assert.match(idx, /return analyse\(\{ \.\.\.scope, provider: other \}\)/)
+  assert.match(idx, /error: 'FAILED', reason: aiFailures\.get\(scope\.key\)\?\.reason/)
+  const ui = fs.readFileSync(path.join(import.meta.dirname, '..', 'src', 'components', 'Extras.tsx'), 'utf8')
+  assert.match(ui, /res\.status !== 202/)
+})

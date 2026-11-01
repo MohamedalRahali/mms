@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import express from 'express'
 import { getItems, reactionsOf } from './store.js'
-import { aiEnabled, aiProvider, aiReason, aiUsage, analyse, aroundRun, cached, explainSpike, initUsage, loadKey, runEconomy, writeQuery } from './ai.js'
+import { aiEnabled, aiProvider, aiReason, economyProvider, aiUsage, analyse, aroundRun, cached, explainSpike, initUsage, loadKey, runEconomy, writeQuery } from './ai.js'
 import { initEntityAI, startEntityAI } from './entityAI.js'
 import { allTags, countList, entitiesOf, findSpikes, initTags, itemKey, setTags, spikeItems, tagsOf, toCsv } from './intel.js'
 import { keyStatus } from './keys.js'
@@ -819,24 +819,49 @@ function aiScope(q) {
   return { items: found, days, flux, key: `${flux || 'all'}|${days}|${lastUpdate}|${found.length}`, fluxLabel: FLUX_LABEL[q.flux] || 'Mosaïque FM et Libye' }
 }
 let aiRunning = false
+// Analyse lancée en tâche de fond (audit v6) : une analyse longue (300 fiches, moteur principal) dépassait le délai du
+// proxy et l'écran affichait une erreur alors qu'elle se terminait. POST lance (202) ; l'écran suit par GET.
+// Moteur principal en panne : repli sur le moteur des tâches de fond ; cause typée (QUOTA, KEY, TIMEOUT…) gardée.
+const aiFailures = new Map() // clé de la période → { reason, at }
+async function runAnalysis(scope) {
+  try {
+    return await analyse(scope)
+  } catch (err) {
+    const other = economyProvider()
+    if (!other || other === aiProvider()) throw err
+    console.error(`Analyse intelligente : ${aiProvider()} indisponible (${aiReason(err)}), repli sur ${other}`)
+    return analyse({ ...scope, provider: other })
+  }
+}
 app.get('/api/ai/analysis', (req, res) => {
   const scope = aiScope(req.query)
-  res.json({ enabled: aiEnabled(), count: scope.items.length, running: aiRunning, result: cached(scope.key) })
+  const failed = aiFailures.get(scope.key)
+  res.json({ enabled: aiEnabled(), count: scope.items.length, running: aiRunning, result: cached(scope.key), ...(failed && !aiRunning ? { error: 'FAILED', reason: failed.reason } : {}) })
 })
 app.post('/api/ai/analysis', async (req, res) => {
   if (!aiEnabled()) return res.status(400).json({ error: 'NO_KEY' })
   const scope = aiScope(req.query)
   if (scope.items.length === 0) return res.status(400).json({ error: 'NO_ITEMS' })
-  if (aiRunning) return res.status(429).json({ error: 'BUSY' })
+  const done = cached(scope.key)
+  if (done) return res.json({ result: done })
+  // Déjà en cours : l'écran suit la même analyse au lieu d'afficher une erreur
+  if (aiRunning) return res.status(202).json({ running: true })
   aiRunning = true
-  try {
-    res.json({ result: await analyse(scope) })
-  } catch (err) {
-    console.error('Analyse intelligente :', err.message)
-    res.status(500).json({ error: err.code || 'FAILED' }) // message brut (nom du moteur) jamais renvoyé au client (audit v5)
-  } finally {
-    aiRunning = false
-  }
+  aiFailures.delete(scope.key)
+  const job = runAnalysis(scope)
+    .catch((err) => {
+      console.error('Analyse intelligente :', err.message)
+      aiFailures.set(scope.key, { reason: aiReason(err), at: Date.now() })
+      return null
+    })
+    .finally(() => {
+      aiRunning = false
+    })
+  // Réponse rapide si le moteur répond vite, sinon 202 et suivi par GET
+  const quick = await Promise.race([job, new Promise((r) => setTimeout(() => r(undefined), Number(process.env.MMS_AI_QUICK_MS) || 20_000))])
+  if (quick) return res.json({ result: quick })
+  if (quick === null) return res.status(500).json({ error: 'FAILED', reason: aiFailures.get(scope.key)?.reason || 'PROVIDER' }) // jamais le message brut (audit v5)
+  res.status(202).json({ running: true })
 })
 
 // Explication d'un pic par l'IA, gardée en mémoire tant que le pic ne bouge pas

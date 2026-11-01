@@ -5,6 +5,7 @@ import { type Flux, type NewsItem, type NewsResponse, useFetch } from '../lib/ne
 import { useI18n } from '../lib/i18n'
 import { useAlerts, useFavorites } from '../lib/prefs'
 import { canDo, useAuth } from '../lib/auth'
+import { useAround } from '../lib/around'
 
 /** Bandeau orange « mises à jour disponibles », avec compte à rebours, comme NewsRadar */
 export function UpdateToast({ onReload }: { onReload: () => void }) {
@@ -258,7 +259,7 @@ function WatchAlerts({ watches }: { watches: WatchRow[] | null }) {
 }
 
 type Analysis = { synthese: string; themes: { titre: string; points: string[] }[]; a_surveiller: string[]; at: string; count: number; days?: number; flux?: string }
-type AnalysisState = { enabled: boolean; count: number; running: boolean; result: Analysis | null }
+type AnalysisState = { enabled: boolean; count: number; running: boolean; result: Analysis | null; error?: string; reason?: string }
 
 export function AiAnalysis({ flux }: { flux: Flux | '' }) {
   const i = useI18n()
@@ -271,6 +272,7 @@ export function AiAnalysis({ flux }: { flux: Flux | '' }) {
   const [result, setResult] = useState<Analysis | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const reasons = useAround().errors
   const latest = useRef(query)
   useEffect(() => {
     latest.current = query
@@ -279,21 +281,34 @@ export function AiAnalysis({ flux }: { flux: Flux | '' }) {
   }, [query])
   // Audit v6 : un résultat d'une autre période (réponse arrivée après un changement de période) n'est jamais affiché
   // sous la période choisie ; « بناءً على N خبر » = fiches de la période du résultat
-  const sameScope = (r: Analysis | null) => (r && (r.days === undefined || (String(r.days) === days && (r.flux ?? '') === (flux || ''))) ? r : null)
+  const sameScope = (r: Analysis | null) => (r && (r.days === undefined || String(r.days) === days) ? r : null)
   const shown = sameScope(result) ?? sameScope(state?.result ?? null)
 
+  // Audit v6 : l'analyse tourne en tâche de fond sur le serveur (202) ; l'écran la suit jusqu'au résultat ou à la cause
+  // de l'échec (quota, clé, délai…), au lieu d'une erreur quand la rédaction dépasse le délai de la connexion
   async function run() {
     setBusy(true)
     setError('')
+    const fail = (code: string, reason = '') =>
+      setError(code === 'NO_KEY' ? t.aiNoKey : code === 'NO_SDK' ? t.aiNoSdk : code === 'NO_ITEMS' ? t.aiNoItems : (reason && reasons[reason]) || t.aiFailed)
     try {
       const res = await fetch(`/api/ai/analysis?${query}`, { method: 'POST' })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'FAILED')
-      // Période changée pendant la rédaction : le résultat est ignoré (il reste en cache côté serveur)
-      if (latest.current === query) setResult(json.result)
-    } catch (err) {
-      const code = (err as Error).message
-      setError(code === 'NO_KEY' ? t.aiNoKey : code === 'NO_SDK' ? t.aiNoSdk : code === 'NO_ITEMS' ? t.aiNoItems : t.aiFailed)
+      const json = await res.json().catch(() => ({}))
+      if (res.status !== 202) {
+        if (!res.ok) return fail(json.error || 'FAILED', json.reason)
+        // Période changée pendant la rédaction : le résultat est ignoré (il reste en cache côté serveur)
+        if (latest.current === query) setResult(json.result)
+        return
+      }
+      for (let k = 0; k < 100 && latest.current === query; k++) {
+        await new Promise((r) => setTimeout(r, 3000))
+        const st = await fetch(`/api/ai/analysis?${query}`).then((r) => (r.ok ? r.json() : null)).catch(() => null)
+        if (!st) continue
+        if (st.result) return void setResult(st.result)
+        if (st.error && !st.running) return fail(st.error, st.reason)
+      }
+    } catch {
+      fail('FAILED', 'NETWORK')
     } finally {
       setBusy(false)
     }
