@@ -156,15 +156,20 @@ export function briefingTelegram({ b, summary }) {
 }
 
 export async function sendBriefing() {
+  // Aucun canal (ni destinataire avec SMTP, ni Telegram) : refus immédiat, avant la rédaction du résumé par l'IA
+  // (appel au moteur de 30 s et plus, consommé pour rien)
+  const mail = Boolean(conf.recipients.length && process.env.SMTP_USER && process.env.SMTP_PASS)
+  const telegram = Boolean(conf.telegram && telegramReady())
+  if (!mail && !telegram) throw Object.assign(new Error('Aucun canal configuré'), { code: 'NO_CHANNEL' })
   const { items, lastUpdate } = getItems()
   const real = items.filter((it) => !it.demo)
   const report = await briefingWithSummary(real, conf.days, lastUpdate)
   const sent = []
-  if (conf.recipients.length && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (mail) {
     await sendMail(conf.recipients, briefingEmail(report))
     sent.push('email')
   }
-  if (conf.telegram && telegramReady()) {
+  if (telegram) {
     await sendTelegram(briefingTelegram(report))
     sent.push('telegram')
   }
