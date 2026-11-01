@@ -20,7 +20,7 @@ On te donne une question et des actualités numérotées [1], [2]… tirées de 
 Réponds dans la langue de la question (arabe standard si la question est en arabe), de façon claire, structurée et factuelle.
 - titre : un titre court (3 à 8 mots) pour la conversation ;
 - reponse : la réponse en Markdown simple. Pour un aperçu ou une liste d'actualités, fais une liste numérotée de sujets :
-  « 1. **Titre du sujet** » puis une ligne « - Aperçu : … ». Sinon, des paragraphes courts, des listes « - »,
+  « 1. **Titre du sujet** » puis une ligne « - » qui résume le sujet en une ou deux phrases, sans étiquette. Sinon, des paragraphes courts, des listes « - »,
   des intertitres « ## » si la réponse est longue, et un tableau Markdown seulement pour comparer des chiffres.
   Appuie chaque fait sur les actualités en citant leur numéro entre crochets à la fin de la phrase, par exemple [3] ou [2, 5] ;
 - sources : les numéros des actualités citées ;

@@ -18,6 +18,8 @@ const cells = (line: string) =>
     .split('|')
     .map((c) => c.trim())
 
+const LABEL_RE = /^(?:\*\*)?(?:Aper[çc]u|Overview)(?:\*\*)?\s*[:：]\s*/i
+
 export function parseMd(src: string): Block[] {
   const blocks: Block[] = []
   const lines = String(src || '').replace(/\r/g, '').split('\n')
@@ -45,7 +47,8 @@ export function parseMd(src: string): Block[] {
     const ol = line.match(/^(\d+)[.)]\s+(.*)$/)
     const ul = line.match(/^[-*•]\s+(.*)$/)
     if (ol || ul) {
-      const text = (ol ? ol[2] : ul![1]).trim()
+      // Étiquette « Aperçu : » recopiée de la consigne par le modèle (mot français dans une réponse arabe) : retirée
+      const text = (ol ? ol[2] : ul![1]).trim().replace(LABEL_RE, '')
       const ordered = Boolean(ol)
       const last = blocks[blocks.length - 1]
       // Puce en retrait sous un élément de liste : sous-point de cet élément
