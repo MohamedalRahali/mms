@@ -4887,6 +4887,13 @@ img.mms-user__avatar--img {
 .ai-disclosure__table tr.is-warn {
   color: var(--danger, #c0392b);
 }
+.help-center section.security-note {
+  display: block;
+}
+.security-note > div,
+.security-note ul {
+  inline-size: auto;
+}
 .security-note__head {
   display: flex;
   flex-wrap: wrap;
