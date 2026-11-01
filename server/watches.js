@@ -223,6 +223,7 @@ export function repairWatchesV5(now = new Date()) {
  * ambigus (sigles) sont évités : la comparaison se fait par sous-chaîne.
  */
 const LY = '(ليبيا OR الليبي OR الليبية OR طرابلس OR بنغازي OR مصراتة OR سبها OR Libya OR Libyan)'
+const LY_PLACES = '(ليبيا OR الليبي OR الليبية OR طرابلس OR بنغازي OR مصراتة OR سبها OR الزاوية OR سرت OR درنة OR الخمس OR زليتن OR غريان OR صبراتة OR ورشفانة OR الكفرة OR أوباري OR تاجوراء OR جنزور OR عين زارة OR أبوسليم OR Libya OR Libyan OR Tripoli)'
 export const SEED_WATCHES_V6 = [
   {
     key: 'government',
@@ -246,7 +247,9 @@ export const SEED_WATCHES_V6 = [
     key: 'security',
     name: 'الأمن',
     rules: [
-      'اشتباكات OR اشتباك مسلح OR مسلحين OR مسلحون OR اغتيال OR خطف OR اختطاف OR تفجير OR انفجار OR جهاز الردع OR قوة الردع OR الردع OR جهاز الأمن الداخلي OR جهاز الأمن العام OR جهاز الأمن OR إطلاق نار OR إطلاق النار OR هجوم مسلح OR clashes OR assassination OR kidnapping',
+      // Événements limités aux lieux libyens (sinon les affrontements d'autres pays cités par la presse arabe alertent)
+      '(اشتباكات OR اشتباك مسلح OR مسلحين OR مسلحون OR اغتيال OR خطف OR اختطاف OR تفجير OR انفجار OR إطلاق نار OR إطلاق النار OR هجوم مسلح OR clashes OR assassination OR kidnapping) AND ' + LY_PLACES,
+      'جهاز الردع OR قوة الردع OR جهاز الأمن الداخلي الليبي OR جهاز الأمن العام الليبي OR جهاز دعم الاستقرار OR اللواء 444',
     ],
     alert: { severity: 'high', threshold: 1, everyMinutes: 30 },
   },
