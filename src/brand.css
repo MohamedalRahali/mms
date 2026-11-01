@@ -379,6 +379,11 @@ body,
 .mms-login__card::after {
   content: none;
 }
+/* Bouton secondaire dans la carte claire (« رجوع » de l'étape du code 2FA) : texte clair du thème sombre, invisible */
+.mms-login__card .news-btn--ghost {
+  color: var(--p-ink-l);
+  border-color: rgba(0, 0, 0, 0.18);
+}
 .mms-login__brand {
   display: flex;
   flex-direction: column;
