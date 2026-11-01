@@ -40,7 +40,12 @@ const ROLE_ACTIONS: Record<Role, ActionKey[]> = {
 /** Le profil du compte ouvre-t-il ce module ? */
 export const hasModule = (user: User | undefined | null, m: ModuleKey) => !user?.perms || user.perms.modules.includes(m)
 /** Le profil du compte permet-il cette action (bouton) ? */
-export const canDo = (user: User | undefined | null, a: ActionKey) => (user?.perms ? user.perms.actions.includes(a) : ROLE_ACTIONS[user?.role ?? 'admin'].includes(a))
+/** Compte partagé passé en lecture seule (audit v5) : le serveur refuse toute écriture (403 SHARED_READONLY) */
+export const isReadOnly = (user: User | undefined | null) => Boolean(user?.shared && user?.readOnly)
+// Audit v6 : pour un compte en lecture seule, les boutons d'écriture disparaissent (le serveur les refuserait) ;
+// l'export (lecture) reste permis
+export const canDo = (user: User | undefined | null, a: ActionKey) =>
+  (a === 'export' || !isReadOnly(user)) && (user?.perms ? user.perms.actions.includes(a) : ROLE_ACTIONS[user?.role ?? 'admin'].includes(a))
 export type Auth = { user: User; logout: () => void }
 
 export const AuthContext = createContext<Auth | null>(null)

@@ -4,7 +4,7 @@ import { NewsCard } from './NewsCard'
 import { type Flux, type NewsItem, type NewsResponse, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
 import { useAlerts, useFavorites } from '../lib/prefs'
-import { canDo, useAuth } from '../lib/auth'
+import { canDo, isReadOnly, useAuth } from '../lib/auth'
 import { useAround } from '../lib/around'
 
 /** Bandeau orange « mises à jour disponibles », avec compte à rebours, comme NewsRadar */
@@ -268,7 +268,9 @@ export function AiAnalysis({ flux }: { flux: Flux | '' }) {
   const query = `days=${days}${flux ? `&flux=${flux}` : ''}`
   const state = useFetch<AnalysisState>(`/api/ai/analysis?${query}`).data
   // Bouton « تشغيل » : action « ai_run » du profil ; sans elle, lecture du dernier résultat seulement
-  const mayRun = canDo(useAuth()?.user, 'ai_run')
+  const me = useAuth()?.user
+  const mayRun = canDo(me, 'ai_run')
+  const readOnly = isReadOnly(me)
   const [result, setResult] = useState<Analysis | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -290,7 +292,19 @@ export function AiAnalysis({ flux }: { flux: Flux | '' }) {
     setBusy(true)
     setError('')
     const fail = (code: string, reason = '') =>
-      setError(code === 'NO_KEY' ? t.aiNoKey : code === 'NO_SDK' ? t.aiNoSdk : code === 'NO_ITEMS' ? t.aiNoItems : (reason && reasons[reason]) || t.aiFailed)
+      setError(
+        code === 'NO_KEY'
+          ? t.aiNoKey
+          : code === 'NO_SDK'
+            ? t.aiNoSdk
+            : code === 'NO_ITEMS'
+              ? t.aiNoItems
+              : code === 'SHARED_READONLY'
+                ? t.aiReadOnly
+                : code === 'FORBIDDEN'
+                  ? t.aiNoRight
+                  : (reason && reasons[reason]) || t.aiFailed,
+      )
     try {
       const res = await fetch(`/api/ai/analysis?${query}`, { method: 'POST' })
       const json = await res.json().catch(() => ({}))
@@ -332,6 +346,7 @@ export function AiAnalysis({ flux }: { flux: Flux | '' }) {
         {state && <span className="news-status">{t.aiCount(state.count)}</span>}
       </div>
       {state?.enabled === false && <p className="mms-note">{t.aiNoKey}</p>}
+      {state?.enabled !== false && !mayRun && <p className="mms-note">{readOnly ? t.aiReadOnly : t.aiNoRight}</p>}
       {busy && <p className="news-status">{t.aiRunning}</p>}
       {error && <p className="news-status news-status--error">{error}</p>}
       {shown && (

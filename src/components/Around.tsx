@@ -96,7 +96,8 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   const json = await res.json().catch(() => ({}))
   if (!res.ok) {
     // 401/403 : session expirée ou droit retiré ; sinon la cause donnée par le serveur (clé, quota, modèle…)
-    const code = res.status === 401 || res.status === 403 ? 'AUTH' : json.error || String(res.status)
+    // Compte en lecture seule (403 SHARED_READONLY) : message propre, pas « session expirée » (audit v6)
+    const code = json.error === 'SHARED_READONLY' ? 'READONLY' : res.status === 401 || res.status === 403 ? 'AUTH' : json.error || String(res.status)
     throw Object.assign(new Error(code), { code, reason: json.reason || '' })
   }
   return json as T
@@ -1185,7 +1186,7 @@ export function Around({ flux }: { flux: Flux | '' }) {
     const { code = '', reason = '' } = err as { code?: string; reason?: string }
     if (code === 'NO_KEY') return a.aiOff
     if (code === 'BUSY') return a.busy
-    if (code === 'NETWORK' || code === 'AUTH') return a.errors[code]
+    if (code === 'NETWORK' || code === 'AUTH' || code === 'READONLY') return a.errors[code]
     return a.errors[reason] || (code.startsWith('5') ? a.errors.PROVIDER : a.aiError)
   }
 

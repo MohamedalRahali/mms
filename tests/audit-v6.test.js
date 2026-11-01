@@ -187,3 +187,23 @@ test('menu : la page « البودكاست » reste dans le menu même sans épi
   assert.match(media, /MEDIA_PAGES: MediaPageType\[\] = \['broadcast', 'podcast'/)
   assert.match(media, /podcast: 'البودكاست'/)
 })
+
+test('lecture seule : refus SHARED_READONLY / FORBIDDEN traduits, bouton retiré, export gardé (analyse intelligente, Around)', async () => {
+  // Le serveur refuse bien l'analyse à un compte partagé en lecture seule : c'était l'erreur générique « تعذّر التحليل »
+  const pol = await import('../server/accountPolicy.js')
+  const users = [{ email: 'aroundexpressions@gmail.com', role: 'admin' }, { email: 'a@npdc.gov.ly', role: 'admin' }]
+  assert.equal(pol.sharedReadOnly('aroundexpressions@gmail.com', users), true)
+  const read = (f) => fs.readFileSync(path.join(import.meta.dirname, '..', ...f.split('/')), 'utf8')
+  const auth = read('src/lib/auth.ts')
+  assert.match(auth, /export const isReadOnly = \(user: User \| undefined \| null\) => Boolean\(user\?\.shared && user\?\.readOnly\)/)
+  assert.match(auth, /\(a === 'export' \|\| !isReadOnly\(user\)\) &&/)
+  const ui = read('src/components/Extras.tsx')
+  assert.match(ui, /code === 'SHARED_READONLY'\s*\? t\.aiReadOnly/)
+  assert.match(ui, /code === 'FORBIDDEN'\s*\? t\.aiNoRight/)
+  assert.match(ui, /!mayRun && <p className="mms-note">\{readOnly \? t\.aiReadOnly : t\.aiNoRight\}/)
+  const i18n = read('src/lib/i18n.ts')
+  assert.match(i18n, /aiReadOnly: 'هذا الحساب للاطلاع فقط، لا يمكنه تشغيل التحليل الذكي/)
+  assert.match(i18n, /aiReadOnly: 'This account is read-only/)
+  assert.match(read('src/components/Around.tsx'), /json\.error === 'SHARED_READONLY' \? 'READONLY'/)
+  assert.match(read('src/lib/around.ts'), /READONLY: 'هذا الحساب للاطلاع فقط/)
+})
