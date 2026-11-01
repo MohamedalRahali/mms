@@ -113,6 +113,16 @@ export function loadKey(root) {
 
 export const cached = (key) => cache.get(key) || null
 
+// Dernière analyse de chaque période (veille + jours) : la clé du cache contient la version des données, relues toutes
+// les 10 minutes ; une analyse plus longue que cela était rangée sous l'ancienne clé et l'écran ne la trouvait jamais
+export const periodKey = (s) => `${s.flux || 'all'}|${s.days}`
+const byPeriod = new Map()
+export function rememberAnalysis(scope, result) {
+  cache.set(scope.key, result)
+  byPeriod.set(periodKey(scope), result)
+}
+export const latestForPeriod = (scope) => byPeriod.get(periodKey(scope)) || null
+
 /* ---------------------------------------------------------------- choix du moteur */
 
 const ENGINES = ['claude', 'vertex', 'local', 'gemini', 'openai']
@@ -243,7 +253,7 @@ export async function analyse({ items, key, fluxLabel, days, flux = '', provider
   const data = await run(provider || aiProvider(), prompt)
   // Période et veille du résultat (audit v6) : l'écran n'affiche « بناءً على N خبر » que pour la période choisie
   const result = { ...data, at: new Date().toISOString(), count: items.length, days, flux }
-  cache.set(key, result)
+  rememberAnalysis({ key, days, flux }, result)
   return result
 }
 

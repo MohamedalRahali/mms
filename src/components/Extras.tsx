@@ -321,6 +321,8 @@ export function AiAnalysis({ flux }: { flux: Flux | '' }) {
         if (st.result) return void setResult(st.result)
         if (st.error && !st.running) return fail(st.error, st.reason)
       }
+      // Suivi épuisé sans résultat ni erreur : le dire au lieu de rendre la main en silence
+      if (latest.current === query) fail('FAILED', 'TIMEOUT')
     } catch {
       fail('FAILED', 'NETWORK')
     } finally {

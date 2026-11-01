@@ -174,7 +174,7 @@ test('analyse intelligente : moteur choisi (repli), résultat daté de sa pério
   const idx = fs.readFileSync(path.join(import.meta.dirname, '..', 'server', 'index.js'), 'utf8')
   assert.match(idx, /res\.status\(202\)\.json\(\{ running: true \}\)/)
   assert.match(idx, /return analyse\(\{ \.\.\.scope, provider: other \}\)/)
-  assert.match(idx, /error: 'FAILED', reason: aiFailures\.get\(scope\.key\)\?\.reason/)
+  assert.match(idx, /error: 'FAILED', reason: aiFailures\.get\(periodKey\(scope\)\)\?\.reason/)
   const ui = fs.readFileSync(path.join(import.meta.dirname, '..', 'src', 'components', 'Extras.tsx'), 'utf8')
   assert.match(ui, /res\.status !== 202/)
 })
