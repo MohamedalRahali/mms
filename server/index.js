@@ -17,6 +17,7 @@ import { initMailPolicy } from './mailPolicy.js'
 import { initPermissions, permissionGate, permsOf } from './permissions.js'
 import { logAudit, logSecurity } from './monitor.js'
 import { compileQuery, queryError, searchText } from './query.js'
+import { coverageNote } from './insights.js'
 import { buildBriefing, comparePeriods, engagementTotals, interactions, retrieve, shareOfVoice, topEngaged } from './insights.js'
 import { briefingConf, briefingKey, briefingWithSummary, sendBriefing, setBriefingConf, startBriefing } from './briefing.js'
 import { imageRoute, initImages, withImages } from './images.js'
@@ -25,6 +26,7 @@ import { auditMiddleware, initAuditTrail, mountClientAuditTrail } from './auditT
 import { activateAccount, sharedGate, sharedReadOnly, startAccountPolicy } from './accountPolicy.js'
 import { isSharedAccount } from './auditTrail.js'
 import { mountJournalists } from './journalists.js'
+import { initAlertWords, mountAlertWords } from './alertWords.js'
 import { initReviewValidation, mountReviewValidation } from './reviewValidation.js'
 import { backupStatus, startBackups } from './backups.js'
 import { currentCuts, startStreamAlerts } from './streamAlerts.js'
@@ -37,6 +39,7 @@ import { AGENTS, ANALYSES, ASK_SPEC, agentFacts, agentItems, agentStats, askProm
 import { dedupeStories, emergingTopics, historyOf, sentimentBarometer, validDay, smartAlerts, startRadarAlerts, storyClusters, storyIndex } from './radar.js'
 import { startRadarWorker } from './radarWorker.js'
 import { sendSupportMail } from './watches.js'
+import { deletedWatches, dryRunWatch, restoreWatch, seedWatchesV6 } from './watches.js'
 import { createWatch, deleteWatch, enabledWatches, guardWatch, itemsForWatch, mergeWatches, sendMail, setWatchAccess, similarWatches, watchesFor, watchIdsFor, sendTelegram, setEnabled, setMailBlockedListener, setWatchAlert, setWatchAlertListener, setWatchTools, startWatches, telegramReady } from './watches.js'
 import { countryOf, reachIsSet, reachOf } from './sourceMeta.js'
 import { initProcessed, isProcessed, processedOf, setProcessed } from './processed.js'
@@ -810,7 +813,8 @@ function aiScope(q) {
   const { items, lastUpdate } = getItems()
   const days = [1, 7, 30].includes(Number(q.days)) ? Number(q.days) : 7
   const found = applyFilters(items, { flux: q.flux, days })
-  return { items: found, days, key: `${q.flux || 'all'}|${days}|${lastUpdate}|${found.length}`, fluxLabel: FLUX_LABEL[q.flux] || 'Mosaïque FM et Libye' }
+  const flux = FLUX_LABEL[q.flux] ? String(q.flux) : ''
+  return { items: found, days, flux, key: `${flux || 'all'}|${days}|${lastUpdate}|${found.length}`, fluxLabel: FLUX_LABEL[q.flux] || 'Mosaïque FM et Libye' }
 }
 let aiRunning = false
 app.get('/api/ai/analysis', (req, res) => {
@@ -996,7 +1000,8 @@ app.get('/api/news/compare', (req, res) => {
   // Période de référence plus ancienne que la collecte : comparaison signalée comme non fiable
   // Période de référence en partie avant la collecte : variations calculées à jours couverts égaux (coverage)
   const cmp = comparePeriods(applyFilters(items, { flux: req.query.flux }), days)
-  res.json({ ...cmp, history, insufficient: cmp.coverage.partial })
+  // Même phrase et même format de jours couverts que le rapport exécutif (audit v6)
+  res.json({ ...cmp, history, insufficient: cmp.coverage.partial, coverageNote: { ar: coverageNote(cmp.coverage, 'ar'), en: coverageNote(cmp.coverage, 'en') } })
 })
 
 // Rapport exécutif : chiffres, synthèse IA (si déjà rédigée), envoi programmé
@@ -1061,6 +1066,30 @@ app.post('/api/watches/merge', express.json({ limit: '4kb' }), (req, res) => {
     res.status(err.status || 500).json({ error: err.code || 'FAILED' })
   }
 })
+// Veilles supprimées (archivées) : liste et restauration, administrateurs (audit v6)
+const adminOnly = (req, res) => ((req.user?.role || 'admin') === 'admin' ? false : (res.status(403).json({ error: 'ADMIN_ONLY' }), true))
+app.get('/api/watches/deleted', (req, res) => {
+  if (adminOnly(req, res)) return
+  res.json({ watches: deletedWatches() })
+})
+app.post('/api/watches/:id/restore', (req, res) => {
+  if (adminOnly(req, res)) return
+  const w = restoreWatch(req.params.id, req.user?.email)
+  if (!w) return res.status(404).json({ error: 'NO_WATCH' })
+  res.json({ watch: w })
+})
+// Essai à blanc (audit v6) : combien d'alertes partiraient maintenant, sans rien envoyer ni marquer ; administrateurs
+app.post('/api/watches/:id/dry-run', (req, res) => {
+  if (adminOnly(req, res)) return
+  try {
+    guardWatch(req.params.id, req.user)
+  } catch (err) {
+    return res.status(err.status).json({ error: err.code })
+  }
+  const r = dryRunWatch(req.params.id)
+  if (!r) return res.status(404).json({ error: 'NO_WATCH' })
+  res.json(r)
+})
 app.patch('/api/watches/:id', express.json({ limit: '2kb' }), (req, res) => {
   // Droits de la veille (créateur et administrateurs), réglages d'alerte, ou activation ; droits vérifiés avant tout
   try {
@@ -1082,7 +1111,8 @@ app.delete('/api/watches/:id', (req, res) => {
   } catch (err) {
     return res.status(err.status).json({ error: err.code })
   }
-  if (!deleteWatch(req.params.id)) return res.status(404).json({ error: 'NO_WATCH' })
+  // Archivée, pas effacée (audit v6) : restaurable par un administrateur
+  if (!deleteWatch(req.params.id, req.user?.email)) return res.status(404).json({ error: 'NO_WATCH' })
   res.json({ ok: true })
 })
 
@@ -1154,6 +1184,9 @@ mountMailingLists(app, {
 mountRasd(app, { getItems, telegramReady, sendTelegram, logDispatch })
 // قاعدة الصحفيين ووسائل الإعلام : journalistes et médias libyens, historique des publications et citations
 mountJournalists(app, { getItems })
+// Mots-clés d'alerte personnels, gardés par compte sur le serveur (audit v6, constat 1a)
+initAlertWords(path.join(root, 'data'))
+mountAlertWords(app)
 // Revue de presse validée par un analyste, avec heure limite de livraison (audit v4, P2)
 initReviewValidation(path.join(root, 'data'))
 mountReviewValidation(app)
@@ -1311,6 +1344,17 @@ app.use((err, req, res, _next) => {
 
 startWatches(path.join(root, 'data'))
 startBriefing(path.join(root, 'data'))
+// Veilles permanentes de départ (audit v6) : destinataires = ceux déjà approuvés pour le rapport exécutif hebdomadaire
+try {
+  const seeded = seedWatchesV6({ recipients: briefingConf().recipients })
+  if (seeded) {
+    console.log(`Veilles de départ (audit v6) : ${seeded.created.length} créées, ${seeded.recipients} destinataire(s), Telegram ${seeded.telegram ? 'oui' : 'non'}`)
+    for (const e of seeded.existing) console.log(`  « ${e.name} » non créée : veille équivalente déjà présente (« ${e.existing.name} », ${e.existing.deleted ? 'supprimée (archivée)' : e.existing.enabled ? 'active' : 'désactivée'})`)
+    if (seeded.created.length && !seeded.recipients && !seeded.telegram) console.log('  Aucun destinataire approuvé : veilles créées sans destinataire (signalées dans الرصد المبرمج)')
+  }
+} catch (err) {
+  console.error('Veilles de départ (audit v6) :', err.message)
+}
 startRadarAlerts(path.join(root, 'data'), getItems, { sendTelegram, telegramReady, sendMail, canSend: canSendAlert, onSent: (r) => logDispatch({ kind: 'radar', name: r.names.slice(0, 3).join(' · '), count: r.count, channels: r.channels, recipients: r.recipients }) })
 
 // Sur le VPS, MMS_HOST=127.0.0.1 : seul nginx (HTTPS) parle au serveur

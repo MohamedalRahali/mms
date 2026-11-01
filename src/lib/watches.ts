@@ -40,6 +40,21 @@ export type Watch = {
   access?: { visibility: WatchVisibility; editors: string[] }
   mayEdit?: boolean
   mayShare?: boolean
+  // Veille de départ créée par l'audit v6 (seed: 'audit-v6')
+  seed?: string
+}
+
+/** Essai à blanc d'une veille (POST /api/watches/:id/dry-run, administrateurs) */
+export type WatchDryRun = {
+  wouldSend: number
+  pending: number
+  reason: '' | 'disabled' | 'upcoming' | 'finished' | 'nothing_new' | 'below_threshold' | 'interval' | 'no_recipients'
+  threshold: number
+  channels: string[]
+  recipients: number
+  matching24h: number
+  matching7d: number
+  sample: { id: string; title: string; origin: string; date: string; hits: string[] }[]
 }
 export type WatchVisibility = 'team' | 'restricted' | 'private'
 
