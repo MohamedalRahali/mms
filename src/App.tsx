@@ -304,6 +304,10 @@ export default function App() {
   const [theme, setTheme] = useTheme()
   const [colors, setColors] = usePalette()
   useFx()
+  // Langue du document (lecteurs d'écran, traduction du navigateur) : suit la langue choisie (était « fr » en dur)
+  useEffect(() => {
+    document.documentElement.lang = lang
+  }, [lang])
 
   {
     const status = useFetch<NewsResponse>('/api/news?size=1').data
