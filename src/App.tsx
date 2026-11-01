@@ -307,14 +307,9 @@ export default function App() {
 
   {
     const status = useFetch<NewsResponse>('/api/news?size=1').data
-    // Pages de médias sans aucune publication dans la base (aujourd'hui : les podcasts) : retirées du menu, elles
-    // reviennent d'elles-mêmes dès que la veille en collecte ; l'adresse directe reste valable
-    const facets = useFetch<{ media?: { name: string; count: number }[]; mediaLast?: Record<string, string> }>('/api/news/facets').data
-    const mediaCounts = facets?.media
-    // Podcasts : section masquée sans épisode depuis 21 jours (les émissions suivies ne publient plus, audit v4)
-    const podcastLast = facets?.mediaLast?.podcast
-    const podcastLive = Boolean(podcastLast && Date.now() - Date.parse(podcastLast) < 21 * 86_400_000)
-    const shownMedia = MEDIA_PAGES.filter((m) => m !== 'podcast' || !facets || (podcastLive && Boolean(mediaCounts?.some((c) => c.name === m && c.count > 0))))
+    // Toutes les pages de médias restent dans le menu (audit v6 : « البودكاست » masqué depuis l'audit v4 quand aucun
+    // épisode n'était paru depuis 21 jours, l'utilisateur ne trouvait plus la page). La page dit elle-même s'il n'y a rien.
+    const shownMedia = MEDIA_PAGES
 
     function setLang(next: Lang) {
       if (next !== lang) track('lang', next)

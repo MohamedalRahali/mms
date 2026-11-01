@@ -178,3 +178,12 @@ test('analyse intelligente : moteur choisi (repli), résultat daté de sa pério
   const ui = fs.readFileSync(path.join(import.meta.dirname, '..', 'src', 'components', 'Extras.tsx'), 'utf8')
   assert.match(ui, /res\.status !== 202/)
 })
+
+test('menu : la page « البودكاست » reste dans le menu même sans épisode récent (masquée depuis l’audit v4)', () => {
+  const app = fs.readFileSync(path.join(import.meta.dirname, '..', 'src', 'App.tsx'), 'utf8')
+  assert.match(app, /const shownMedia = MEDIA_PAGES\r?\n/)
+  assert.equal(/podcastLive/.test(app), false)
+  const media = fs.readFileSync(path.join(import.meta.dirname, '..', 'src', 'lib', 'media.ts'), 'utf8')
+  assert.match(media, /MEDIA_PAGES: MediaPageType\[\] = \['broadcast', 'podcast'/)
+  assert.match(media, /podcast: 'البودكاست'/)
+})
