@@ -146,7 +146,7 @@ function inScope(watch, it) {
 
 /** Actualités d'une veille, sur toute la base (filtre « الرصد » de الأخبار) */
 export function itemsForWatch(id, items) {
-  const watch = watches.find((w) => w.id === id)
+  const watch = watches.find((w) => w.id === id && !w.deleted)
   if (!watch) return null
   return items.filter((it) => inScope(watch, it) && watchHits(watch, it, itemText(it)))
 }
@@ -217,7 +217,133 @@ export function repairWatchesV5(now = new Date()) {
   return { repaired, duplicates }
 }
 
-export const listWatches = () => watches.map(publicWatch)
+/*
+ * Veilles permanentes de départ (audit produit v6, constat 1b : aucune veille programmée active). Glissantes (sans date
+ * de fin), sur la veille Libye, avec des mots-clés arabes (et quelques anglais) choisis pour la Libye. Les mots courts
+ * ambigus (sigles) sont évités : la comparaison se fait par sous-chaîne.
+ */
+const LY = '(ليبيا OR الليبي OR الليبية OR طرابلس OR بنغازي OR مصراتة OR سبها OR Libya OR Libyan)'
+export const SEED_WATCHES_V6 = [
+  {
+    key: 'government',
+    name: 'الحكومة',
+    rules: [
+      'مجلس الوزراء OR حكومة الوحدة الوطنية OR الحكومة الليبية OR الحكومة المكلفة OR قرار حكومي OR أسامة حماد OR Government of National Unity',
+      '(وزارة OR وزير OR وزيرة OR حكومة OR الحكومة) AND ' + LY,
+    ],
+    alert: { severity: 'info', threshold: 3, everyMinutes: 180 },
+  },
+  {
+    key: 'oil',
+    name: 'النفط',
+    rules: [
+      'المؤسسة الوطنية للنفط OR حقل الشرارة OR الشرارة OR حقل الفيل OR الهلال النفطي OR الموانئ النفطية OR موانئ النفط OR إنتاج النفط OR تصدير النفط OR صادرات النفط OR النفط الليبي OR راس لانوف OR رأس لانوف OR السدرة OR البريقة OR مصفاة الزاوية OR National Oil Corporation OR Sharara',
+      '(حقل OR حقول OR إنتاج OR تصدير OR موانئ OR ميناء OR برميل) AND (النفط OR نفط OR النفطي OR النفطية OR الخام OR الغاز)',
+    ],
+    alert: { severity: 'high', threshold: 1, everyMinutes: 60 },
+  },
+  {
+    key: 'security',
+    name: 'الأمن',
+    rules: [
+      'اشتباكات OR اشتباك مسلح OR مسلحين OR مسلحون OR اغتيال OR خطف OR اختطاف OR تفجير OR انفجار OR جهاز الردع OR قوة الردع OR الردع OR جهاز الأمن الداخلي OR جهاز الأمن العام OR جهاز الأمن OR إطلاق نار OR إطلاق النار OR هجوم مسلح OR clashes OR assassination OR kidnapping',
+    ],
+    alert: { severity: 'high', threshold: 1, everyMinutes: 30 },
+  },
+  {
+    key: 'pm_office',
+    name: 'ديوان رئيس الوزراء',
+    rules: [
+      'الدبيبة OR عبد الحميد الدبيبة OR حكومة الوحدة الوطنية OR ديوان رئاسة الوزراء OR ديوان رئيس الوزراء OR رئاسة الوزراء OR رئيس حكومة الوحدة OR Dbeibah',
+      'رئيس الوزراء AND (الليبي OR ليبيا OR طرابلس OR الوحدة الوطنية)',
+    ],
+    alert: { severity: 'high', threshold: 1, everyMinutes: 60 },
+  },
+  {
+    key: 'central_bank',
+    name: 'مصرف ليبيا المركزي',
+    rules: [
+      'مصرف ليبيا المركزي OR المصرف المركزي OR محافظ المصرف المركزي OR ناجي عيسى OR الدينار الليبي OR سعر صرف الدينار OR السيولة النقدية OR Central Bank of Libya',
+    ],
+    alert: { severity: 'info', threshold: 2, everyMinutes: 180 },
+  },
+]
+
+/**
+ * Création des veilles de départ (audit v6), une seule fois, sauvegarde de watches.json avant écriture :
+ * - destinataires : UNIQUEMENT ceux du rapport exécutif hebdomadaire déjà approuvés (passés par server/index.js,
+ *   filtrés encore par la liste blanche) + Telegram s'il est configuré ; sans destinataire, la veille est créée quand
+ *   même et signalée (noRecipients) ;
+ * - une veille équivalente (même nom, ou ses mots repris à 60 % au moins) déjà présente, active ou désactivée par un humain :
+ *   rien n'est créé ni réactivé, elle est signalée ;
+ * - marquées seed: 'audit-v6' ; alertes seulement pour les nouvelles actualités (notifyAfter).
+ * Idempotente : fichier repère watches-seed-v6.json, et une veille déjà semée (seedKey) n'est jamais recréée.
+ */
+export function seedWatchesV6({ recipients = [], now = new Date() } = {}) {
+  if (!file) return null
+  const marker = path.join(path.dirname(file), 'watches-seed-v6.json')
+  if (fs.existsSync(marker)) return null
+  const approved = splitRecipients([...new Set((recipients || []).map((e) => String(e).trim().toLowerCase()).filter((e) => EMAIL_RE.test(e)))]).ok.slice(0, MAX_RECIPIENTS)
+  const created = []
+  const existing = []
+  const toAdd = []
+  for (const seed of SEED_WATCHES_V6) {
+    if (watches.some((w) => w.seed === 'audit-v6' && w.seedKey === seed.key)) continue
+    const words = wordsOf({ rules: seed.rules })
+    // Équivalente : même nom, ou mots de la veille existante repris à 60 % au moins par la veille de départ (2 au moins)
+    const overlap = (w) => {
+      const own = wordsOf(w)
+      let n = 0
+      for (const x of own) if (words.has(x)) n++
+      return n >= 2 && n / Math.max(1, Math.min(own.size, words.size)) >= 0.6
+    }
+    const same = watches.find((w) => w.seed !== 'audit-v6' && (normalize(w.name || '') === normalize(seed.name) || overlap(w)))
+    if (same) {
+      // Active, désactivée ou supprimée (archivée) par un humain : ni recréée en double, ni réactivée ; signalée
+      existing.push({ key: seed.key, name: seed.name, existing: { id: same.id, name: same.name, enabled: Boolean(same.enabled), deleted: Boolean(same.deleted) } })
+      continue
+    }
+    toAdd.push(seed)
+  }
+  if (toAdd.length && fs.existsSync(file)) fs.copyFileSync(file, path.join(path.dirname(file), 'watches.avant-audit-v6.json'))
+  for (const seed of toAdd) {
+    if (liveCount() >= MAX_WATCHES) break
+    const watch = {
+      id: Math.random().toString(36).slice(2, 10),
+      name: seed.name,
+      rules: seed.rules,
+      themes: [],
+      scope: [],
+      flux: 'libye',
+      from: dayOf(now.toISOString()),
+      to: null,
+      recipients: approved,
+      alert: cleanAlert({ channels: ['email', 'telegram'], ...seed.alert }),
+      access: cleanAccess({}),
+      enabled: true,
+      createdAt: now.toISOString(),
+      createdBy: 'audit-v6',
+      seed: 'audit-v6',
+      seedKey: seed.key,
+      notifyAfter: now.toISOString(),
+      lastRun: null,
+      lastError: null,
+      matchCount: 0,
+      matches: [],
+      notified: [],
+    }
+    watches.push(watch)
+    created.push({ key: seed.key, id: watch.id, name: watch.name, recipients: approved.length, noRecipients: !approved.length && !telegramReady() })
+  }
+  if (created.length) save()
+  const report = { at: now.toISOString(), created, existing, recipients: approved.length, telegram: telegramReady() }
+  fs.mkdirSync(path.dirname(marker), { recursive: true })
+  fs.writeFileSync(marker, JSON.stringify(report, null, 1))
+  return report
+}
+
+export const listWatches = () => watches.filter((w) => !w.deleted).map(publicWatch)
+const liveCount = () => watches.filter((w) => !w.deleted).length
 export const enabledWatches = (user) => watches.filter((w) => w.enabled && (!user || canSeeWatch(w, user))).map((w) => ({ id: w.id, name: w.name, status: statusOf(w) }))
 
 function fail(code) {
@@ -268,7 +394,7 @@ export function mergeWatches(ids, by = '', name = '') {
   const group = [...new Set((Array.isArray(ids) ? ids : []).map(String))].map((id) => watches.find((w) => w.id === id))
   if (group.length < 2 || group.some((w) => !w)) throw fail('BAD_MERGE')
   if (group.some((w) => !sameFrame(group[0], w))) throw fail('NOT_SIMILAR')
-  if (watches.length >= MAX_WATCHES) throw fail('TOO_MANY')
+  if (liveCount() >= MAX_WATCHES) throw fail('TOO_MANY')
   const rules = [...new Set(group.flatMap((w) => w.rules))].slice(0, MAX_RULES)
   const recipients = [...new Set(group.flatMap((w) => w.recipients))].slice(0, MAX_RECIPIENTS)
   const tos = group.map((w) => w.to)
@@ -322,6 +448,8 @@ export function cleanAlert(a = {}) {
     severity: SEVERITIES.includes(a.severity) ? a.severity : 'info',
     assignee: String(a.assignee || '').trim().slice(0, 120),
     dueHours: Math.min(Math.max(Math.round(Number(a.dueHours) || 0), 0), 720),
+    // Intervalle minimal entre deux envois (minutes, audit v6) : les actualités attendent et partent groupées ensuite
+    ...(Number(a.everyMinutes) > 0 ? { everyMinutes: Math.min(Math.max(Math.round(Number(a.everyMinutes)), 5), 1440) } : {}),
   }
 }
 const alertOf = (w) => w.alert || cleanAlert()
@@ -331,7 +459,7 @@ let onWatchAlert = () => {}
 export const setWatchAlertListener = (fn) => (onWatchAlert = fn)
 
 export function createWatch(body, by = '') {
-  if (watches.length >= MAX_WATCHES) throw fail('TOO_MANY')
+  if (liveCount() >= MAX_WATCHES) throw fail('TOO_MANY')
   const rules = (Array.isArray(body.rules) ? body.rules : []).map((r) => String(r).trim()).filter((r) => r && parseRule(r).length)
   const query = String(body.query || '').trim()
   if (query.length > MAX_RULE_LEN || (query && !tools.valid(query))) throw fail('BAD_QUERY')
@@ -420,13 +548,13 @@ export function cleanAccess(a = {}) {
 
 /** Veilles visibles par l'utilisateur, avec ce qu'il peut y faire */
 export function watchesFor(user) {
-  return watches.filter((w) => canSeeWatch(w, user)).map((w) => ({ ...publicWatch(w), access: accessOf(w), mayEdit: canEditWatch(w, user), mayShare: canSetAccess(w, user) }))
+  return watches.filter((w) => !w.deleted && canSeeWatch(w, user)).map((w) => ({ ...publicWatch(w), access: accessOf(w), mayEdit: canEditWatch(w, user), mayShare: canSetAccess(w, user) }))
 }
-export const watchIdsFor = (user) => new Set(watches.filter((w) => canSeeWatch(w, user)).map((w) => w.id))
+export const watchIdsFor = (user) => new Set(watches.filter((w) => !w.deleted && canSeeWatch(w, user)).map((w) => w.id))
 
 /** Contrôle d'accès avant une modification : 404 si invisible, 403 si non modifiable */
 export function guardWatch(id, user, { share = false } = {}) {
-  const w = watches.find((x) => x.id === id)
+  const w = watches.find((x) => x.id === id && !x.deleted)
   if (!w || !canSeeWatch(w, user)) throw Object.assign(new Error('NO_WATCH'), { code: 'NO_WATCH', status: 404 })
   if (!(share ? canSetAccess(w, user) : canEditWatch(w, user))) throw Object.assign(new Error('WATCH_FORBIDDEN'), { code: 'WATCH_FORBIDDEN', status: 403 })
   return w
@@ -458,12 +586,55 @@ export function setEnabled(id, enabled) {
   return publicWatch(watch)
 }
 
-export function deleteWatch(id) {
-  const before = watches.length
-  watches = watches.filter((w) => w.id !== id)
-  if (watches.length === before) return false
+/*
+ * Suppression réversible (audit v6 : des « DELETE watches » du journal expliquaient les 0 veilles) : la veille est
+ * archivée (deleted, deletedAt, deletedBy, désactivée), masquée des listes et des passages, jamais effacée ; une copie
+ * complète est ajoutée à data/watches-supprimees.json. Un administrateur peut la lister et la restaurer.
+ */
+export function deleteWatch(id, by = '', now = new Date()) {
+  const watch = watches.find((w) => w.id === id && !w.deleted)
+  if (!watch) return false
+  watch.deletedWasEnabled = Boolean(watch.enabled)
+  watch.enabled = false
+  watch.deleted = true
+  watch.deletedAt = now.toISOString()
+  watch.deletedBy = String(by || '').slice(0, 120)
+  const archive = path.join(path.dirname(file), 'watches-supprimees.json')
+  let rows = []
+  try {
+    rows = JSON.parse(fs.readFileSync(archive, 'utf8')).watches || []
+  } catch {
+    rows = []
+  }
+  rows.push({ ...watch })
+  fs.writeFileSync(archive, JSON.stringify({ watches: rows }, null, 1))
   save()
   return true
+}
+
+/** Veilles supprimées (archivées), de la plus récente à la plus ancienne */
+export const deletedWatches = () =>
+  watches
+    .filter((w) => w.deleted)
+    .map((w) => ({ id: w.id, name: w.name, rules: w.rules, query: w.query || '', createdBy: w.createdBy || '', deletedAt: w.deletedAt, deletedBy: w.deletedBy || '', seed: w.seed || '' }))
+    .sort((a, b) => String(b.deletedAt).localeCompare(String(a.deletedAt)))
+
+/** Restaure une veille supprimée, désactivée : un humain la réactive s'il le souhaite */
+export function restoreWatch(id, by = '', now = new Date()) {
+  const watch = watches.find((w) => w.id === id && w.deleted)
+  if (!watch) return null
+  delete watch.deleted
+  watch.restoredAt = now.toISOString()
+  watch.restoredBy = String(by || '').slice(0, 120)
+  watch.previouslyDeletedAt = watch.deletedAt
+  delete watch.deletedAt
+  delete watch.deletedBy
+  delete watch.deletedWasEnabled
+  watch.enabled = false
+  // Pas de rattrapage de tout ce qui est arrivé pendant la suppression
+  watch.notifyAfter = now.toISOString()
+  save()
+  return publicWatch(watch)
 }
 
 /* ---------------------------------------------------------------- e-mail */
@@ -599,30 +770,86 @@ export const telegramChats = () =>
 
 /* ---------------------------------------------------------------- vérification */
 
-/** Vérifie chaque veille active ; un verrou empêche deux passages simultanés */
-export async function runWatches() {
+/** Actualités qu'un passage enverrait pour cette veille : dans la période, pas encore envoyées, après notifyAfter */
+function pendingFor(watch, items, texts) {
+  const sent = new Set(watch.notified)
+  const found = []
+  for (const it of items) {
+    if (!inScope(watch, it) || sent.has(itemKey(it)) || (watch.notifyAfter && it.date < watch.notifyAfter)) continue
+    const hits = watchHits(watch, it, texts ? texts.get(it.id) : itemText(it))
+    if (hits) found.push({ it, hits })
+  }
+  return found
+}
+
+/** Intervalle minimal entre deux envois non écoulé (alert.everyMinutes) */
+const waitingInterval = (watch, conf, now) => Boolean(conf.everyMinutes && watch.lastSentAt && now - Date.parse(watch.lastSentAt) < conf.everyMinutes * 60_000)
+
+/**
+ * Essai à blanc (audit v6) : ce qu'un passage réel enverrait maintenant pour cette veille, sans rien envoyer ni
+ * marquer (ni « notified », ni résultats, ni date de passage). Donne aussi les fiches actuelles qui correspondent
+ * sur 24 h et 7 jours (même déjà envoyées), pour juger les mots-clés.
+ */
+export function dryRunWatch(id, items = getItems().items.filter((it) => !it.demo), now = Date.now()) {
+  const watch = watches.find((w) => w.id === id)
+  if (!watch) return null
+  const conf = alertOf(watch)
+  const found = pendingFor(watch, items)
+  const all = items.filter((it) => inScope(watch, it) && watchHits(watch, it, itemText(it)))
+  const since = (h) => all.filter((it) => Date.parse(it.date) >= now - h * 3_600_000).length
+  const byTelegram = telegramReady() && conf.channels.includes('telegram')
+  const byEmail = conf.channels.includes('email') && watch.recipients.length > 0
+  const status = statusOf(watch)
+  const reason = !watch.enabled
+    ? 'disabled'
+    : status !== 'active'
+      ? status
+      : !found.length
+        ? 'nothing_new'
+        : found.length < conf.threshold
+          ? 'below_threshold'
+          : waitingInterval(watch, conf, now)
+            ? 'interval'
+            : !byTelegram && !byEmail
+              ? 'no_recipients'
+              : ''
+  return {
+    id: watch.id,
+    name: watch.name,
+    wouldSend: reason ? 0 : found.length,
+    pending: found.length,
+    reason,
+    threshold: conf.threshold,
+    channels: [...(byEmail ? ['email'] : []), ...(byTelegram ? ['telegram'] : [])],
+    recipients: (byEmail ? watch.recipients.length : 0) + (byTelegram ? telegramChats() : 0),
+    matching24h: since(24),
+    matching7d: since(24 * 7),
+    sample: found
+      .sort((a, b) => b.it.date.localeCompare(a.it.date))
+      .slice(0, 5)
+      .map(({ it, hits }) => ({ id: it.id, title: it.title, origin: it.origin, date: it.date, hits })),
+  }
+}
+
+/** Vérifie chaque veille active ; un verrou empêche deux passages simultanés (items, now : pour les tests) */
+export async function runWatches({ items: given = null, now = Date.now() } = {}) {
   if (running) return
   running = true
   try {
     // Les actualités d'exemple (MMS_DEMO) s'affichent dans le filtre mais ne partent jamais par e-mail
-    const items = getItems().items.filter((it) => !it.demo)
+    const items = (given || getItems().items).filter((it) => !it.demo)
     const texts = new Map(items.map((it) => [it.id, itemText(it)]))
     let changed = false
     for (const watch of watches) {
       if (!watch.enabled || statusOf(watch) !== 'active') continue
-      const sent = new Set(watch.notified)
-      const found = []
-      for (const it of items) {
-        if (!inScope(watch, it) || sent.has(itemKey(it)) || (watch.notifyAfter && it.date < watch.notifyAfter)) continue
-        const hits = watchHits(watch, it, texts.get(it.id))
-        if (hits) found.push({ it, hits })
-      }
-      watch.lastRun = new Date().toISOString()
+      const found = pendingFor(watch, items, texts)
+      watch.lastRun = new Date(now).toISOString()
       changed = true
-      // Seuil : en dessous, les actualités attendent le passage suivant (elles ne sont pas marquées envoyées)
+      // Seuil (et intervalle minimal) : les actualités attendent le passage suivant (elles ne sont pas marquées envoyées)
       const conf = alertOf(watch)
-      watch.pending = found.length < conf.threshold ? found.length : 0
-      if (!found.length || found.length < conf.threshold) continue
+      const wait = found.length < conf.threshold || waitingInterval(watch, conf, now)
+      watch.pending = wait ? found.length : 0
+      if (!found.length || wait) continue
       found.sort((a, b) => b.it.date.localeCompare(a.it.date))
       watch.matches = [
         ...found.map(({ it, hits }) => ({ id: it.id, title: it.title, flux: it.flux, origin: it.origin, date: it.date, url: it.url, hits })),
@@ -654,6 +881,7 @@ export async function runWatches() {
           logDispatch({ kind: 'watch', name: watch.name, count: found.length, channels: [], recipients: 0, status: 'skipped', error: 'NO_RECIPIENTS' })
         } else {
           watch.lastError = null
+          watch.lastSentAt = new Date(now).toISOString()
           logDispatch({ kind: 'watch', name: watch.name, count: found.length, channels, recipients: mailTo + telegramTo })
         }
         try {

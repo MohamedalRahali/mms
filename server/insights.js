@@ -124,7 +124,18 @@ export function coverageOf(items, days, now = Date.now()) {
   const current = r1(coveredDays(items, now - days * DAY_MS, now, now))
   const previous = r1(coveredDays(items, now - 2 * days * DAY_MS, now - days * DAY_MS, now))
   const start = collectionStartDay(items, now)
-  return { days, current, previous, partial: previous < days - 0.5, since: start }
+  // Libellé unique des jours couverts (audit v6 : « 5 sur 7 » d'un côté, « 4,6 jours » de l'autre pour la même semaine)
+  return { days, current, previous, partial: previous < days - 0.5, since: start, label: { ar: coveredDaysLabel(previous, days, 'ar'), en: coveredDaysLabel(previous, days, 'en') } }
+}
+
+/**
+ * Jours couverts, un seul format partout (comparaison, rapport exécutif à l'écran, e-mail, Telegram, consigne de l'IA) :
+ * « 4,6 من 7 أيام » / « 4.6 of 7 days » — une décimale quand la couverture est partielle, entier sinon.
+ */
+export function coveredDaysLabel(covered, days, lang = 'ar') {
+  const x = Math.round(Number(covered || 0) * 10) / 10
+  const n = Number.isInteger(x) ? String(x) : lang === 'en' ? x.toFixed(1) : x.toFixed(1).replace('.', ',')
+  return lang === 'en' ? `${n} of ${days} days` : `${n} من ${days} ${days > 10 ? 'يوماً' : 'أيام'}`
 }
 
 // Base minimale : sous 5, pas de pourcentage ; sous 20, pas de multiplicateur (×16 sur 10 articles ne veut rien dire)
@@ -151,10 +162,10 @@ export function fairChange(cur, prev, cov) {
 /** Phrase « la période précédente ne couvre que X jours » (page, rapport exécutif, exports), ou '' */
 export function coverageNote(cov, lang = 'ar') {
   if (!cov?.partial) return ''
-  const x = Math.round(cov.previous * 10) / 10
+  const label = coveredDaysLabel(cov.previous, cov.days, lang)
   return lang === 'en'
-    ? `The previous period only covers ${x} of ${cov.days} days (collection complete since ${cov.since || '—'}): changes compare daily averages of covered days.`
-    : `الفترة السابقة لا تغطي إلا ${x} يوم من ${cov.days} (التغطية كاملة منذ ${cov.since || '—'}): النسب تقارن المتوسط اليومي للأيام المغطاة.`
+    ? `The previous period only covers ${label} (collection complete since ${cov.since || '—'}): changes compare daily averages of covered days.`
+    : `الفترة السابقة لا تغطي إلا ${label} (التغطية كاملة منذ ${cov.since || '—'}): النسب تقارن المتوسط اليومي للأيام المغطاة.`
 }
 
 /** Période en cours (days derniers jours) contre la même durée juste avant */
@@ -230,7 +241,7 @@ export function briefingFacts(b) {
   return [
     `Période : ${b.days} derniers jours. ${b.current.total} actualités (période précédente : ${b.previous.total}), ${b.current.sources} sources.`,
     // Couverture partielle : l'IA ne doit pas présenter une hausse qui vient du démarrage de la collecte
-    b.coverage?.partial ? `ATTENTION : la période précédente n'est couverte par la collecte que sur ${Math.round(b.coverage.previous * 10) / 10} jours sur ${b.days} ; ne présente aucune hausse ou baisse globale comme un fait, compare seulement des moyennes par jour.` : '',
+    b.coverage?.partial ? `ATTENTION : la période précédente n'est couverte par la collecte que sur ${coveredDaysLabel(b.coverage.previous, b.days, 'ar')} (${coveredDaysLabel(b.coverage.previous, b.days, 'en')}) ; ne présente aucune hausse ou baisse globale comme un fait, compare seulement des moyennes par jour.` : '',
     `Tonalité : positif ${t.positive}, neutre ${t.neutral}, négatif ${t.negative} (avant : ${tp.positive} / ${tp.neutral} / ${tp.negative}).`,
     `Thèmes : ${b.categories.map(row).join(' ; ')}.`,
     `Personnalités : ${b.people.map(row).join(' ; ')}.`,

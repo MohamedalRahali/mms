@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { AiDisclosureDetails } from './SecurityNoteView'
 import { NewsCard } from './NewsCard'
 import { type Flux, type NewsItem, type NewsResponse, useFetch } from '../lib/news'
@@ -175,7 +175,7 @@ export function Alerts({ flux }: { flux: Flux | '' }) {
   const { t } = useI18n()
   const [words, setWords] = useAlerts()
   const [draft, setDraft] = useState('')
-  // Veilles du serveur (droit « watch » du profil) ; sans ce droit, seulement les mots de ce navigateur
+  // Veilles du serveur (droit « watch » du profil) ; sans ce droit, seulement les mots du compte (gardés sur le serveur, audit v6)
   const [watches, setWatches] = useState<WatchRow[] | null>(null)
   useEffect(() => {
     let live = true
@@ -215,7 +215,7 @@ type WatchRow = { id: string; name: string; rules: string[]; query?: string; sta
 
 /**
  * Alertes des veilles (الرصد) : les mots-clés suivis par l'équipe sur le serveur, avec leurs derniers résultats,
- * à côté des mots ajoutés dans ce navigateur (audit v4 : la page restait vide pour un nouveau poste).
+ * à côté des mots personnels du compte (audit v4 : la page restait vide pour un nouveau poste).
  */
 function WatchAlerts({ watches }: { watches: WatchRow[] | null }) {
   const i = useI18n()
@@ -257,7 +257,7 @@ function WatchAlerts({ watches }: { watches: WatchRow[] | null }) {
   )
 }
 
-type Analysis = { synthese: string; themes: { titre: string; points: string[] }[]; a_surveiller: string[]; at: string; count: number }
+type Analysis = { synthese: string; themes: { titre: string; points: string[] }[]; a_surveiller: string[]; at: string; count: number; days?: number; flux?: string }
 type AnalysisState = { enabled: boolean; count: number; running: boolean; result: Analysis | null }
 
 export function AiAnalysis({ flux }: { flux: Flux | '' }) {
@@ -271,11 +271,16 @@ export function AiAnalysis({ flux }: { flux: Flux | '' }) {
   const [result, setResult] = useState<Analysis | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const latest = useRef(query)
   useEffect(() => {
+    latest.current = query
     setResult(null)
     setError('')
   }, [query])
-  const shown = result ?? state?.result ?? null
+  // Audit v6 : un résultat d'une autre période (réponse arrivée après un changement de période) n'est jamais affiché
+  // sous la période choisie ; « بناءً على N خبر » = fiches de la période du résultat
+  const sameScope = (r: Analysis | null) => (r && (r.days === undefined || (String(r.days) === days && (r.flux ?? '') === (flux || ''))) ? r : null)
+  const shown = sameScope(result) ?? sameScope(state?.result ?? null)
 
   async function run() {
     setBusy(true)
@@ -284,7 +289,8 @@ export function AiAnalysis({ flux }: { flux: Flux | '' }) {
       const res = await fetch(`/api/ai/analysis?${query}`, { method: 'POST' })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'FAILED')
-      setResult(json.result)
+      // Période changée pendant la rédaction : le résultat est ignoré (il reste en cache côté serveur)
+      if (latest.current === query) setResult(json.result)
     } catch (err) {
       const code = (err as Error).message
       setError(code === 'NO_KEY' ? t.aiNoKey : code === 'NO_SDK' ? t.aiNoSdk : code === 'NO_ITEMS' ? t.aiNoItems : t.aiFailed)

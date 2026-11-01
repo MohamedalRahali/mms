@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { type Coverage, basisNote, fairChange, formatChange } from '../lib/fair'
+import { type Coverage, basisNote, coveredLabel, fairChange, formatChange } from '../lib/fair'
 import { DataSince } from './DataSince'
 import { type Count, type EngagementTotals, type Flux, type NewsItem, type Spike, type Stats, type Tone, DrillContext, TONES, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
@@ -375,6 +375,7 @@ type Profile = { total: number; sources: number; important: number; tones: Recor
 type Compare = {
   insufficient?: boolean
   coverage?: Coverage
+  coverageNote?: { ar: string; en: string }
   days: number
   current: Profile
   previous: Profile
@@ -424,9 +425,10 @@ export function ComparePeriods({ flux }: { flux: Flux | '' }) {
       <DataSince />
       {data?.insufficient && data.coverage && (
         <p className="mms-note" role="note">
-          {i.lang === 'ar'
-            ? `الفترة السابقة لا تغطيها البيانات إلا ${Math.round(data.coverage.previous)} يوم من ${data.coverage.days}: النسب محسوبة على متوسط الأيام المغطاة في كل فترة.`
-            : `Data covers only ${Math.round(data.coverage.previous)} of the ${data.coverage.days} days of the previous period: percentages compare the daily average of the covered days.`}
+          {data.coverageNote?.[i.lang === 'en' ? 'en' : 'ar'] ||
+            (i.lang === 'ar'
+              ? `الفترة السابقة لا تغطي إلا ${coveredLabel(data.coverage, 'ar')}: النسب تقارن المتوسط اليومي للأيام المغطاة.`
+              : `The previous period only covers ${coveredLabel(data.coverage, 'en')}: changes compare daily averages of covered days.`)}
         </p>
       )}
       <div className="mms-toolbar">

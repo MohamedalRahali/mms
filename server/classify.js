@@ -40,14 +40,40 @@ const RULES = [
   ['météo', ['الطقس', 'أمطار', 'الأرصاد', 'عاصفة', 'فيضانات', 'درجات الحرارة', 'weather', 'storm', 'flood', 'météo', 'tempête', 'inondation'], ['الأرصاد', 'weather', 'météo']],
   ['faits divers', ['حادث سير', 'حريق', 'وفاة', 'غرق', 'جريمة', 'القبض على', 'accident', 'fire', 'drowned', 'crime', 'incendie'], ['حادث سير', 'حريق']],
 ]
-const low = (t) => String(t || '').toLowerCase()
+/*
+ * Audit v6 (constat 2c : « أخرى » encore 755 dans l'analyse) : listes de mots enrichies (services publics, justice,
+ * diplomatie, finances publiques, électricité et carburant, sécurité intérieure, accidents…). Les mots courts qui se
+ * retrouvent dans d'autres mots sont évités (« حادث » est dans « محادثات », « هدف » dans « استهداف », « cup » dans
+ * « occupation »). Textes et mots sont comparés après pliage (alef, ya, ta marbuta, diacritiques) : « اطلاق نار » =
+ * « إطلاق نار ». La règle de prudence est inchangée (deux indices, thème nettement en tête).
+ */
+const MORE = {
+  sécurité: ['وزارة الداخلية', 'الشرطة', 'مديرية الأمن', 'جهاز الردع', 'قوة الردع', 'تفجير', 'انفجار', 'إطلاق نار', 'إطلاق النار', 'رصاص', 'القبض على', 'ضبط', 'مخدرات', 'دورية', 'كمين', 'خطف', 'مسلحين', 'مسلحون', 'العسكرية', 'رئاسة الأركان', 'ألغام', 'طائرة مسيرة', 'السجن', 'الحرس الرئاسي', 'police', 'arrested', 'gunmen', 'kidnapped', 'explosion', 'drone strike'],
+  énergie: ['الخام', 'صادرات النفط', 'إنتاج النفط', 'الإنتاج النفطي', 'الطاقة', 'الطاقة الشمسية', 'الشركة العامة للكهرباء', 'انقطاع الكهرباء', 'طرح الأحمال', 'الوقود', 'البنزين', 'المحروقات', 'الشرارة', 'ميناء نفطي', 'الموانئ النفطية', 'crude', 'fuel', 'power cuts', 'National Oil Corporation'],
+  économie: ['المصارف', 'مصرف', 'سعر الصرف', 'سعر صرف', 'السوق الموازية', 'الدولار', 'العملة', 'الأسواق', 'السلع', 'الإنفاق', 'الإيرادات', 'وزارة المالية', 'وزارة الاقتصاد', 'الواردات', 'الصادرات', 'القطاع الخاص', 'الشركات', 'الذهب', 'المرتبات', 'exchange rate', 'prices', 'market', 'trade', 'revenue', 'investors'],
+  politique: ['مجلس الوزراء', 'حكومة الوحدة', 'الحكومة الليبية', 'البرلمان', 'المجلس الأعلى للدولة', 'عقيلة صالح', 'تكالة', 'المفوضية', 'السفير', 'السفارة', 'وزير الخارجية', 'وزارة الخارجية', 'دبلوماسي', 'مباحثات', 'الأمم المتحدة', 'المبعوث', 'مرسوم', 'رئيس الحكومة', 'رئيس الوزراء', 'ambassador', 'minister', 'envoy', 'diplomatic', 'talks', 'United Nations'],
+  santé: ['وزارة الصحة', 'مكافحة الأمراض', 'الأطباء', 'العلاج', 'المرضى', 'جراحة', 'الإسعاف', 'صحية', 'الصيدلة', 'مركز صحي', 'patients', 'medical', 'doctors', 'treatment'],
+  sport: ['كأس', 'المنتخب الوطني', 'اللاعب', 'لاعبي', 'الاتحاد الليبي', 'الدوري الليبي', 'نادي الاتحاد', 'نادي الأهلي', 'كرة السلة', 'كرة اليد', 'أولمبي', 'الملعب', 'المدرب', 'player', 'World Cup', 'coach', 'stadium'],
+  société: ['المعلمين', 'التعليم العالي', 'الامتحانات', 'الشهادة الثانوية', 'المجلس البلدي', 'عميد البلدية', 'المياه', 'الصرف الصحي', 'صيانة الطرق', 'الإسكان', 'الأطفال', 'المتقاعدين', 'الضمان الاجتماعي', 'منحة الزوجة', 'منحة', 'النازحين', 'المهجرين', 'الجالية', 'السجل المدني', 'الجوازات', 'البطالة', 'المواطن', 'الأوقاف', 'المساجد', 'teachers', 'school', 'university', 'municipality', 'housing', 'children', 'salaries'],
+  culture: ['المسرح', 'الفنان', 'الفنون', 'الموسيقى', 'الشعر', 'الأدب', 'متحف', 'الآثار', 'السينما', 'معرض الكتاب', 'theatre', 'museum', 'music', 'cinema'],
+  météo: ['الرياح', 'الغبار', 'الحرارة', 'منخفض جوي', 'الأمطار', 'سيول', 'المركز الوطني للأرصاد', 'rain', 'heatwave', 'wind'],
+  'faits divers': ['حادث مروري', 'حادث مرور', 'حوادث السير', 'حوادث المرور', 'مصرع', 'جثة', 'انهيار', 'الدفاع المدني', 'سرقة', 'اختناق', 'traffic accident', 'drowning', 'robbery'],
+}
+const fold = (t) =>
+  String(t || '')
+    .toLowerCase()
+    .replace(/[ً-ٰٟـ]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+const FOLDED = RULES.map(([cat, words, strong]) => [cat, [...new Set([...words, ...(MORE[cat] || [])].map(fold))], strong.map(fold)])
 export function guessCategory(title, summary = '') {
-  const text = low(`${title} ${title} ${summary}`)
+  const text = fold(`${title} ${title} ${summary}`)
   if (text.trim().length < 12) return ''
-  const scores = RULES.map(([cat, words, strong]) => {
+  const scores = FOLDED.map(([cat, words, strong]) => {
     let n = 0
-    for (const w of words) if (text.includes(low(w))) n++
-    for (const w of strong) if (text.includes(low(w))) n++
+    for (const w of words) if (text.includes(w)) n++
+    for (const w of strong) if (text.includes(w)) n++
     return [cat, n]
   }).sort((a, b) => b[1] - a[1])
   const [best, second] = scores

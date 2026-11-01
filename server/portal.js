@@ -93,6 +93,8 @@ export function portalNews(items, q = {}, selection = null) {
       sources: count('origin').slice(0, 40),
       langs: count('lang'),
       types: count(typeOf).sort((a, b) => TYPES.indexOf(a.name) - TYPES.indexOf(b.name)),
+      // Périmètre des comptes (audit v6) : toutes les fiches publiées, de la plus ancienne à la plus récente
+      scope: { total: pub.length, from: pub.reduce((m, it) => (!m || it.date < m ? it.date : m), ''), to: pub.reduce((m, it) => (it.date > m ? it.date : m), '') },
     },
   }
 }

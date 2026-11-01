@@ -10,7 +10,7 @@ import './portal.css'
 
 type Item = { id: string; title: string; summary: string; source: string; date: string; url: string; image: string; category: string; lang: string; type?: string; pinned?: boolean }
 type Count = { name: string; count: number }
-type Page = { total: number; page: number; pages: number; items: Item[]; facets: { categories: Count[]; sources: Count[]; langs: Count[]; types?: Count[] }; site?: { title: string; intro: string } }
+type Page = { total: number; page: number; pages: number; items: Item[]; facets: { categories: Count[]; sources: Count[]; langs: Count[]; types?: Count[]; scope?: { total: number; from: string; to: string } }; site?: { title: string; intro: string } }
 
 const TEXT = {
   ar: {
@@ -219,6 +219,13 @@ export function Portal() {
                 {i.category(c.name)} <small>{c.count}</small>
               </button>
             ))}
+            {data.facets.scope?.from && (
+              <small className="pt-scope">
+                {lang === 'ar'
+                  ? `الأعداد على كل الأخبار المنشورة (${data.facets.scope.total}) من ${i.dateTime(data.facets.scope.from).split(/[،,]/)[0]} إلى ${i.dateTime(data.facets.scope.to).split(/[،,]/)[0]}`
+                  : `Counts over all published news (${data.facets.scope.total}) from ${i.dateTime(data.facets.scope.from).split(/[،,]/)[0]} to ${i.dateTime(data.facets.scope.to).split(/[،,]/)[0]}`}
+              </small>
+            )}
           </nav>
         )}
 

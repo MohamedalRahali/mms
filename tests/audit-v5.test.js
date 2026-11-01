@@ -212,7 +212,8 @@ test('présence dans les réponses du modèle (constat 8) : même question dans 
   const runs = [{ questionId: 'q1', question: 'من هو  رئيس الحكومة؟', at: new Date(now - 30_000).toISOString() }]
   assert.ok(recentRun({ id: 'q2', text: 'من هو رئيس الحكومة؟' }, runs, now))
   assert.equal(recentRun({ id: 'q3', text: 'سؤال آخر' }, runs, now), null)
-  assert.equal(recentRun({ id: 'q1', text: 'x' }, [{ ...runs[0], at: new Date(now - 2 * 3600_000).toISOString() }], now), null)
+  // Audit v6 : la fenêtre passe de 1 h à 24 h (même question non reposée dans la journée)
+  assert.equal(recentRun({ id: 'q1', text: 'x' }, [{ ...runs[0], at: new Date(now - 25 * 3600_000).toISOString() }], now), null)
 })
 
 test('journalistes (constat 11) : noms complets seulement, signature tirée du texte', async () => {
@@ -225,6 +226,8 @@ test('journalistes (constat 11) : noms complets seulement, signature tirée du t
   const d = directory([
     { id: '1', origin: 'X', author: 'aw', date: '2026-10-30', channel: 'site', category: 'politique' },
     { id: '2', origin: 'X', author: 'Hanan Saleh', date: '2026-10-30', channel: 'site', category: 'politique' },
+    // Audit v6 : au moins 2 signatures pour figurer dans la base
+    { id: '3', origin: 'X', author: 'Hanan Saleh', date: '2026-10-31', channel: 'site', category: 'politique' },
   ])
   assert.deepEqual(d.journalists.map((j) => j.name), ['Hanan Saleh'])
   assert.equal(d.journalists[0].themes[0].name, 'politique')

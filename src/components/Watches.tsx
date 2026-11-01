@@ -8,7 +8,7 @@ import { DispatchHistory } from './DispatchHistory'
 import { LoadState } from './LoadState'
 import { MailingListPicker } from './MailingLists'
 import { AlertFields, DEFAULT_ALERT, MergeProposals, VisibilitySelect, WatchAccessRow, WatchAlertRow, WatchAlertTracker } from './WatchAlerts'
-import { type WatchVisibility } from '../lib/watches'
+import { type WatchDryRun, type WatchVisibility } from '../lib/watches'
 
 /** Écran « الرصد المبرمج » : zone surveillée, thèmes à cocher, période, destinataires, puis liste des veilles */
 
@@ -224,8 +224,21 @@ function WatchForm({ onCreated }: { onCreated: () => void }) {
 function WatchRow({ watch, onChange, onOpen, nameOf }: { watch: Watch; onChange: () => void; onOpen: (id: string) => void; nameOf: (id: string) => string }) {
   const i = useI18n()
   // Activer, désactiver, supprimer : action « manage_watches » du profil, et droits de cette veille (serveur)
-  const mayEdit = canDo(useAuth()?.user, 'manage_watches') && watch.mayEdit !== false
+  const user = useAuth()?.user
+  const mayEdit = canDo(user, 'manage_watches') && watch.mayEdit !== false
+  // Essai à blanc : administrateurs seulement (le serveur le vérifie aussi)
+  const mayTry = (user?.role ?? 'admin') === 'admin' && mayEdit
+  const [dry, setDry] = useState<WatchDryRun | 'busy' | 'error' | null>(null)
   const w = WATCH_TEXT[i.lang]
+  async function tryRun() {
+    setDry('busy')
+    try {
+      const res = await fetch(`/api/watches/${watch.id}/dry-run`, { method: 'POST' })
+      setDry(res.ok ? ((await res.json()) as WatchDryRun) : 'error')
+    } catch {
+      setDry('error')
+    }
+  }
   async function toggle() {
     await fetch(`/api/watches/${watch.id}`, {
       method: 'PATCH',
@@ -273,6 +286,10 @@ function WatchRow({ watch, onChange, onOpen, nameOf }: { watch: Watch; onChange:
           {i.lang === 'ar' ? '⚠ لا مستلم لهذا الرصد: لن يُرسل أي تنبيه. أضيفوا بريداً (مثلاً ‎@npdc.gov.ly) أو فعّلوا Telegram.' : '⚠ This watch has no recipient: no alert will be sent. Add an email (e.g. @npdc.gov.ly) or turn on Telegram.'}
         </p>
       )}
+      {watch.seed === 'audit-v6' && (
+        <p className="mms-watch__meta">{i.lang === 'ar' ? 'رصد دائم أُنشئ تلقائياً (مستلمو التقرير التنفيذي الأسبوعي المعتمدون فقط).' : 'Permanent watch created automatically (approved weekly executive report recipients only).'}</p>
+      )}
+      {dry && dry !== 'busy' && <DryRunResult dry={dry} />}
       {watch.duplicateOf && (
         <p className="mms-watch__meta">
           {i.lang === 'ar' ? 'نسخة مكررة (معطّلة دون حذف) من' : 'Duplicate (disabled, not deleted) of'}: <b dir="auto">{nameOf(watch.duplicateOf)}</b>
@@ -325,8 +342,97 @@ function WatchRow({ watch, onChange, onOpen, nameOf }: { watch: Watch; onChange:
             </button>
           </>
         )}
+        {mayTry && (
+          <button type="button" className="news-btn news-btn--ghost" onClick={tryRun} disabled={dry === 'busy'} title={i.lang === 'ar' ? 'يحسب ما سيُرسل الآن دون إرسال أي تنبيه ودون تعليم الأخبار' : 'Counts what would be sent now, without sending or marking anything'}>
+            {i.lang === 'ar' ? 'تجربة دون إرسال' : 'Dry run (no sending)'}
+          </button>
+        )}
       </div>
     </article>
+  )
+}
+
+type DeletedRow = { id: string; name: string; rules: string[]; query: string; createdBy: string; deletedAt: string; deletedBy: string }
+
+/** Veilles supprimées (archivées, audit v6) : administrateurs ; restaurées désactivées */
+function DeletedWatches({ tick, onRestored }: { tick: number; onRestored: () => void }) {
+  const i = useI18n()
+  const ar = i.lang === 'ar'
+  const [rows, setRows] = useState<DeletedRow[]>([])
+  useEffect(() => {
+    let off = false
+    fetch('/api/watches/deleted')
+      .then((r) => (r.ok ? r.json() : { watches: [] }))
+      .then((d: { watches: DeletedRow[] }) => !off && setRows(d.watches ?? []))
+      .catch(() => {})
+    return () => {
+      off = true
+    }
+  }, [tick])
+  if (!rows.length) return null
+  async function restore(id: string) {
+    const res = await fetch(`/api/watches/${id}/restore`, { method: 'POST' })
+    if (res.ok) onRestored()
+  }
+  return (
+    <details className="mms-widget">
+      <summary>{ar ? `الرصد المحذوف (${rows.length}) — محفوظ ويمكن استرجاعه` : `Deleted watches (${rows.length}) — archived, can be restored`}</summary>
+      <ul className="mms-watch__matches">
+        {rows.map((r) => (
+          <li key={r.id}>
+            <b dir="auto">{r.name}</b>
+            <small>
+              {ar ? 'حُذف في' : 'Deleted on'} {i.dateTime(r.deletedAt)}
+              {r.deletedBy && <> · <span dir="ltr">{r.deletedBy}</span></>}
+            </small>{' '}
+            <button type="button" className="news-btn news-btn--ghost" onClick={() => restore(r.id)}>
+              {ar ? 'استرجاع (معطّل)' : 'Restore (disabled)'}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </details>
+  )
+}
+
+/** Résultat de l'essai à blanc : nombre d'alertes qui partiraient, ou pourquoi aucune */
+function DryRunResult({ dry }: { dry: WatchDryRun | 'error' }) {
+  const i = useI18n()
+  const ar = i.lang === 'ar'
+  if (dry === 'error') return <p className="news-status news-status--error">{ar ? 'تعذّرت التجربة الآن.' : 'The dry run failed.'}</p>
+  const why: Record<string, [string, string]> = {
+    disabled: ['الرصد معطّل.', 'The watch is disabled.'],
+    upcoming: ['الرصد لم يبدأ بعد.', 'The watch has not started yet.'],
+    finished: ['انتهت فترة الرصد.', 'The watch period is over.'],
+    nothing_new: ['لا أخبار جديدة لم تُرسل بعد.', 'No new item that was not already sent.'],
+    below_threshold: [`${dry.pending} خبر في الانتظار، دون العتبة (${dry.threshold}).`, `${dry.pending} waiting, below the threshold (${dry.threshold}).`],
+    interval: [`${dry.pending} خبر في الانتظار حتى انقضاء المهلة بين تنبيهين.`, `${dry.pending} waiting for the minimum interval between two alerts.`],
+    no_recipients: ['لا مستلم: لن يُرسل شيء.', 'No recipient: nothing would be sent.'],
+  }
+  return (
+    <div className="mms-note" role="status">
+      <p>
+        <b>{ar ? 'تجربة دون إرسال' : 'Dry run'}:</b>{' '}
+        {dry.wouldSend
+          ? ar
+            ? `سيُرسل الآن تنبيه واحد يضم ${dry.wouldSend} خبر إلى ${dry.recipients} مستلم (${dry.channels.join('، ')}).`
+            : `One alert with ${dry.wouldSend} items would be sent now to ${dry.recipients} recipient(s) (${dry.channels.join(', ')}).`
+          : (why[dry.reason]?.[ar ? 0 : 1] ?? '')}{' '}
+        {ar ? `مطابقات حالية: ${dry.matching24h} خلال 24 ساعة، ${dry.matching7d} خلال 7 أيام. لم يُرسل أي شيء.` : `Current matches: ${dry.matching24h} in 24 h, ${dry.matching7d} in 7 days. Nothing was sent.`}
+      </p>
+      {dry.sample.length > 0 && (
+        <ul className="mms-watch__matches">
+          {dry.sample.map((m) => (
+            <li key={m.id}>
+              <b dir="auto">{m.title}</b>
+              <small>
+                {m.origin} · {i.dateTime(m.date)} · {m.hits.join('، ')}
+              </small>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
@@ -384,6 +490,7 @@ export function Watches({ onOpen }: { onOpen: (id: string) => void }) {
           </div>
         </section>
       </div>
+      {(auth?.user?.role ?? 'admin') === 'admin' && canDo(auth?.user, 'manage_watches') && <DeletedWatches tick={tick} onRestored={reload} />}
       <WatchAlertTracker onOpen={onOpen} tick={tick} />
       <DispatchHistory />
     </>

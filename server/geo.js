@@ -126,16 +126,43 @@ function takeQuota() {
   return true
 }
 
-const sameText = (a, b) => String(a).replace(/\s+/g, ' ').trim().toLowerCase() === String(b).replace(/\s+/g, ' ').trim().toLowerCase()
+/**
+ * Question normalisée (audit v6 : la même question posée 3 fois le 27/10) : casse, diacritiques, alef/ya/ta marbuta,
+ * ponctuation et espaces ignorés ; « ما هي الحكومة؟ » = « ما هى الحكومه »
+ */
+export const questionKey = (t) =>
+  normalize(t)
+    .replace(/[؟?!.,،؛;:«»"'()[\]-]/g, ' ')
+    .replace(/ +/g, ' ')
+    .trim()
+const sameText = (a, b) => questionKey(a) === questionKey(b)
 
-/** Réponse déjà obtenue dans l'heure pour la même question (même texte) : réutilisée, pas de nouvelle ligne (audit v5) */
+// Une même question (normalisée) n'est reposée qu'au bout de 24 h : la réponse déjà obtenue est réutilisée (audit v6)
+export const REPEAT_MS = 24 * 3600_000
+
+/** Réponse déjà obtenue dans les 24 h pour la même question (même texte normalisé) : réutilisée, pas de nouvelle ligne */
 export function recentRun(question, runs = state.runs, now = Date.now()) {
   for (let k = runs.length - 1; k >= 0; k--) {
     const r = runs[k]
-    if (now - Date.parse(r.at) > 3600_000) break
+    if (now - Date.parse(r.at) > REPEAT_MS) break
     if (r.questionId === question.id || sameText(r.question, question.text)) return r
   }
   return null
+}
+
+/**
+ * Affichage dédoublonné : une ligne par question normalisée et par jour (la réponse la plus récente), avec le nombre
+ * de fois où elle a été posée ce jour-là (repeat). Les réponses restent toutes gardées.
+ */
+export function groupRuns(runs) {
+  const groups = new Map()
+  for (const r of runs) {
+    const key = `${String(r.at).slice(0, 10)}|${questionKey(r.question)}`
+    const g = groups.get(key)
+    if (!g) groups.set(key, { ...r, repeat: 1 })
+    else groups.set(key, r.at > g.at ? { ...r, repeat: g.repeat + 1 } : { ...g, repeat: g.repeat + 1 })
+  }
+  return [...groups.values()].sort((a, b) => b.at.localeCompare(a.at))
 }
 
 async function ask(question, aiRun, why) {
@@ -194,7 +221,7 @@ export function mountGeo(app, dataDir, { aiEnabled, aiRun }) {
       today: state.day?.key === new Date().toISOString().slice(0, 10) ? state.day.count : 0,
       lastScheduled: state.lastScheduled,
       summary: summarize(recent, state.settings.entities),
-      runs: state.runs.slice(-60).reverse(),
+      runs: groupRuns(state.runs.slice(-200)).slice(0, 60),
     }
   }
   app.get('/api/geo', (_req, res) => res.json(view()))

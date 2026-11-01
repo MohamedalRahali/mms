@@ -159,6 +159,8 @@ const MODULE_RULES = [
   [/^\/portal-feed(\/|$)/, ['news', 'media']],
   [/^\/journalists(\/|$)/, ['news', 'media']],
   [/^\/report$/, ['report']],
+  // Mots-clés d'alerte personnels (audit v6) : chaque compte ne voit que les siens
+  [/^\/alert-words(\/|$)/, ['alerts']],
 ]
 
 /** Action exigée par l'appel, ou '' */

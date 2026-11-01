@@ -14,7 +14,8 @@ import { LoadState } from './LoadState'
  */
 
 type Mention = { name: string; count: number; cited: boolean; tone: Tone | ''; inSources?: boolean }
-type Run = { id: string; at: string; questionId: string; question: string; answer: string; sources: string[]; mentions: Mention[]; why: string }
+// repeat : nombre de fois où la même question (normalisée) a été posée ce jour-là (audit v6)
+type Run = { id: string; at: string; questionId: string; question: string; answer: string; sources: string[]; mentions: Mention[]; why: string; repeat?: number }
 type Summary = { name: string; runs: number; cited: number; rate: number; mentions: number; tone: Record<Tone, number>; perDay: { date: string; runs: number; cited: number }[] }
 type Settings = { enabled: boolean; schedule: 'off' | 'daily' | 'weekly'; dailyLimit: number; questions: { id: string; text: string }[]; entities: string[] }
 type GeoView = { ai: boolean; running: boolean; settings: Settings; today: number; lastScheduled: string | null; summary: Summary[]; runs: Run[] }
@@ -239,6 +240,11 @@ export function GeoPresence() {
           <details key={r.id} className="geo__run">
             <summary>
               <span dir="auto">{r.question}</span>
+              {(r.repeat ?? 1) > 1 && (
+                <small className="geo__repeat" title={i.lang === 'ar' ? 'السؤال نفسه طُرح أكثر من مرة في هذا اليوم: تُعرض آخر إجابة فقط' : 'Same question asked several times that day: only the latest answer is shown'}>
+                  ×{r.repeat}
+                </small>
+              )}
               <time>{i.dateTime(r.at)}</time>
               <span className="geo__chips">
                 {r.mentions.map((m) => (

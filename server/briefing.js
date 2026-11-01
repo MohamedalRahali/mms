@@ -4,7 +4,7 @@ import { getItems } from './store.js'
 import { onMailPolicyChange, splitRecipients } from './mailPolicy.js'
 import { logDispatch } from './dispatchLog.js'
 import { aiEnabled, briefingSummary } from './ai.js'
-import { briefingFacts, buildBriefing, fairChange } from './insights.js'
+import { briefingFacts, buildBriefing, coveredDaysLabel, fairChange } from './insights.js'
 import { sendMail, sendTelegram, telegramReady } from './watches.js'
 import { accentOr, outputName } from './brand.js'
 import { readUsers } from './auth.js'
@@ -98,7 +98,7 @@ const delta = (a, b) => {
   if (c == null) return ''
   // Au-delà de +100 % : multiplicateur (« ×2,7 », أكثر من الضعف), comme à l'écran (lib/fair.ts formatChange)
   const shown = c > 100 ? `×${(1 + c / 100).toFixed(1).replace('.', ',')}` : `${Math.abs(c)}%`
-  return `${c >= 0 ? '▲' : '▼'} ${shown}${coverage?.partial ? ` (على أساس ${Math.round(coverage.previous)} يوم)` : ''}`
+  return `${c >= 0 ? '▲' : '▼'} ${shown}${coverage?.partial ? ` (على أساس ${coveredDaysLabel(coverage.previous, coverage.days)})` : ''}`
 }
 
 export function briefingEmail({ b, summary }) {

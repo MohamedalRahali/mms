@@ -233,7 +233,7 @@ On te donne les actualités d'une période. Rédige en arabe standard, sur un to
 - a_surveiller : 2 à 5 sujets à suivre dans les prochains jours.
 N'invente aucun fait absent des actualités fournies.`
 
-export async function analyse({ items, key, fluxLabel, days }) {
+export async function analyse({ items, key, fluxLabel, days, flux = '' }) {
   if (cache.has(key)) return cache.get(key)
   const lines = items
     .slice(0, 300)
@@ -241,7 +241,8 @@ export async function analyse({ items, key, fluxLabel, days }) {
     .join('\n')
   const prompt = `Veille : ${fluxLabel}. Période : ${days} derniers jours. ${items.length} actualités.\n\n${lines}`
   const data = await run(aiProvider(), prompt)
-  const result = { ...data, at: new Date().toISOString(), count: items.length }
+  // Période et veille du résultat (audit v6) : l'écran n'affiche « بناءً على N خبر » que pour la période choisie
+  const result = { ...data, at: new Date().toISOString(), count: items.length, days, flux }
   cache.set(key, result)
   return result
 }

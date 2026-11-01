@@ -127,6 +127,22 @@ export function stateOf(r, st, now) {
   return { etat: 'en_attente', debutDans: Math.max(0, Math.round((start - now) / 1000)), dureeS: Math.round((end - start) / 1000) }
 }
 
+/**
+ * Échecs anciens (audit v6 : les échecs du 28-29/10 restaient affichés) : un échec terminé depuis plus de 48 h, ou
+ * suivi d'un enregistrement réussi de la même chaîne, est marqué pastFailure ; l'interface le range, replié, dans
+ * « إخفاقات سابقة (N) ». Rien n'est supprimé.
+ */
+export function markPastFailures(rows, now = Date.now()) {
+  const okAfter = new Map()
+  for (const r of rows) if (r.etat === 'termine') okAfter.set(r.chaine, Math.max(okAfter.get(r.chaine) || 0, Date.parse(r.debut)))
+  return rows.map((r) => {
+    if (r.etat !== 'echoue') return r
+    const old = now - Date.parse(r.fin) > 48 * 3_600_000
+    const replaced = (okAfter.get(r.chaine) || 0) > Date.parse(r.debut)
+    return old || replaced ? { ...r, pastFailure: replaced ? 'replaced' : 'old' } : r
+  })
+}
+
 const minutesOf = (r) => (Date.parse(r.fin) - Date.parse(r.debut)) / MIN
 
 // Jour de Tripoli (UTC+2 toute l'année) d'un instant
@@ -362,7 +378,7 @@ export function mountRecordings(app) {
       const st = statusFile()
       // Passages repérés par الرصد المبرمج (server/rasd.js), additionnés pour toutes les veilles de l'enregistrement
       const hits = readJson(path.join(dataDir, 'libye-rasd-hits.json'), {})
-      const items = list
+      const items = markPastFailures(list
         .map((r) => ({
           id: r.id,
           chaine: r.chaine,
@@ -379,7 +395,7 @@ export function mountRecordings(app) {
           estimate: round(minutesOf(r) * LIMITS.costPerMinute),
           ...stateOf(r, st, now),
         }))
-        .sort((x, y) => y.debut.localeCompare(x.debut))
+        .sort((x, y) => y.debut.localeCompare(x.debut)), now)
       const channels = recordableChannels().map(({ stream, ...c }) => c)
       // Non-administrateurs : codes d'erreur lisibles seulement ; « admin » dit à l'interface d'afficher les coûts
       const admin = isAdminReq(req)
