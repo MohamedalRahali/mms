@@ -751,7 +751,8 @@
 .mms-capture__list li.is-nosource {
   --state: #d9534f;
 }
-.mms-capture__list li.is-liveOnly {
+.mms-capture__list li.is-liveOnly,
+.mms-capture__list li.is-waiting {
   --state: #4a83c9;
 }
 .mms-capture__list .mms-mi {

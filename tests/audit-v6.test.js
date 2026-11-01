@@ -117,3 +117,16 @@ test('mur du direct (constat 4) : un flux de secours est joué quand YouTube n�
   assert.match(src, /flux_alternatifs/)
   assert.match(src, /if \(alt && yt\.live !== true\) return \{ \.\.\.base, mode: 'hls', src: alt/)
 })
+
+test('TV (constat 4) : bulletin pas encore extrait = « en attente », pas « sans extraits »', async () => {
+  const { capturePart } = await import('../server/media.js')
+  const ch = [
+    { id: 'wataniya-tv', name: 'قناة الوطنية', sub: 'tv', state: 'ok', extracts24: 0, production: 'en_attente', nextSlot: '21:00' },
+    { id: 'tanasuh-tv', name: 'قناة التناصح', sub: 'tv', state: 'ok', extracts24: 0, production: 'enregistre_sans_extrait' },
+    { id: 'wasat-tv', name: 'قناة الوسط', sub: 'tv', state: 'ok', extracts24: 4, production: 'produit' },
+  ]
+  const r = capturePart(ch, [], 'tv', [])
+  assert.equal(r.find((x) => x.id === 'wataniya-tv').state, 'waiting')
+  assert.equal(r.find((x) => x.id === 'tanasuh-tv').state, 'silent')
+  assert.equal(r.find((x) => x.id === 'wasat-tv').state, 'ok')
+})

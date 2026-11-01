@@ -70,13 +70,13 @@ export function capturePart(channels, found, sub, recent = [], now = Date.now())
   // une source qui enregistre sans rien produire passe en « silent » (enregistre, aucun extrait)
   const last24 = new Map()
   for (const it of recent) if (Date.parse(it.date) >= now - DAY && it.media === 'broadcast') last24.set(it.origin, (last24.get(it.origin) || 0) + 1)
-  const order = { ok: 0, silent: 1, stale: 2, unknown: 3, offline: 4, blocked: 5, error: 6, nosource: 7, never: 8, disabled: 9, liveOnly: 10 }
+  const order = { ok: 0, waiting: 1, silent: 1, stale: 2, unknown: 3, offline: 4, blocked: 5, error: 6, nosource: 7, never: 8, disabled: 9, liveOnly: 10 }
   return channels
     .filter((c) => !sub || c.sub === sub)
     .map((c) => {
       // Chiffre de la veille quand il existe (rattaché par identifiant de chaîne), sinon fiches vues par MMS
       const day = typeof c.extracts24 === 'number' ? Math.max(c.extracts24, last24.get(c.name) || 0) : last24.get(c.name) || 0
-      return { ...c, count: perOrigin.get(c.name) || 0, last24: day, state: c.state === 'ok' && day === 0 ? 'silent' : c.state }
+      return { ...c, count: perOrigin.get(c.name) || 0, last24: day, state: c.state === 'ok' && day === 0 ? (c.production === 'en_attente' ? 'waiting' : 'silent') : c.state }
     })
     .sort((a, b) => order[a.state] - order[b.state] || b.count - a.count || a.name.localeCompare(b.name, 'ar'))
 }
