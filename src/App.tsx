@@ -114,7 +114,9 @@ const viewAllowed = (user: User | undefined | null, v: View) => {
   // إدارة البوابة العامة : seulement les profils qui ont le droit de publier sur la vitrine
   if (v === 'portal-admin' && (!canDo(user, 'publish_public') || user?.org?.features?.portal === false)) return false
   // إدارة الفريق : administrateur de l'organisation (pas un compte partagé)
-  if (v === 'team') return user?.role === 'admin' && !user?.shared
+  // Espaces clients seulement, administrateur sur un profil complet (les comptes du client historique restent
+  // gérés par le Super Admin)
+  if (v === 'team') return user?.role === 'admin' && !user?.shared && Boolean(user?.org && !user.org.main) && (!user?.perms || user.perms.profile === 'admin')
   // Journal d'audit en lecture seule : administrateurs du client seulement (audit v5)
   if (v === 'audit-log') return user?.role === 'admin'
   return !m || hasModule(user, m)

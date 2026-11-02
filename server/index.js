@@ -220,7 +220,7 @@ mountSuperAdmin(app, root, {
   platformDir: PLATFORM,
   console: !TENANT,
   // Processus principal : requêtes des espaces clients transmises à leur processus
-  gateway: TENANT ? undefined : (a) => mountGateway(a, { log: (type, info) => logSecurity(type, info), shareOf: shareFor }),
+  gateway: TENANT ? undefined : (a) => mountGateway(a, { log: (type, info) => logSecurity(type, info), shareOf: shareFor, limit: publicLimit }),
 })
 
 // Connexion : seules ces routes sont ouvertes, tout le reste de l'API demande une session
@@ -1258,7 +1258,8 @@ mountMailingLists(app, {
   // Journal d'audit de la console Super Admin : qui a créé, modifié ou supprimé une liste
   audit: (req, action, target, detail) => logAudit(req.user.email, String(req.ip || '').replace(/^::ffff:/, ''), action, target, detail),
 })
-mountRasd(app, { getItems, telegramReady, sendTelegram, logDispatch })
+// الرصد المبرمج du client historique (fichiers communs lus par la veille, envois Telegram) : jamais dans un espace client
+if (!TENANT) mountRasd(app, { getItems, telegramReady, sendTelegram, logDispatch })
 // قاعدة الصحفيين ووسائل الإعلام : journalistes et médias libyens, historique des publications et citations
 mountJournalists(app, { getItems })
 // Mots-clés d'alerte personnels, gardés par compte sur le serveur (audit v6, constat 1a)
@@ -1294,12 +1295,14 @@ startAccountPolicy(OWN)
 // الإعدادات الشخصية : photo de profil, nom, préférences, mot de passe
 initProfile(DATA)
 mountProfile(app)
-// إدارة الفريق : comptes, rôles, profils et activité de l'organisation, par son administrateur (Client Admin)
-mountTeam(app, {
-  seats: () => (TENANT ? orgById(TENANT)?.seats || 0 : 0),
-  link: (t) => `/login?activate=${t}${TENANT ? `&o=${TENANT}` : ''}`,
-  org: () => tenantInfo(brandOf()),
-})
+// إدارة الفريق : comptes, rôles, profils et activité de l'organisation, par son administrateur (Client Admin).
+// Espaces clients seulement : les comptes du client historique restent gérés par le Super Admin, comme avant.
+if (TENANT)
+  mountTeam(app, {
+    seats: () => orgById(TENANT)?.seats || 0,
+    link: (t) => `/login?activate=${t}&o=${TENANT}`,
+    org: () => tenantInfo(brandOf()),
+  })
 // Corrections d'articles, articles ajoutés à la main, approbation pour la vitrine publique
 initItemEdits(DATA, { changed: refreshSourcePolicy })
 mountItemEdits(app, { getItems, isAdmin: (u) => (u?.role || 'admin') === 'admin' })
@@ -1456,7 +1459,8 @@ if (!TENANT) try {
 } catch (err) {
   console.error('Veilles de départ (audit v6) :', err.message)
 }
-startRadarAlerts(DATA, getItems, { sendTelegram, telegramReady, sendMail, canSend: canSendAlert, onSent: (r) => logDispatch({ kind: 'radar', name: r.names.slice(0, 3).join(' · '), count: r.count, channels: r.channels, recipients: r.recipients }) })
+// Alertes critiques du radar envoyées aux destinataires du client historique : processus principal seulement
+if (!TENANT) startRadarAlerts(DATA, getItems, { sendTelegram, telegramReady, sendMail, canSend: canSendAlert, onSent: (r) => logDispatch({ kind: 'radar', name: r.names.slice(0, 3).join(' · '), count: r.count, channels: r.channels, recipients: r.recipients }) })
 
 // Sur le VPS, MMS_HOST=127.0.0.1 : seul nginx (HTTPS) parle au serveur
 const HOST = process.env.MMS_HOST || undefined

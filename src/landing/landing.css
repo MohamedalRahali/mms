@@ -2135,3 +2135,20 @@
   border-radius: 50%;
   background: var(--blue-2);
 }
+
+.lp-tour__side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+}
+@media (max-width: 1080px) {
+  .lp-tour__side {
+    flex-direction: row;
+    align-items: center;
+  }
+  .lp-tour__side .lp-tour__tabs {
+    flex: 1;
+    min-width: 0;
+  }
+}

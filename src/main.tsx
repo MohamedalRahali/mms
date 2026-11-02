@@ -45,14 +45,16 @@ try {
  */
 function wantsLogin() {
   const q = new URLSearchParams(location.search)
-  return location.pathname === '/login' || q.has('activate') || q.has('view') || q.has('clip') || q.has('watch')
+  // Application installée (PWA) : toujours la connexion, jamais la page d'accueil publique
+  const installed = typeof matchMedia === 'function' && matchMedia('(display-mode: standalone)').matches
+  return installed || location.pathname === '/login' || q.has('activate') || q.has('view') || q.has('clip') || q.has('watch')
 }
 
 /** Après connexion : l'application vit à « / » (ses pages dans ?view=…), sans les paramètres de connexion */
 function toAppUrl() {
   if (location.pathname === '/login') {
     const q = new URLSearchParams(location.search)
-    for (const k of ['activate', 'o', 'next']) q.delete(k)
+    for (const k of ['activate', 'o', 'next', 'lang']) q.delete(k)
     history.replaceState(null, '', `/${q.toString() ? `?${q}` : ''}`)
   }
 }
@@ -102,7 +104,8 @@ function Gate() {
       .catch(() => setUser(null))
     // Session expirée pendant l'utilisation : retour à la page de connexion (pas à la page d'accueil)
     return watchUnauthorized(() => {
-      if (location.pathname !== '/login') history.replaceState(null, '', '/login')
+      // L'adresse de la page en cours (?view=…) est gardée : après reconnexion, retour sur la même page
+      if (location.pathname !== '/login') history.replaceState(null, '', `/login${location.search}`)
       setUser(null)
     })
   }, [])
@@ -153,7 +156,12 @@ function Gate() {
           onLogin={(u) => {
             toAppUrl()
             resetBrand()
-            setUser(u)
+            // Fiche complète (organisation, visage) relue avant d'afficher l'application : aucun instant avec
+            // l'identité ou les fonctions d'un autre espace
+            fetch('/api/auth/me')
+              .then((r) => (r.ok ? r.json() : null))
+              .then((json) => setUser(json?.user ?? u))
+              .catch(() => setUser(u))
           }}
         />
       </>

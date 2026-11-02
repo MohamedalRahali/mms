@@ -46,9 +46,9 @@ const HELP: Record<'ar' | 'en', { intro: string; search: string; none: string; g
       {
         title: 'الأسئلة الشائعة',
         topics: [
-          { q: 'لماذا لا أرى بعض الصفحات أو الأزرار؟', a: ['الصلاحيات تُحدَّد حسب ملفك (مدير، محلل، قارئ أو ملف مخصص). اطلب من المدير تعديلها.'] },
+          { q: 'لماذا لا أرى بعض الصفحات أو الأزرار؟', a: ['الصلاحيات تُحدَّد حسب ملفك (مسؤول الحساب، مدير، مستخدم أو ملف مخصص). اطلب من مسؤول الحساب تعديلها.'] },
           { q: 'هل تُستعمل بياناتنا لتدريب الذكاء الاصطناعي؟', a: ['لا. « محرك مرصاد » اسم منتجنا وليس مزوّداً: يعمل عبر واجهات برمجية مدفوعة بعقود تجارية تنص شروطها على عدم استخدام الطلبات والردود للتدريب.', 'لا يُرسل إلا نص الأخبار المرصودة وسؤال المستخدم، وصوت البث العام للتفريغ، دون كلمات مرور أو بيانات حسابات.', 'لكل استعمال: مدة الاحتفاظ لدى المزوّد (30 أو 55 يوماً على الأكثر حسب الاستعمال) ومنطقة المعالجة (الولايات المتحدة أساساً) في جدول « ملاحظة الأمان » أسفل هذه الصفحة.'] },
-          { q: 'من يرى ما أفعله؟', a: ['مديرو المنصة يطّلعون على « سجل التدقيق »: الدخول، التسجيلات، النشر، الرصد، التصدير، الحسابات.'] },
+          { q: 'من يرى ما أفعله؟', a: ['مسؤولو الحساب يطّلعون على « سجل التدقيق »: الدخول، التسجيلات، النشر، الرصد، التصدير، الحسابات.'] },
           { q: 'منذ متى البيانات متوفرة؟', a: ['تظهر « بيانات منذ » أعلى الصفحات. استرجاع الأرشيف (حتى 12 شهراً) يتم تدريجياً من أرشيفات الأخبار العامة.'] },
         ],
       },
@@ -104,7 +104,7 @@ const HELP: Record<'ar' | 'en', { intro: string; search: string; none: string; g
       {
         title: 'FAQ',
         topics: [
-          { q: 'Why can’t I see some pages or buttons?', a: ['Permissions depend on your profile (administrator, analyst, viewer or custom). Ask an administrator.'] },
+          { q: 'Why can’t I see some pages or buttons?', a: ['Permissions depend on your profile (Client Admin, Manager, User or custom). Ask your Client Admin.'] },
           { q: 'Is our data used to train AI?', a: ['No. « Mearsaad AI engine » is our product name, not a provider: it runs on paid APIs under commercial contracts whose terms state that prompts and outputs are not used for training.', 'Only the monitored news text and the user question, and public broadcast audio for transcription, are sent; never passwords or account data.', 'For each use: retention at the provider (30 or 55 days at most depending on the use) and processing region (mainly United States) in the « Security note » table at the bottom of this page.'] },
           { q: 'Who can see what I do?', a: ['Platform administrators read the « Audit log »: sign-ins, recordings, publishing, watches, exports, accounts.'] },
           { q: 'Since when is data available?', a: ['« Data since » is shown at the top of pages. Back-filling the archive (up to 12 months) runs gradually from public news archives.'] },

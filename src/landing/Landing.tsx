@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { COPY, TOURS, type Copy, type LandingLang, type TourKey } from './copy'
 import './landing.css'
 
@@ -385,7 +385,10 @@ function Tour({ c }: { c: Copy }) {
   const [active, setActive] = useState<TourKey>('monitor')
   const [playing, setPlaying] = useState(() => !reduced())
   const [hover, setHover] = useState(false)
+  // Clavier ou lecteur d'écran dans la visite : pas de défilement automatique sous le focus
+  const [focused, setFocused] = useState(false)
   const ref = useRef<HTMLElement>(null)
+  const tabs = useRef<Record<string, HTMLButtonElement | null>>({})
   const [visible, setVisible] = useState(false)
   useEffect(() => {
     const el = ref.current
@@ -394,7 +397,18 @@ function Tour({ c }: { c: Copy }) {
     io.observe(el)
     return () => io.disconnect()
   }, [])
-  const running = playing && !hover && visible
+  const running = playing && !hover && !focused && visible
+  // Flèches, Début et Fin entre les onglets (onglet actif seul dans l'ordre de tabulation)
+  const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const n = TOURS.indexOf(active)
+    const rtl = c.dir === 'rtl'
+    const step = { ArrowDown: 1, ArrowUp: -1, ArrowRight: rtl ? -1 : 1, ArrowLeft: rtl ? 1 : -1 }[e.key as 'ArrowDown']
+    const next = e.key === 'Home' ? TOURS[0] : e.key === 'End' ? TOURS[TOURS.length - 1] : step ? TOURS[(n + step + TOURS.length) % TOURS.length] : null
+    if (!next) return
+    e.preventDefault()
+    setActive(next)
+    tabs.current[next]?.focus()
+  }
   useEffect(() => {
     if (!running) return
     const id = setTimeout(() => setActive((a) => TOURS[(TOURS.indexOf(a) + 1) % TOURS.length]), TOUR_MS)
@@ -408,8 +422,16 @@ function Tour({ c }: { c: Copy }) {
         <h2>{c.tour.title}</h2>
         <p>{c.tour.text}</p>
       </header>
-      <div className="lp-tour__grid" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} data-reveal>
-        <div className="lp-tour__tabs" role="tablist" aria-label={c.tour.eyebrow}>
+      <div
+        className="lp-tour__grid"
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onFocus={() => setFocused(true)}
+        onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setFocused(false)}
+        data-reveal
+      >
+        <div className="lp-tour__side">
+        <div className="lp-tour__tabs" role="tablist" aria-label={c.tour.eyebrow} aria-orientation="vertical" onKeyDown={onKey}>
           {TOURS.map((k) => (
             <button
               key={k}
@@ -418,6 +440,10 @@ function Tour({ c }: { c: Copy }) {
               id={`tour-tab-${k}`}
               aria-selected={k === active}
               aria-controls="tour-panel"
+              tabIndex={k === active ? 0 : -1}
+              ref={(el) => {
+                tabs.current[k] = el
+              }}
               className={k === active ? 'is-active' : ''}
               onClick={() => setActive(k)}
             >
@@ -431,9 +457,10 @@ function Tour({ c }: { c: Copy }) {
               {k === active && <span key={`${k}-${running}`} className={`lp-tour__progress${running ? ' is-running' : ''}`} style={{ animationDuration: `${TOUR_MS}ms` }} />}
             </button>
           ))}
-          <button type="button" className="lp-tour__play" onClick={() => setPlaying(!playing)}>
-            <Icon name={playing ? 'pause' : 'play'} size={16} /> {playing ? c.tour.pause : c.tour.play}
-          </button>
+        </div>
+        <button type="button" className="lp-tour__play" aria-pressed={!playing} onClick={() => setPlaying(!playing)}>
+          <Icon name={playing ? 'pause' : 'play'} size={16} /> {playing ? c.tour.pause : c.tour.play}
+        </button>
         </div>
         <div className="lp-tour__panel" role="tabpanel" id="tour-panel" aria-labelledby={`tour-tab-${active}`}>
           <div className="lp-tour__stage" key={active}>

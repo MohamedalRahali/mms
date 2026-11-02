@@ -174,7 +174,9 @@ export function currentUser(req) {
 function setCookie(res, token, maxAgeMs, secure) {
   const parts = [`${COOKIE}=${token}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${Math.floor(maxAgeMs / 1000)}`]
   if (secure) parts.push('Secure')
-  res.setHeader('Set-Cookie', parts.join('; '))
+  // Ajouté aux cookies déjà posés (effacement de l'aiguillage vers un espace client, server/tenancy.js)
+  const prev = res.getHeader('Set-Cookie')
+  res.setHeader('Set-Cookie', [...(Array.isArray(prev) ? prev : prev ? [String(prev)] : []).filter((c) => !c.startsWith(`${COOKIE}=`)), parts.join('; ')])
 }
 
 // Connexions en attente du code de double authentification : jeton → compte (5 minutes, 5 essais)

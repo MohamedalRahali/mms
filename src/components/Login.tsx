@@ -136,8 +136,13 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
       <section className="mms-login__panel">
         <header className="mms-login__top">
           {/* Avant l'identification de l'organisation : marque de la plateforme (Mearsaad by Around Expressions) */}
+          {/* Marque blanche (هوية المخرجات) : logo ou nom du client, sans la marque Mearsaad / Around */}
           <a className="mms-login__logo mms-login__logo--around" href="/" title={t.home}>
-            <img src="/brand/mearsaad-intl-light.png" alt="مرصاد — Mearsaad, by Around Expressions" width={900} height={262} />
+            {loginBrand?.whiteLabel ? (
+              loginBrand.logo ? <img src={loginBrand.logo} alt={loginBrand.name || ''} /> : <strong className="mms-login__wl">{loginBrand.name || 'MMS'}</strong>
+            ) : (
+              <img src="/brand/mearsaad-intl-light.png" alt="مرصاد — Mearsaad, by Around Expressions" width={900} height={262} />
+            )}
           </a>
           <div className="mms-login__actions">
             <InstallButton lang={lang} className="mms-login__install" />
@@ -188,13 +193,15 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
         ) : (
         <form className="mms-login__card" onSubmit={submit}>
           {/* Marque de la plateforme (carte de connexion claire) : l'organisation est reconnue d'après l'identifiant */}
-          <div className="mms-login__brand mms-login__brand--around">
-            <img src="/brand/mearsaad-intl-dark.png" alt="مرصاد — Mearsaad" width={900} height={262} />
-            <span dir="ltr">
-              <em>by</em>
-              <strong>Around Expressions</strong>
-            </span>
-          </div>
+          {!loginBrand?.whiteLabel && (
+            <div className="mms-login__brand mms-login__brand--around">
+              <img src="/brand/mearsaad-intl-dark.png" alt="مرصاد — Mearsaad" width={900} height={262} />
+              <span dir="ltr">
+                <em>by</em>
+                <strong>Around Expressions</strong>
+              </span>
+            </div>
+          )}
           <h2>{t.title}</h2>
           <p className="mms-login__intro">{t.intro}</p>
 

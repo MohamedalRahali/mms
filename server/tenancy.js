@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
+import stream from 'node:stream'
 import path from 'node:path'
 import { fork } from 'node:child_process'
 import express from 'express'
@@ -201,31 +202,44 @@ export function issueOrgActivation(id, email, by = '') {
 
 /* ---------------------------------------------------------------- superviseur des processus */
 
-const procs = new Map() // id → { child, port, startedAt, restarts, lastExit, wanted, timer }
+const procs = new Map() // id → { child, port, startedAt, restarts, lastExit, wanted, timer, restarting }
 let rootDir = ''
+// Un processus resté en marche 10 minutes est jugé stable : le délai de redémarrage repart de 5 s
+const STABLE_MS = 10 * 60_000
+
+// Réglages du client historique jamais transmis à un espace client : son groupe Telegram, les destinataires des
+// alertes du radar et du rapport exécutif. Vides (et non absents) : dotenv ne remplace jamais une variable déjà
+// définie, même vide, et le .env du serveur ne les réintroduit donc pas dans le processus de l'organisation.
+const MAIN_ONLY_ENV = { TELEGRAM_BOT_TOKEN: '', TELEGRAM_CHAT_ID: '', MMS_RADAR_ALERTS: '0', MMS_RADAR_ALERTS_TO: '', MMS_BRIEFING_TO: '' }
+
+export function tenantEnv(org) {
+  return {
+    ...process.env,
+    ...MAIN_ONLY_ENV,
+    MMS_TENANT: org.id,
+    MMS_TENANT_NAME: org.name,
+    MMS_DATA_DIR: orgDir(org.id),
+    MMS_PLATFORM_DIR: path.join(mainData, 'superadmin'),
+    MMS_SHARED_DATA: mainData,
+    MMS_PORT: String(org.port),
+    MMS_HOST: '127.0.0.1',
+    LIBYE_DATA_DIR: process.env.LIBYE_DATA_DIR,
+    MOSAIQUE_DATA_DIR: process.env.MOSAIQUE_DATA_DIR,
+    // Pas de compte d'administration Around créé d'office dans l'espace d'un client
+    MMS_SEED_ADMIN: '0',
+  }
+}
 
 function launch(org) {
   const state = procs.get(org.id) || { restarts: 0, lastExit: null }
+  // Un seul processus par organisation, quoi qu'il arrive (relance, synchronisation, redémarrage demandé)
+  if (state.child && state.child.exitCode === null && !state.child.killed) return
+  clearTimeout(state.timer)
+  state.timer = null
   state.wanted = true
+  state.restarting = false
   state.port = org.port
-  const child = fork(path.join(rootDir, 'server', 'index.js'), [], {
-    cwd: rootDir,
-    env: {
-      ...process.env,
-      MMS_TENANT: org.id,
-      MMS_TENANT_NAME: org.name,
-      MMS_DATA_DIR: orgDir(org.id),
-      MMS_PLATFORM_DIR: path.join(mainData, 'superadmin'),
-      MMS_SHARED_DATA: mainData,
-      MMS_PORT: String(org.port),
-      MMS_HOST: '127.0.0.1',
-      LIBYE_DATA_DIR: process.env.LIBYE_DATA_DIR,
-      MOSAIQUE_DATA_DIR: process.env.MOSAIQUE_DATA_DIR,
-      // Pas de compte d'administration Around créé d'office dans l'espace d'un client
-      MMS_SEED_ADMIN: '0',
-    },
-    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-  })
+  const child = fork(path.join(rootDir, 'server', 'index.js'), [], { cwd: rootDir, env: tenantEnv(org), stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
   const prefix = (stream, out) => stream.on('data', (b) => out.write(String(b).replace(/^(?=.)/gm, `[${org.id}] `)))
   prefix(child.stdout, process.stdout)
   prefix(child.stderr, process.stderr)
@@ -233,13 +247,21 @@ function launch(org) {
   state.startedAt = Date.now()
   procs.set(org.id, state)
   child.on('exit', (code, signal) => {
-    state.child = null
+    if (state.child === child) state.child = null
     state.lastExit = { at: new Date().toISOString(), code, signal }
+    if (Date.now() - state.startedAt >= STABLE_MS) state.restarts = 0
+    if (state.restarting) {
+      const fresh = orgById(org.id)
+      if (fresh && fresh.status === 'active') launch(fresh)
+      else state.restarting = false
+      return
+    }
     if (!state.wanted) return
     // Redémarrage automatique, de plus en plus espacé si le processus tombe en boucle (5 s → 2 min)
     state.restarts++
     const wait = Math.min(5000 * 2 ** Math.min(state.restarts - 1, 5), 120_000)
     state.timer = setTimeout(() => {
+      state.timer = null
       const fresh = orgById(org.id)
       if (fresh && fresh.status === 'active' && procs.get(org.id)?.wanted) launch(fresh)
     }, wait)
@@ -251,7 +273,9 @@ function stopProc(id) {
   const s = procs.get(id)
   if (!s) return
   s.wanted = false
+  s.restarting = false
   clearTimeout(s.timer)
+  s.timer = null
   if (s.child) s.child.kill('SIGTERM')
 }
 
@@ -261,20 +285,25 @@ export function syncTenants() {
   const orgs = listOrgs()
   for (const o of orgs) {
     const s = procs.get(o.id)
-    // Déjà voulu : en marche, ou redémarrage programmé après un arrêt inattendu
-    if (o.status === 'active' && !s?.wanted) launch(o)
-    if (o.status !== 'active' && s?.wanted) stopProc(o.id)
+    // Déjà voulu (en marche, relance programmée) ou redémarrage en cours : rien à faire
+    if (o.status === 'active' && !s?.wanted && !s?.restarting) launch(o)
+    if (o.status !== 'active' && (s?.wanted || s?.restarting)) stopProc(o.id)
   }
   for (const id of procs.keys()) if (!orgs.some((o) => o.id === id)) stopProc(id)
 }
 
+/** Redémarrage demandé (console, changement de nom) : arrêt puis relance unique à la sortie du processus */
 export function restartTenant(id) {
   const o = orgById(id)
   if (!o) throw fail('NOT_FOUND', 404)
-  stopProc(id)
+  if (!rootDir) return
   const s = procs.get(id)
-  if (s?.child) s.child.once('exit', () => o.status === 'active' && launch(orgById(id) || o))
-  else if (o.status === 'active') launch(o)
+  if (s?.child && s.child.exitCode === null) {
+    s.wanted = false
+    s.restarting = true
+    clearTimeout(s.timer)
+    s.child.kill('SIGTERM')
+  } else if (o.status === 'active') launch(o)
 }
 
 export function tenantState(id) {
@@ -286,12 +315,18 @@ export function tenantState(id) {
 export function startTenants(root) {
   rootDir = root
   syncTenants()
-  // Arrêt du service : les processus des organisations s'arrêtent avec lui
+  // Arrêt du service : les processus des organisations s'arrêtent avec lui (ils s'arrêtent aussi d'eux-mêmes si le
+  // canal avec le processus principal se ferme). Pas de process.exit ici : l'arrêt normal du serveur reste inchangé.
   const stopAll = () => {
     for (const id of procs.keys()) stopProc(id)
   }
   process.once('exit', stopAll)
-  for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => (stopAll(), process.exit(0)))
+  for (const sig of ['SIGTERM', 'SIGINT'])
+    process.once(sig, () => {
+      stopAll()
+      // Comportement par défaut du signal rétabli après l'arrêt des processus des organisations
+      process.kill(process.pid, sig)
+    })
 }
 
 /* ---------------------------------------------------------------- aiguillage des requêtes (processus principal) */
@@ -299,7 +334,13 @@ export function startTenants(root) {
 function readOrgCookie(req) {
   for (const part of String(req.headers.cookie || '').split(';')) {
     const [k, ...v] = part.trim().split('=')
-    if (k === ORG_COOKIE) return decodeURIComponent(v.join('='))
+    if (k === ORG_COOKIE) {
+      try {
+        return decodeURIComponent(v.join('='))
+      } catch {
+        return ''
+      }
+    }
   }
   return ''
 }
@@ -310,7 +351,8 @@ function orgCookie(req, value) {
   return parts.join('; ')
 }
 
-function addCookie(res, cookie) {
+/** Ajoute un cookie sans effacer ceux déjà posés (y compris par une route qui les pose après) */
+export function addCookie(res, cookie) {
   const prev = res.getHeader('Set-Cookie')
   res.setHeader('Set-Cookie', [...(Array.isArray(prev) ? prev : prev ? [String(prev)] : []), cookie])
 }
@@ -319,7 +361,7 @@ const HOP = new Set(['connection', 'keep-alive', 'proxy-connection', 'transfer-e
 
 /**
  * Transmet la requête au processus de l'organisation. body : corps déjà lu (JSON), sinon le flux est transmis tel quel.
- * after(status, headers) peut ajouter des cookies avant l'envoi de la réponse.
+ * after(status, res) peut ajouter des cookies avant l'envoi de la réponse.
  */
 function forward(req, res, org, { body, after } = {}) {
   const headers = {}
@@ -345,74 +387,149 @@ function forward(req, res, org, { body, after } = {}) {
     res.status(r.statusCode || 502)
     for (const [k, v] of Object.entries(out)) if (v !== undefined) res.setHeader(k, v)
     if (after) after(r.statusCode || 502, res)
-    r.pipe(res)
+    // Processus de l'organisation arrêté au milieu de la réponse : la connexion est coupée, jamais terminée
+    // proprement (un fichier tronqué ne doit pas passer pour complet)
+    stream.pipeline(r, res, (err) => err && res.destroy(err))
   })
   up.setTimeout(10 * 60_000, () => up.destroy(new Error('timeout')))
   up.on('error', () => {
     if (!res.headersSent) res.status(503).json({ error: 'TENANT_DOWN' })
-    else res.end()
+    else res.destroy()
   })
-  req.on('aborted', () => up.destroy())
+  // Visiteur parti avant la fin : la requête vers le processus de l'organisation est abandonnée
+  res.on('close', () => !res.writableFinished && up.destroy())
   if (payload) up.end(payload)
   else req.pipe(up)
 }
 
 // Routes du processus principal jamais transmises : console Super Admin, état de la plateforme, accès publics
-const LOCAL = [/^\/api\/superadmin(\/|$)/, /^\/api\/platform\/status$/, /^\/api\/public\//, /^\/api\/v1\//, /^\/api\/landing\//]
+const LOCAL = [/^\/api\/superadmin(\/|$)/i, /^\/api\/platform\/status\/?$/i, /^\/api\/public\//i, /^\/api\/v1\//i, /^\/api\/landing\//i]
+
+/* -------- liens de partage d'un tableau d'une organisation : propriétaire trouvé d'après l'empreinte du jeton */
+
+const sharesCache = new Map() // fichier → { mtime, hashes }
+function orgOfShare(token) {
+  const h = sha(token)
+  for (const o of listOrgs()) {
+    if (o.status !== 'active') continue
+    const file = path.join(orgDir(o.id), 'shares.json')
+    let hashes
+    try {
+      const mtime = fs.statSync(file).mtimeMs
+      const c = sharesCache.get(file)
+      if (c && c.mtime === mtime) hashes = c.hashes
+      else {
+        hashes = new Set((JSON.parse(fs.readFileSync(file, 'utf8')).shares || []).map((x) => x.hash))
+        sharesCache.set(file, { mtime, hashes })
+      }
+    } catch {
+      continue
+    }
+    if (hashes.has(h)) return o
+  }
+  return null
+}
+
+/* -------- connexions aux espaces clients : limite commune par adresse IP et journal de la console Super Admin */
+
+const LOCK_MS = 15 * 60_000
+const MAX_IP_FAILS = 20
+const ipFails = new Map() // ip → { count, at }
+setInterval(() => {
+  const now = Date.now()
+  for (const [k, f] of ipFails) if (now - f.at >= LOCK_MS) ipFails.delete(k)
+}, 5 * 60_000).unref()
+const ipLocked = (ip) => {
+  const f = ipFails.get(ip)
+  return Boolean(f && f.count >= MAX_IP_FAILS && Date.now() - f.at < LOCK_MS)
+}
+function countFail(ip) {
+  const f = ipFails.get(ip)
+  ipFails.set(ip, { count: (f && Date.now() - f.at < LOCK_MS ? f.count : 0) + 1, at: Date.now() })
+}
+
+/** Mot de passe d'un compte d'une organisation, vérifié sur son fichier (espace suspendu : pas de processus) */
+function checkOrgPassword(id, login, password) {
+  const key = lc(login)
+  const u = orgUsers(id).find((x) => matches(x, key))
+  if (!u?.salt || !u?.hash) return (hashPassword(password), false)
+  const a = Buffer.from(hashPassword(password, u.salt).hash, 'hex')
+  const b = Buffer.from(u.hash, 'hex')
+  return a.length === b.length && crypto.timingSafeEqual(a, b)
+}
 
 /**
  * Aiguillage monté par le processus principal, après les blocages et la maintenance de la plateforme
- * et avant ses propres routes de connexion.
+ * et avant ses propres routes de connexion. limit : limite des accès publics (liens de partage).
  */
-export function mountGateway(app, { log = () => {}, shareOf = () => null } = {}) {
+export function mountGateway(app, { log = () => {}, shareOf = () => null, limit = (_req, _res, next) => next() } = {}) {
   const smallJson = express.json({ limit: '4kb' })
+  const ipOf = (req) => String(req.ip || '').replace(/^::ffff:/, '')
+  const uaOf = (req) => String(req.headers['user-agent'] || '').slice(0, 200)
+  // Requête traitée par le processus principal lui-même (client historique) : jamais transmise ensuite
+  const stayHere = (req, res, next) => {
+    req.gatewayLocal = true
+    if (readOrgCookie(req)) addCookie(res, orgCookie(req, ''))
+    next()
+  }
 
   // Connexion : l'organisation est trouvée d'après l'identifiant ; le client historique garde sa propre route
   app.post('/api/auth/login', smallJson, (req, res, next) => {
     const login = req.body?.login
-    if (typeof login !== 'string' || typeof req.body?.password !== 'string') return next()
+    const password = req.body?.password
+    if (typeof login !== 'string' || typeof password !== 'string' || login.length > 200 || password.length > 1000) return stayHere(req, res, next)
     const id = orgOfLogin(login)
-    if (!id || id === 'main') {
-      if (readOrgCookie(req)) addCookie(res, orgCookie(req, ''))
-      return next()
+    const org = id && id !== 'main' ? orgById(id) : null
+    if (!org) return stayHere(req, res, next)
+    const ip = ipOf(req)
+    if (ipLocked(ip)) {
+      log('locked', { ip, ua: uaOf(req), login })
+      return res.status(429).json({ error: 'LOCKED' })
     }
-    const org = orgById(id)
-    if (!org) return next()
     if (org.status !== 'active') {
-      log('org_suspended_login', { ip: String(req.ip || ''), login, detail: org.id })
+      // Espace suspendu : signalé seulement à qui connaît le mot de passe (sinon même réponse qu'un compte inconnu)
+      if (!checkOrgPassword(org.id, login, password)) {
+        countFail(ip)
+        log('login_fail', { ip, ua: uaOf(req), login, detail: org.id })
+        return res.status(401).json({ error: 'BAD_CREDENTIALS' })
+      }
+      log('org_suspended_login', { ip, ua: uaOf(req), login, detail: org.id })
       return res.status(403).json({ error: 'SUSPENDED' })
     }
-    forward(req, res, org, { body: req.body, after: (status, r) => status < 300 && addCookie(r, orgCookie(req, org.id)) })
+    forward(req, res, org, {
+      body: req.body,
+      after: (status, r) => {
+        if (status < 300) {
+          addCookie(r, orgCookie(req, org.id))
+          ipFails.delete(ip)
+        } else if (status === 401 || status === 429) {
+          countFail(ip)
+          log(status === 429 ? 'locked' : 'login_fail', { ip, ua: uaOf(req), login, detail: org.id })
+        }
+      },
+    })
   })
 
-  // Activation d'un compte d'une organisation : le lien porte l'organisation (?o=…)
+  // Activation d'un compte d'une organisation : le lien porte l'organisation (?o=…) ; sans elle, client historique
   app.post('/api/auth/activate', smallJson, (req, res, next) => {
     const id = String(req.body?.org || '')
-    if (!ORG_RE.test(id)) return next()
+    if (!ORG_RE.test(id)) return stayHere(req, res, next)
     const org = orgById(id)
     if (!org || org.status !== 'active') return res.status(404).json({ error: 'BAD_TOKEN' })
     const { org: _drop, ...body } = req.body
     forward(req, res, org, { body })
   })
 
-  // Lien de partage d'un tableau d'une organisation : cherché dans chaque espace si le client historique ne le connaît pas
-  app.get(/^\/api\/public\/share\/([A-Za-z0-9_-]{43})(\/.*)?$/, async (req, res, next) => {
+  // Lien de partage d'un tableau d'une organisation : même limite que les autres accès publics, aucun appel en rafale
+  app.get(/^\/api\/public\/share\/([A-Za-z0-9_-]{43})(\/.*)?$/, limit, (req, res, next) => {
     if (shareOf(req.params[0])) return next()
-    for (const org of listOrgs().filter((o) => o.status === 'active')) {
-      const found = await new Promise((resolve) => {
-        const r = http.get({ host: '127.0.0.1', port: org.port, path: `/api/public/share/${req.params[0]}`, timeout: 3000 }, (x) => {
-          x.resume()
-          resolve(x.statusCode === 200)
-        })
-        r.on('error', () => resolve(false))
-        r.on('timeout', () => (r.destroy(), resolve(false)))
-      })
-      if (found) return forward(req, res, org)
-    }
-    next()
+    const org = orgOfShare(req.params[0])
+    if (!org) return next()
+    forward(req, res, org)
   })
 
   app.use('/api', (req, res, next) => {
+    if (req.gatewayLocal) return next()
     const id = readOrgCookie(req)
     if (!id) return next()
     if (LOCAL.some((re) => re.test(req.originalUrl.split('?')[0]))) return next()

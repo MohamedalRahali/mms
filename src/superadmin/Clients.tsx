@@ -95,7 +95,7 @@ export function Clients() {
         </button>
       </div>
       {error && <p className="sa-error">{error}</p>}
-      {created && <LinkBox title={`تم إنشاء مساحة «${created.name}». أرسل رابط التفعيل هذا إلى مسؤول الحساب لدى العميل (صالح 7 أيام، لمرة واحدة):`} path={created.path} />}
+      {created && <LinkBox key={created.path} title={`تم إنشاء مساحة «${created.name}». أرسل رابط التفعيل هذا إلى مسؤول الحساب لدى العميل (صالح 7 أيام، لمرة واحدة):`} path={created.path} />}
       {tab === 'orgs' && data && (
         <div className="sa-table-wrap">
           <table className="sa-table">
@@ -297,7 +297,7 @@ function OrgSheet({ org, onClose, onChange }: { org: OrgRow; onClose: () => void
           </>
         )}
         {msg && <p className="sa-note">{msg}</p>}
-        {link && <LinkBox title={`رابط تفعيل جديد لـ ${link.email} (صالح 7 أيام):`} path={link.path} />}
+        {link && <LinkBox key={link.path} title={`رابط تفعيل جديد لـ ${link.email} (صالح 7 أيام):`} path={link.path} />}
         <h3>الحسابات ({users?.length ?? '…'})</h3>
         <div className="sa-table-wrap">
           <table className="sa-table">

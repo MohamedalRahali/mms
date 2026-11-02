@@ -7,6 +7,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { hashPassword } from '../server/auth.js'
+import { initTenancy, tenantEnv } from '../server/tenancy.js'
 
 /**
  * Espaces clients de bout en bout, sur un vrai serveur (processus principal + un processus par organisation) :
@@ -299,8 +300,8 @@ test('client historique : inchangé, ne voit que ses comptes', async () => {
   assert.equal(c.jar.has('mms_org'), false)
   const me = await c.get('/api/auth/me')
   assert.equal(me.json.user.org.main, true)
-  const team = (await c.get('/api/team')).json.users.map((u) => u.email)
-  assert.deepEqual(team, [MAIN_ADMIN.email])
+  // Comptes du client historique : gérés par le Super Admin seulement, comme avant (pas de gestion d'équipe ici)
+  assert.equal((await c.get('/api/team')).status, 404)
   const boards = ((await c.get('/api/dashboards')).json.boards || []).map((x) => x.name)
   assert.ok(!boards.includes('Tableau confidentiel A'))
 })
@@ -343,4 +344,86 @@ test('le Super Admin voit chaque espace et peut relancer son processus', async (
   assert.equal((await sa.post(`/api/superadmin/orgs/${orgs.A.id}/restart`, {}, saH)).status, 200)
   // Sessions gardées sur disque : toujours connecté après le redémarrage
   await waitFor(async () => (await orgs.A.adminClient.get('/api/auth/me')).status === 200)
+})
+
+test('un espace client ne reçoit ni le Telegram ni les destinataires d’alertes du client historique', () => {
+  const saved = { ...process.env }
+  Object.assign(process.env, { TELEGRAM_BOT_TOKEN: 'main-bot', TELEGRAM_CHAT_ID: '-100main', MMS_RADAR_ALERTS: '1', MMS_RADAR_ALERTS_TO: 'cell@main.test', MMS_BRIEFING_TO: 'dg@main.test' })
+  initTenancy(data)
+  const env = tenantEnv({ id: 'org_test01', name: 'T', port: 9999 })
+  // Vides et non absentes : dotenv ne les réintroduit pas depuis le .env du serveur
+  for (const k of ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'MMS_RADAR_ALERTS_TO', 'MMS_BRIEFING_TO']) assert.equal(env[k], '', k)
+  assert.equal(env.MMS_RADAR_ALERTS, '0')
+  process.env = saved
+})
+
+test('aiguillage périmé : une connexion du client historique reste chez lui et efface l’aiguillage', async () => {
+  const c = client()
+  c.jar.set('mms_org', orgs.A.id)
+  const r = await c.post('/api/auth/login', { login: MAIN_ADMIN.email, password: MAIN_ADMIN.password })
+  assert.equal(r.status, 200, JSON.stringify(r.json))
+  assert.equal(c.jar.has('mms_org'), false, 'aiguillage effacé malgré le cookie de session posé ensuite')
+  assert.equal((await c.get('/api/auth/me')).json.user.org.main, true)
+  // Activation sans organisation : jamais transmise à l'espace du cookie
+  const act = await c.post('/api/auth/activate', { token: 'x'.repeat(40), password: 'y'.repeat(12) })
+  assert.equal(act.status, 404)
+})
+
+test('administrateur limité par un profil : pas de gestion d’équipe, pas de changement de son propre profil', async () => {
+  const a = orgs.A.adminClient
+  const email = 'limited-admin@client-a.test'
+  assert.equal((await a.post('/api/team/users', { email, role: 'admin', password: 'Limited-admin-1!' })).status, 201)
+  const prof = (await a.get('/api/team/permissions')).json.profiles.find((x) => x.name === 'Lecture analyse')
+  assert.ok(prof)
+  assert.equal((await a.patch(`/api/team/users/${encodeURIComponent(email)}`, { profile: prof.id })).status, 200)
+  const { c } = await login(email, 'Limited-admin-1!')
+  assert.equal((await c.get('/api/team')).status, 403)
+  assert.equal((await c.patch(`/api/team/users/${encodeURIComponent(email)}`, { profile: '' })).status, 403)
+  assert.equal((await c.put(`/api/team/permissions/${prof.id}`, { modules: ['dashboard'], actions: ['export'] })).status, 403)
+  // Un administrateur complet ne change pas non plus son propre profil
+  assert.equal((await a.patch(`/api/team/users/${encodeURIComponent(orgs.A.admin)}`, { profile: prof.id })).json.error, 'SELF')
+  await a.del(`/api/team/users/${encodeURIComponent(email)}`)
+})
+
+test('lien de partage d’un tableau d’un espace client : trouvé sans session, jeton inconnu refusé', async () => {
+  const a = orgs.A.adminClient
+  const sh = await a.post('/api/shares', { boardId: 'a-board', days: 7 })
+  assert.equal(sh.status, 201, JSON.stringify(sh.json))
+  const pub = await client().get(`/api/public/share/${sh.json.token}`)
+  assert.equal(pub.status, 200)
+  assert.equal(pub.json.board.name, 'Tableau confidentiel A')
+  assert.equal((await client().get(`/api/public/share/${'z'.repeat(43)}`)).status, 404)
+})
+
+test('le Super Admin ne peut pas créer chez le client historique une adresse déjà prise dans un espace', async () => {
+  const r = await sa.post('/api/superadmin/users', { email: orgs.A.admin, password: 'Whatever-123456', role: 'viewer' }, saH)
+  assert.equal(r.status, 409)
+})
+
+test('espace suspendu : mauvais mot de passe = réponse ordinaire, rien n’indique que le compte existe', async () => {
+  await sa.patch(`/api/superadmin/orgs/${orgs.B.id}`, { status: 'suspended' }, saH)
+  assert.equal((await login(orgs.B.admin, 'not-the-password')).r.json.error, 'BAD_CREDENTIALS')
+  assert.equal((await login(orgs.B.admin, 'Admin-B-Password!')).r.json.error, 'SUSPENDED')
+  await sa.patch(`/api/superadmin/orgs/${orgs.B.id}`, { status: 'active' }, saH)
+  await waitFor(async () => (await login(orgs.B.admin, 'Admin-B-Password!')).r.status === 200)
+})
+
+test('renommer un espace : un seul processus relancé, toujours joignable', async () => {
+  const before = (await sa.get('/api/superadmin/orgs')).json.orgs.find((o) => o.id === orgs.B.id).state.pid
+  assert.equal((await sa.patch(`/api/superadmin/orgs/${orgs.B.id}`, { name: 'Client B Telecom Group' }, saH)).status, 200)
+  await waitFor(async () => {
+    const st = (await sa.get('/api/superadmin/orgs')).json.orgs.find((o) => o.id === orgs.B.id).state
+    return st.running && st.pid !== before
+  })
+  await waitFor(async () => (await orgs.B.adminClient.get('/api/platform/brand')).json.name === 'Client B Telecom Group')
+})
+
+// En dernier : bloque les connexions aux espaces depuis cette adresse pour 15 minutes
+test('force brute sur les espaces clients : limite commune par adresse IP, visible dans la console', async () => {
+  let last
+  for (let i = 0; i < 22; i++) last = await login(i % 2 ? orgs.A.admin : orgs.B.admin, `wrong-${i}`)
+  assert.equal(last.r.status, 429)
+  assert.equal(last.r.json.error, 'LOCKED')
+  const sec = (await sa.get('/api/superadmin/security')).json
+  assert.ok(JSON.stringify(sec).includes(orgs.A.admin), 'échecs inscrits dans le journal de sécurité de la console')
 })

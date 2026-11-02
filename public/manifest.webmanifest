@@ -2,7 +2,7 @@
   "name": "مرصاد — Mearsaad",
   "short_name": "مرصاد",
   "description": "منصة رصد وتحليل الأخبار",
-  "start_url": "/",
+  "start_url": "/login",
   "scope": "/",
   "display": "standalone",
   "dir": "rtl",

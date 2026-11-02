@@ -683,3 +683,9 @@ body,
     display: none;
   }
 }
+
+.mms-login__wl {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--l-ink, #fff);
+}

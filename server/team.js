@@ -3,7 +3,7 @@ import express from 'express'
 import { closeSessions, displayName, hashPassword, readUsers, ROLES, userSessions, writeUsers } from './auth.js'
 import { listProfiles, mountPermissionsAdmin, permsOf, profileExists } from './permissions.js'
 import { all, isOnline, lastSeenOf } from './monitor.js'
-import { recordAudit } from './auditTrail.js'
+import { isSharedAccount, recordAudit } from './auditTrail.js'
 import { emailTaken } from './tenancy.js'
 
 /**
@@ -50,8 +50,9 @@ function row(u) {
 export function mountTeam(app, { seats = () => 0, link = (t) => `/login?activate=${t}`, org = () => ({}) } = {}) {
   const team = express.Router()
   team.use(express.json({ limit: '20kb' }))
-  // Administrateurs de l'organisation seulement ; un compte partagé ne gère pas l'équipe
-  team.use((req, res, next) => (req.user?.role === 'admin' && !req.user?.shared ? next() : fail(res, 403, 'FORBIDDEN')))
+  // Administrateurs de l'organisation seulement, sur un profil de permissions complet (un administrateur limité par
+  // un profil personnalisé ne gère pas l'équipe) ; un compte partagé ne gère pas l'équipe
+  team.use((req, res, next) => (req.user?.role === 'admin' && !req.user?.profile && !isSharedAccount(req.user.email) ? next() : fail(res, 403, 'FORBIDDEN')))
   const audit = (req, action, target, detail = '') => recordAudit({ actor: req.user.email, role: req.user.role, ip: req.ip, category: 'users', action, target, detail })
 
   team.get('/', (_req, res) => {
@@ -120,6 +121,7 @@ export function mountTeam(app, { seats = () => 0, link = (t) => `/login?activate
       u.role = req.body.role
     }
     if (req.body?.profile !== undefined) {
+      if (self) return fail(res, 400, 'SELF')
       const id = String(req.body.profile || '')
       if (id && (!profileExists(id) || ROLES.includes(id))) return fail(res, 400, 'BAD_PROFILE')
       if (id) u.profile = id

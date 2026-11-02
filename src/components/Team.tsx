@@ -331,7 +331,7 @@ function Members({ t, data, reload }: { t: T; data: TeamData; reload: () => void
         </p>
       )}
       {msg.info && <p className="mms-note">{msg.info}</p>}
-      {msg.link && <CopyLink t={t} url={msg.link} />}
+      {msg.link && <CopyLink key={msg.link} t={t} url={msg.link} />}
       <div className="tm-table">
         <table>
           <thead>

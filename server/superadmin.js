@@ -15,6 +15,7 @@ import { accountKind, issueActivation, providerAccounts, sharedPolicyState } fro
 import { mountPermissionsAdmin, permsOf, profileExists } from './permissions.js'
 import { initBrand, mountClientAdmin } from './clientAdmin.js'
 import { mountOrgsAdmin } from './orgsAdmin.js'
+import { orgOfLogin } from './tenancy.js'
 import { sourceHealth } from './sourceHealth.js'
 import { addException, approveChange, faceAdmin, faceDiagnostics, resetFace, setFacePolicy } from './face.js'
 import { exportHealth, runCheck } from './exportHealth.js'
@@ -600,7 +601,8 @@ export function mountSuperAdmin(app, root, opts = {}) {
     if (!EMAIL_RE.test(email)) return fail(res, 400, 'BAD_EMAIL')
     if (password.length < 8) return fail(res, 400, 'SHORT_PASSWORD')
     const users = readUsers()
-    if (users.some((u) => lc(u.email) === email)) return fail(res, 409, 'EXISTS')
+    // Une adresse n'appartient qu'à une seule organisation (aiguillage à la connexion, server/tenancy.js)
+    if (users.some((u) => lc(u.email) === email) || orgOfLogin(email)) return fail(res, 409, 'EXISTS')
     const name = String(req.body?.name || '').trim().slice(0, 80) || email
     const profile = req.body?.profile && profileExists(req.body.profile) && !ROLES.includes(req.body.profile) ? req.body.profile : ''
     writeUsers([...users, { email, username: email, name, role, ...(profile ? { profile } : {}), createdAt: new Date().toISOString(), ...hashPassword(password) }])
