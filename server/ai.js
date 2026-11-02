@@ -47,9 +47,10 @@ const price = (model) => PRICES.find(([re]) => re.test(model)) || [null, 4, 20]
 let usageFile = ''
 let usage = {} // mois (AAAA-MM) → moteur → { runs, input, output, cost }
 
-export function initUsage(dataDir) {
+// settingsDir : réglages d'IA du Super Admin, communs à tous les espaces clients
+export function initUsage(dataDir, settingsDir = path.join(dataDir, 'superadmin')) {
   usageFile = path.join(dataDir, 'ai-usage.json')
-  aiSettingsFile = path.join(dataDir, 'superadmin', 'ai-settings.json')
+  aiSettingsFile = path.join(settingsDir, 'ai-settings.json')
   try {
     aiSettings = JSON.parse(fs.readFileSync(aiSettingsFile, 'utf8')) || {}
   } catch {

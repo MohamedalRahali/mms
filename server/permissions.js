@@ -55,7 +55,7 @@ const LATER_ACTIONS = ['mark_processed', 'share_dashboards', 'edit_items', 'publ
 const MODULE_KEYS = MODULES.map(([k]) => k)
 const ACTION_KEYS = ACTIONS.map(([k]) => k)
 export const BASE_ROLES = ['admin', 'analyst', 'viewer']
-const ROLE_NAMES = { admin: 'مدير', analyst: 'محلل', viewer: 'قارئ' }
+const ROLE_NAMES = { admin: 'مسؤول الحساب', analyst: 'مدير', viewer: 'مستخدم' }
 
 // Mêmes droits qu'avant les permissions détaillées (minRole de server/index.js et diffusion.js)
 const DEFAULT_ACTIONS = {

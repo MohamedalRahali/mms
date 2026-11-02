@@ -2,7 +2,7 @@ import { useContext, useEffect, useState, type FormEvent } from 'react'
 import { BroadcastStudio } from './BroadcastStudio'
 import { type Count, type Flux, type NewsResponse, type Tone, DrillContext, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
-import { canDo, useAuth } from '../lib/auth'
+import { canDo, hasPipeline, useAuth } from '../lib/auth'
 import { type MediaIconName, type MediaPageType, MEDIA_PAGE_TEXT, MEDIA_SUBS, useMedia } from '../lib/media'
 import { BuzzBars } from './Dashboard'
 import { Donut, Line } from './Charts'
@@ -67,6 +67,7 @@ export function MediaPage({
   onSub: (sub: string) => void
   onLive?: () => void
 }) {
+  const pipeline = hasPipeline(useAuth()?.user)
   const i = useI18n()
   const p = MEDIA_PAGE_TEXT[i.lang]
   const [days, setDays] = useState<number>(7)
@@ -123,9 +124,10 @@ export function MediaPage({
       {error && <p className="news-status news-status--error">{i.t.loadError}</p>}
       {!data && !error && <p className="news-status">{i.t.loading}</p>}
       {data && <Board type={type} data={data} days={days} />}
-      {type === 'broadcast' && <Diffusion />}
+      {/* Sources de diffusion et enregistrement à la demande : collecte du client historique, absente d'un espace client */}
+      {type === 'broadcast' && pipeline && <Diffusion />}
       {/* تسجيل حسب الطلب (برمجة التسجيل، الرصد المبرمج، البحث الذكي) : sur la page Broadcasts, ouvert par défaut */}
-      {type === 'broadcast' && (
+      {type === 'broadcast' && pipeline && (
         <details className="lw-rec" id="rec" open>
           <summary>⏺ {i.lang === 'ar' ? 'تسجيل حسب الطلب: اختيار قناة وفترة محددة، تفريغ النص وتنزيله' : 'Record on demand: pick a channel and a period, then read and download the transcript'}</summary>
           <Recordings />

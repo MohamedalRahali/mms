@@ -11,13 +11,15 @@ import { FaceCard } from './Face'
 import { ExportHealthCard } from './ExportHealth'
 import { AuditLog } from './AuditLog'
 import { SecurityNote } from './SecurityNote'
+import { Clients } from './Clients'
 import { ACTIVITY_LABEL, AUDIT_LABEL, ROLE_LABEL, SECURITY_LABEL, ago, api, errText, flag, fmtBytes, fmtDate, fmtDay, fmtMinutes, fmtNum, qs, setAuthLost } from './api'
 
 /** Console Super Admin (وحدة التحكم العليا) : /superadmin, séparée de la plateforme */
 
-type Section = 'dash' | 'users' | 'team' | 'perms' | 'access' | 'analytics' | 'activity' | 'audit' | 'security' | 'secnote' | 'sources' | 'entities' | 'settings'
+type Section = 'dash' | 'clients' | 'users' | 'team' | 'perms' | 'access' | 'analytics' | 'activity' | 'audit' | 'security' | 'secnote' | 'sources' | 'entities' | 'settings'
 const SECTIONS: [Section, string, string][] = [
   ['dash', 'لوحة المراقبة', '◉'],
+  ['clients', 'العملاء', '🏢'],
   ['users', 'المستخدمون', '👥'],
   ['team', 'الفريق والصلاحيات', '🔑'],
   ['perms', 'الصلاحيات التفصيلية', '🧩'],
@@ -135,6 +137,7 @@ export default function SuperAdmin() {
           <h1>{SECTIONS.find(([k]) => k === section)?.[1]}</h1>
         </header>
         {section === 'dash' && <Dashboard onUser={setOpenUser} />}
+        {section === 'clients' && <Clients />}
         {section === 'users' && <Users onUser={setOpenUser} />}
         {section === 'team' && <Team onUser={setOpenUser} />}
         {section === 'perms' && <Permissions />}
@@ -956,9 +959,9 @@ function CreateUser({ onClose, onDone }: { onClose: () => void; onDone: () => vo
         <label>
           الدور
           <select className="sa-input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-            <option value="viewer">قارئ</option>
-            <option value="analyst">محلل</option>
-            <option value="admin">مدير</option>
+            <option value="viewer">مستخدم</option>
+            <option value="analyst">مدير</option>
+            <option value="admin">مسؤول الحساب</option>
           </select>
         </label>
         <label>
@@ -1034,9 +1037,9 @@ function UserSheet({ email, onClose }: { email: string; onClose: () => void }) {
               <label>
                 الدور
                 <select className="sa-input" value={u.role} onChange={(e) => run(() => api(path, 'PATCH', { role: e.target.value }), 'تم تغيير الدور.')}>
-                  <option value="viewer">قارئ</option>
-                  <option value="analyst">محلل</option>
-                  <option value="admin">مدير</option>
+                  <option value="viewer">مستخدم</option>
+                  <option value="analyst">مدير</option>
+                  <option value="admin">مسؤول الحساب</option>
                 </select>
               </label>
               <label>

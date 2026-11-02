@@ -1023,3 +1023,12 @@ textarea.sa-input {
 /* Compte partagé dans le journal d'audit (audit v5) */
 .sa-row--shared td { background: rgba(192, 57, 43, 0.12); }
 .sa-row--shared td:first-child { box-shadow: inset 3px 0 0 #c0392b; }
+
+/* العملاء : espaces clients */
+.sa-linkbox .sa-row {
+  flex-wrap: nowrap;
+}
+.sa-linkbox .sa-input {
+  flex: 1;
+  min-width: 0;
+}

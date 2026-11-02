@@ -482,10 +482,13 @@ const COLOR_RE = /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\))$/i
 const SIZE_RE = /^\d{1,3}(\.\d+)?(px|pt|em|rem)$/
 const ALIGN = new Set(['left', 'right', 'center', 'justify'])
 
+/** Logo par défaut des rapports : celui du client historique, Around Expressions dans un espace client */
+const defaultLogo = () => (process.env.MMS_TENANT ? '/brand/around-logo.png' : '/logo-npdc.png')
+
 /** Adresse d'image permise : logo du compte, logo de MMS, ou image intégrée png/jpeg/webp/gif */
 export function safeImageSrc(src) {
   const s = String(src || '')
-  if (/^\/api\/reports\/(logo|banner)(\?v=\d{1,15})?$/.test(s) || s === '/logo-npdc.png') return s
+  if (/^\/api\/reports\/(logo|banner)(\?v=\d{1,15})?$/.test(s) || s === '/logo-npdc.png' || s === '/brand/around-logo.png') return s
   if (/^data:image\/(png|jpeg|webp|gif);base64,[a-z0-9+/=\s]+$/i.test(s) && s.length < 1_500_000) return s
   return null
 }
@@ -718,7 +721,7 @@ export function mountReports(app, dataDir, { getItems, aiEnabled, aiRun, sendMai
       }
     } else aiError = 'AI_OFF'
     // Logo : celui du compte, sinon celui de l'organisation (هوية المخرجات), sinon celui de la plateforme
-    const logo = logoFile(req.user.email) ? `/api/reports/logo?v=${now}` : brandOf().logo || '/logo-npdc.png'
+    const logo = logoFile(req.user.email) ? `/api/reports/logo?v=${now}` : brandOf().logo || defaultLogo()
     // Titre lisible et unique (audit v3) : date et heure, nombre de publications ; version ajoutée si le titre existe déjà
     const base = String(req.body?.title || '').trim().slice(0, 180) || `${t.title} — ${fmtDateTime(new Date(now).toISOString(), lang)} — ${posts.length} ${lang === 'en' ? 'posts' : 'منشور'}`
     const taken = new Set(readAll(req.user.email).map((r) => r.title))

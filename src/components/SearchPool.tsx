@@ -1,7 +1,7 @@
 import { useContext, useMemo, useState } from 'react'
 import { type Count, type Flux, DrillContext, useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
-import { hasModule, useAuth } from '../lib/auth'
+import { hasModule, hasPipeline, useAuth } from '../lib/auth'
 import { WATCH_TEXT, type WatchOption } from '../lib/watches'
 import { countryName, flagOf, fmtReach, isNetwork } from '../lib/listing'
 import { PoolSearch } from './PoolSearch'
@@ -219,7 +219,7 @@ export function SearchPool({ flux }: { flux: Flux | '' }) {
   const s = TEXT[i.lang === 'ar' ? 'ar' : 'en']
   const auth = useAuth()
   const [tab, setTab] = useState<Tab>('search')
-  const tabs = (Object.keys(s.tabs) as Tab[]).filter((t) => t !== 'broadcast' || hasModule(auth?.user, 'media'))
+  const tabs = (Object.keys(s.tabs) as Tab[]).filter((t) => t !== 'broadcast' || (hasModule(auth?.user, 'media') && hasPipeline(auth?.user)))
   return (
     <div className="pool">
       <header className="pool__head">

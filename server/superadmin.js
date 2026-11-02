@@ -14,6 +14,7 @@ import { auditRows, auditSummary, isSharedAccount, mountAuditTrail } from './aud
 import { accountKind, issueActivation, providerAccounts, sharedPolicyState } from './accountPolicy.js'
 import { mountPermissionsAdmin, permsOf, profileExists } from './permissions.js'
 import { initBrand, mountClientAdmin } from './clientAdmin.js'
+import { mountOrgsAdmin } from './orgsAdmin.js'
 import { sourceHealth } from './sourceHealth.js'
 import { addException, approveChange, faceAdmin, faceDiagnostics, resetFace, setFacePolicy } from './face.js'
 import { exportHealth, runCheck } from './exportHealth.js'
@@ -234,9 +235,15 @@ function deriveActivity(req, user, ip) {
 /** Fournisseurs d'IA nommés ou non dans l'application client (réglage Super Admin, « neutral » par défaut) */
 export const aiDisclosureMode = () => (settings.aiDisclosure === 'named' ? 'named' : 'neutral')
 
-export function mountSuperAdmin(app, root) {
-  dir = path.join(root, 'data', 'superadmin')
-  initMonitor(path.join(root, 'data'))
+/**
+ * opts (espaces clients) : dataDir = données de l'organisation servie par ce processus (journaux, identité),
+ * platformDir = réglages communs à la plateforme (blocages, maintenance, sources), console = console montée
+ * (processus principal seulement), gateway(app) = aiguillage vers les espaces clients, après blocages et maintenance.
+ */
+export function mountSuperAdmin(app, root, opts = {}) {
+  const dataDir = opts.dataDir || path.join(root, 'data')
+  dir = opts.platformDir || path.join(root, 'data', 'superadmin')
+  initMonitor(dataDir)
   settings = readJson('settings.json', settings)
   blocks = readJson('blocks.json', blocks)
   muted = readJson('sources.json', muted)
@@ -244,8 +251,9 @@ export function mountSuperAdmin(app, root) {
   applyMuted()
   // Pays et portée des sources, logo du client
   initSourceMeta(dir)
-  initBrand(dir)
-  if (!configured()) console.warn('Console Super Admin désactivée : lancez « node server/superadmin-setup.js » pour créer le compte')
+  // Identité (nom, logo) : celle de l'organisation servie par ce processus
+  initBrand(path.join(dataDir, 'superadmin'))
+  if (!configured() && opts.console !== false) console.warn('Console Super Admin désactivée : lancez « node server/superadmin-setup.js » pour créer le compte')
 
   // Connexions à la plateforme → journal de sécurité et d'activité
   setAuthListener((type, info) => {
@@ -294,6 +302,9 @@ export function mountSuperAdmin(app, root) {
     next()
   })
 
+  // Espaces clients : requêtes d'une organisation transmises à son processus (blocages et maintenance déjà appliqués)
+  if (opts.gateway) opts.gateway(app)
+
   /* -------- routes publiques de la plateforme : bandeau, maintenance, activité côté navigateur */
   app.get('/api/platform/status', (_req, res) =>
     res.json({ announcement: settings.announcement.on ? { text: settings.announcement.text, level: settings.announcement.level } : null, maintenance: settings.maintenance.on ? { message: settings.maintenance.message } : null }),
@@ -307,7 +318,20 @@ export function mountSuperAdmin(app, root) {
     res.json({ ok: true })
   })
 
-  /* -------- console */
+  /* -------- console (processus principal seulement) */
+  if (opts.console === false) {
+    // Espace client : réglages communs relus chaque minute (sources masquées par le Super Admin, bandeau…)
+    setInterval(() => {
+      settings = readJson('settings.json', settings)
+      blocks = readJson('blocks.json', blocks)
+      const next = readJson('sources.json', muted)
+      if (JSON.stringify(next) !== JSON.stringify(muted)) {
+        muted = next
+        applyMuted()
+      }
+    }, 60_000).unref()
+    return
+  }
   const sa = express.Router()
   // Corps limités à 20 Ko, sauf le logo du client (image en data:, 400 Ko au plus)
   const smallJson = express.json({ limit: '20kb' })
@@ -367,6 +391,8 @@ export function mountSuperAdmin(app, root) {
 
   /* ---- pays et portée des sources, logo du client, clés d'API, liens de partage */
   mountClientAdmin(sa, { audit })
+  /* ---- العملاء : espaces clients et demandes de démonstration */
+  mountOrgsAdmin(sa, { audit })
   /* ---- سجل التدقيق : lecture et export CSV du journal d'audit (déplacé depuis l'application client) */
   mountAuditTrail(sa)
 
@@ -640,7 +666,7 @@ export function mountSuperAdmin(app, root) {
       const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'mearsaad.com').split(',')[0].trim()
       const proto = req.secure || req.headers['x-forwarded-proto'] === 'https' || !/^(localhost|127\.)/.test(host) ? 'https' : 'http'
       audit(req, 'user_activation_link', lc(req.params.email))
-      res.json({ link: `${proto}://${host}/?activate=${token}`, exp })
+      res.json({ link: `${proto}://${host}/login?activate=${token}`, exp })
     } catch (err) {
       fail(res, err.status || 400, err.code || 'FAILED')
     }

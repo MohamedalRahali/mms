@@ -37,7 +37,7 @@ export function categoryOf(method, p) {
   if (/^\/api\/portal-feed|^\/api\/items\/[^/]+\/public$/.test(p)) return 'portal'
   if (/^\/api\/(watches|rasd)/.test(p)) return 'watch'
   if (/^\/api\/(reports|briefing|shares|mailing-lists|report\/validation)/.test(p)) return 'export'
-  if (/^\/api\/superadmin\/(users|permissions|face)|^\/api\/profile\/password$|^\/api\/auth\/mfa\//.test(p)) return 'users'
+  if (/^\/api\/team(\/|$)|^\/api\/superadmin\/(users|permissions|face|orgs)|^\/api\/profile\/password$|^\/api\/auth\/mfa\//.test(p)) return 'users'
   if (/^\/api\/diffusion/.test(p)) return 'sources'
   if (/^\/api\/superadmin\//.test(p)) return 'settings'
   return 'other'
@@ -111,6 +111,8 @@ export function auditMiddleware(req, res, next) {
   // Identifiant tapé à la connexion (jamais le mot de passe)
   const typed = typeof req.body?.login === 'string' ? req.body.login : ''
   res.on('finish', () => {
+    // Requête d'un espace client : inscrite dans le journal de son propre processus, pas dans celui-ci
+    if (req.tenantProxied) return
     const superLogin = p.startsWith('/api/superadmin/')
     const typedLogin = category === 'login' && typeof req.body?.login === 'string' ? req.body.login : typed
     const actor = req.auditActor || req.user?.email || (req.sa ? `superadmin:${req.sa.u}` : '') || (typedLogin ? (superLogin ? `superadmin:${typedLogin}` : typedLogin) : '') || ''

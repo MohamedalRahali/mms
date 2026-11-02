@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
  * garde sa charte graphique ; la couleur d'accent ne sert qu'aux livrables exportés.
  */
 
-export type Brand = { name: string; logo: string; assistant?: string; accent?: string; whiteLabel?: boolean }
+export type Brand = { name: string; logo: string; fallbackLogo?: string; assistant?: string; accent?: string; whiteLabel?: boolean }
 
 const EMPTY: Brand = { name: '', logo: '' }
 let cached: Brand | null = null
@@ -21,6 +21,12 @@ export function loadBrand(): Promise<Brand> {
       .catch(() => EMPTY)
       .then((b: Brand) => (cached = { ...EMPTY, ...b }))
   return pending
+}
+
+/** Connexion ou déconnexion : la marque est celle de l'organisation du compte (espaces clients), relue ensuite */
+export function resetBrand() {
+  cached = null
+  pending = null
 }
 
 /** Marque déjà lue (null tant que la première lecture n'est pas finie) : pour les exports hors React */

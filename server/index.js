@@ -72,6 +72,8 @@ import { initSourcePolicy } from './sourcePolicy.js'
 import { dispatchHistory, initDispatchLog, logDispatch } from './dispatchLog.js'
 import { SPLITS, STEPS, timeline } from './timeline.js'
 import { setEntityResolver } from './store.js'
+import { addDemoRequest, currentTenant, initDemoRequests, initTenancy, mountGateway, orgById, startTenants, tenantInfo } from './tenancy.js'
+import { mountTeam } from './team.js'
 
 /** Serveur MMS : API de lecture des actualités + site compilé (dist/) en production */
 
@@ -80,6 +82,19 @@ process.env.MOSAIQUE_DATA_DIR = path.resolve(root, process.env.MOSAIQUE_DATA_DIR
 process.env.LIBYE_DATA_DIR = path.resolve(root, process.env.LIBYE_DATA_DIR || './data/libye')
 const PORT = Number(process.env.MMS_PORT) || 8788
 loadKey(root)
+
+// Espaces clients (server/tenancy.js) : ce processus sert le client historique (data/) ou une organisation
+// (MMS_TENANT, données dans MMS_DATA_DIR = data/orgs/<id>/). Le flux collecté (fichiers libye-* de data/) et les
+// réglages de la plateforme (data/superadmin/) restent communs et ne sont écrits que par le processus principal.
+const TENANT = currentTenant()
+const SHARED = process.env.MMS_SHARED_DATA ? path.resolve(process.env.MMS_SHARED_DATA) : path.join(root, 'data')
+const DATA = process.env.MMS_DATA_DIR ? path.resolve(process.env.MMS_DATA_DIR) : path.join(root, 'data')
+const PLATFORM = process.env.MMS_PLATFORM_DIR ? path.resolve(process.env.MMS_PLATFORM_DIR) : path.join(DATA, 'superadmin')
+const OWN = path.join(DATA, 'superadmin')
+// Processus d'un espace client : s'arrête avec le processus principal, même après un arrêt brutal de celui-ci
+if (TENANT && process.send) process.on('disconnect', () => process.exit(0))
+fs.mkdirSync(OWN, { recursive: true })
+initTenancy(SHARED)
 
 // Jour calendaire de diffusion, à l'heure de Tripoli (clients libyens, UTC+2)
 const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tripoli', year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -193,20 +208,26 @@ app.use((req, res, next) => {
 })
 
 // سجل التدقيق : qui a fait quoi (connexions, enregistrements, portail, veilles, exports, comptes), avant toute route
-initAuditTrail(path.join(root, 'data'))
+initAuditTrail(DATA)
 app.use(auditMiddleware)
 
 // Permissions détaillées par profil (modules et boutons), réglées dans la console Super Admin
-initPermissions(path.join(root, 'data', 'superadmin'))
-initDispatchLog(path.join(root, 'data'))
+initPermissions(OWN)
+initDispatchLog(DATA)
 // Console Super Admin (/superadmin) : blocages IP et pays, maintenance et journaux passent avant tout le reste
-mountSuperAdmin(app, root)
+mountSuperAdmin(app, root, {
+  dataDir: DATA,
+  platformDir: PLATFORM,
+  console: !TENANT,
+  // Processus principal : requêtes des espaces clients transmises à leur processus
+  gateway: TENANT ? undefined : (a) => mountGateway(a, { log: (type, info) => logSecurity(type, info), shareOf: shareFor }),
+})
 
 // Connexion : seules ces routes sont ouvertes, tout le reste de l'API demande une session
-initAuth(path.join(root, 'data'))
+initAuth(DATA)
 // التحقق بالوجه : désactivé par défaut et jamais exigé tant que le moteur n'est pas installé
 setFaceEngine(makeEngine(root))
-initFace(path.join(root, 'data'), {
+initFace(DATA, {
   log: (type, email, detail) => logSecurity(type, { login: email, detail }),
   notify: (email, what) => sendMail([email], faceNotice(what)),
   // Super Admins avertis de chaque inscription, changement, demande et retrait (adresse du support technique)
@@ -217,13 +238,13 @@ initFace(path.join(root, 'data'), {
   sessionOf,
 })
 setFaceGate(faceGate)
-initTags(path.join(root, 'data'))
+initTags(DATA)
 app.post('/api/auth/login', express.json({ limit: '4kb' }), loginRoute)
 app.post('/api/auth/logout', logoutRoute)
 // Double authentification : 2e étape de la connexion, activation, désactivation (règle dans la console Super Admin)
-initMfaPolicy(path.join(root, 'data', 'superadmin'))
+initMfaPolicy(PLATFORM)
 // Liste blanche des domaines destinataires (veilles, rapports, briefing, alertes) ; refus journalisés
-initMailPolicy(path.join(root, 'data', 'superadmin'))
+initMailPolicy(PLATFORM)
 setMailBlockedListener((blocked, subject) => logSecurity('mail_blocked', { ip: '', ua: '', login: '', detail: `${blocked.join(', ')} · ${String(subject).slice(0, 80)}` }))
 app.post('/api/auth/mfa', express.json({ limit: '2kb' }), mfaLoginRoute)
 app.post('/api/auth/mfa/setup', mfaSetupRoute)
@@ -235,7 +256,7 @@ app.get('/api/auth/me', (req, res) => {
   const raw = readUsers().find((u) => u.email === user.email)
   // Compte partagé (audit v5) : signalé dans l'interface, en lecture seule dès qu'un autre administrateur existe
   const shared = isSharedAccount(user.email) ? { shared: true, readOnly: sharedReadOnly(user.email) } : {}
-  res.json({ user: { ...user, ...shared, avatar: avatarUrl(user.email), perms: permsOf(user), mfa: mfaStateOf(raw), face: faceStateOf(user.email, sessionOf(req)?.session) } })
+  res.json({ user: { ...user, ...shared, avatar: avatarUrl(user.email), perms: permsOf(user), mfa: mfaStateOf(raw), face: faceStateOf(user.email, sessionOf(req)?.session), org: tenantInfo(brandOf()) } })
 })
 // Activation d'un compte créé sans mot de passe (lien à usage unique généré dans la console Super Admin, audit v5)
 const activationTries = new Map()
@@ -257,9 +278,9 @@ app.post('/api/auth/activate', express.json({ limit: '2kb' }), (req, res) => {
 })
 
 // Référentiel des entités : variantes d'un même acteur fusionnées, médias jamais comptés comme acteurs
-initEntities(path.join(root, 'data', 'superadmin'))
+initEntities(PLATFORM)
 // Politique des sources sociales et des forums (audit v3) : bots, comptes personnels, liste blanche des forums
-initSourcePolicy(path.join(root, 'data', 'superadmin'))
+initSourcePolicy(PLATFORM)
 const applyEntities = () =>
   setEntityResolver((items) => {
     const media = new Set(items.map((it) => normName(it.origin || '')).filter(Boolean))
@@ -282,14 +303,15 @@ const applyEntities = () =>
 applyEntities()
 onEntitiesChange(applyEntities)
 // Correction automatique des acteurs par l'IA (une fois par jour, Gemini gratuit en priorité) : couche sous le référentiel
-initEntityAI(path.join(root, 'data', 'superadmin'))
-startEntityAI(getItems, runEconomy, aiEnabled)
+initEntityAI(PLATFORM)
+// Une seule correction par l'IA pour toute la plateforme (processus principal) : pas de quota consommé par espace
+if (!TENANT) startEntityAI(getItems, runEconomy, aiEnabled)
 
 /* -------- accès sans session : lien de partage d'un tableau de bord, API des clients, logo du client */
-initProcessed(path.join(root, 'data'))
-initShares(path.join(root, 'data'))
-initApiKeys(path.join(root, 'data', 'superadmin'))
-initBrief(path.join(root, 'data'))
+initProcessed(DATA)
+initShares(DATA)
+initApiKeys(OWN)
+initBrief(DATA)
 
 // Logo et nom du client (réglés dans la console Super Admin) : en tête des tableaux de bord, partagés compris
 app.get('/api/platform/brand', (_req, res) => res.json(brandOf()))
@@ -381,6 +403,24 @@ app.get('/api/v1/news', publicLimit, (req, res) => {
   })
 })
 
+// Page d'accueil publique : demande de démonstration (enregistrée pour la console Super Admin, transmise au support)
+if (!TENANT) {
+  initDemoRequests(path.join(SHARED, 'superadmin'))
+  app.post('/api/landing/demo', express.json({ limit: '8kb' }), publicLimit, (req, res) => {
+    try {
+      const row = addDemoRequest(req.body, String(req.ip || '').replace(/^::ffff:/, ''))
+      if (!row.ignored) {
+        const text = [`Demande de démonstration — ${row.company}`, `${row.name} <${row.email}>`, row.role, row.country, row.phone, row.interest, '', row.message].join('\n')
+        const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+        sendSupportMail(supportConf().email, { subject: `MMS · Request a demo · ${row.company}`, text, html: `<pre style="font-family:Arial,sans-serif;white-space:pre-wrap">${esc(text)}</pre><p>Super Admin › العملاء › طلبات العرض</p>` }).catch(() => {})
+      }
+      res.status(201).json({ ok: true })
+    } catch (err) {
+      res.status(err.status || 400).json({ error: err.code || 'FAILED' })
+    }
+  })
+}
+
 app.use('/api', requireAuth)
 mountFace(app)
 
@@ -398,6 +438,15 @@ app.use(
   ),
 )
 
+// Espace client : collecte à la demande (enregistrements, رصد, sources de diffusion) et vitrine publique
+// appartiennent au client historique (fichiers communs lus par la veille) : non disponibles ici
+if (TENANT)
+  app.use('/api', (req, res, next) => {
+    const p = req.path.toLowerCase().replace(/\/+$/, '')
+    const blocked = /^\/(rasd|recordings|portal-feed)(\/|$)/.test(p) || (/^\/diffusion(\/|$)/.test(p) && req.method !== 'GET') || /^\/items\/[^/]+\/public$/.test(p)
+    return blocked ? res.status(403).json({ error: 'NOT_IN_PLAN' }) : next()
+  })
+
 // Quota d'appels à l'IA par compte (60 par heure) : un compte, même compromis, ne peut pas faire exploser la facture
 const AI_QUOTA = 60
 const aiCalls = new Map() // email → [dates]
@@ -411,12 +460,12 @@ app.use('/api/ai', (req, res, next) => {
   next()
 })
 
-initImages(path.join(root, 'data'))
-mountDiffusion(app, path.join(root, 'data'))
+initImages(DATA)
+mountDiffusion(app, SHARED)
 mountMedia(app)
 // Générateur de rapports (التقارير) : publications cochées seulement, rapports propres à chaque compte
-mountReports(app, path.join(root, 'data'), { getItems, aiEnabled, aiRun: aroundRun, sendMail, logDispatch })
-initUsage(path.join(root, 'data'))
+mountReports(app, DATA, { getItems, aiEnabled, aiRun: aroundRun, sendMail, logDispatch })
+initUsage(DATA, PLATFORM)
 app.get('/api/img/:key', imageRoute)
 
 // État pour la barre d'outils ; chemins, clés et dépenses sont dans la console Super Admin (/api/superadmin/dashboard)
@@ -426,7 +475,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     // Profondeur des données : « données depuis le JJ/MM » et comparaisons masquées avant 14 jours
-    history: { ...historyMemo(items), backfill: backfillState(path.join(root, 'data', 'libye-reprise-etat.json')) },
+    history: { ...historyMemo(items), backfill: backfillState(path.join(SHARED, 'libye-reprise-etat.json')) },
     lastUpdate,
     demo,
     ai: aiEnabled(),
@@ -1148,8 +1197,8 @@ app.post('/api/feedback', express.json({ limit: '20kb' }), (req, res) => {
   const rating = Math.min(Math.max(Number(req.body?.rating) || 0, 0), 5)
   const comment = String(req.body?.comment || '').slice(0, 2000)
   if (!rating && !comment.trim()) return res.status(400).json({ error: 'EMPTY' })
-  fs.mkdirSync(path.join(root, 'data'), { recursive: true })
-  fs.appendFileSync(path.join(root, 'data', 'feedback.jsonl'), JSON.stringify({ at: new Date().toISOString(), rating, comment }) + '\n')
+  fs.mkdirSync(DATA, { recursive: true })
+  fs.appendFileSync(path.join(DATA, 'feedback.jsonl'), JSON.stringify({ at: new Date().toISOString(), rating, comment }) + '\n')
   res.json({ ok: true })
 })
 
@@ -1190,19 +1239,20 @@ for (const view of Object.keys(RADAR_VIEWS))
     res.json(view === '/alerts' ? { ...data, alerts: withFlow(data.alerts || []) } : data)
   })
 // Traitement des alertes : étapes et historique (action « تحديد الأخبار كمُعالَجة » du profil)
-initAlertFlow(path.join(root, 'data'))
+initAlertFlow(DATA)
 setWatchAlertListener(openWatchAlert)
 mountAlertFlow(app, { visibleWatches: watchIdsFor })
 // لوحات التثبيت : collections d'articles épinglés, communes à l'équipe
-initPinboards(path.join(root, 'data'))
+initPinboards(DATA)
 mountPinboards(app, { getItems })
-initMailingLists(path.join(root, 'data'))
+initMailingLists(DATA)
 // الدعم الفني : chat d'aide et demandes envoyées par e-mail à l'adresse du support
-initSupport(path.join(root, 'data'))
+initSupport(DATA, PLATFORM)
 // صحة التصدير : résultats des exports réels et contrôle programmé ; alerte à l'adresse du support technique
-initExportHealth(path.join(root, 'data'), { getItems, distDir: path.join(root, 'dist'), brand: brandOf, alert: (mail) => sendSupportMail(supportConf().email, mail) })
+initExportHealth(DATA, { getItems, distDir: path.join(root, 'dist'), brand: brandOf, alert: (mail) => sendSupportMail(supportConf().email, mail) })
 mountExportHealth(app)
-startExportHealth()
+// Contrôle programmé des exports : une fois pour la plateforme (même code dans chaque espace)
+if (!TENANT) startExportHealth()
 mountSupport(app, { sendSupport: sendSupportMail })
 mountMailingLists(app, {
   // Journal d'audit de la console Super Admin : qui a créé, modifié ou supprimé une liste
@@ -1212,22 +1262,25 @@ mountRasd(app, { getItems, telegramReady, sendTelegram, logDispatch })
 // قاعدة الصحفيين ووسائل الإعلام : journalistes et médias libyens, historique des publications et citations
 mountJournalists(app, { getItems })
 // Mots-clés d'alerte personnels, gardés par compte sur le serveur (audit v6, constat 1a)
-initAlertWords(path.join(root, 'data'))
+initAlertWords(DATA)
 mountAlertWords(app)
 // Revue de presse validée par un analyste, avec heure limite de livraison (audit v4, P2)
-initReviewValidation(path.join(root, 'data'))
+initReviewValidation(DATA)
 mountReviewValidation(app)
 // Sauvegarde quotidienne des données (data/backups, 14 jours) ; état exposé aux administrateurs (note de sécurité)
-startBackups(path.join(root, 'data'))
+// La sauvegarde du processus principal comprend les espaces clients (data/orgs)
+if (!TENANT) startBackups(DATA)
 // Coupures des flux TV/radio : alerte Telegram / e-mail du support à la coupure et au retour (audit v4)
-startStreamAlerts(path.join(root, 'data'), {
+if (!TENANT)
+startStreamAlerts(SHARED, {
   sendTelegram,
   telegramReady,
   logDispatch,
   sendMail: async (mail) => (supportConf().email ? (await sendSupportMail(supportConf().email, mail), true) : false),
 })
 // Audio lié à une alerte gardé 90 jours (liste lue par la veille avant chaque purge)
-startRetention(path.join(root, 'data'), { getItems, listWatches })
+// Liste écrite pour la veille (fichier commun) : processus principal seulement
+if (!TENANT) startRetention(SHARED, { getItems, listWatches })
 app.get('/api/diffusion/cuts', (_req, res) => res.json({ cuts: currentCuts() }))
 app.get('/api/security/status', (req, res) => res.json({ backups: req.user?.role === 'admin' ? backupStatus() : { count: backupStatus().count } }))
 // Fiche IA (écran IA, FAQ) et note de sécurité téléchargeable, pour tous les comptes (audit v6, constats 3 et 11) :
@@ -1237,15 +1290,21 @@ app.get('/api/security-note', (req, res) => {
   const b = backupStatus()
   res.json(securityNote(req.query.lang, { mode: aiDisclosureMode(), backups: req.user?.role === 'admin' ? b : { count: b.count, newest: b.newest } }))
 })
-startAccountPolicy(path.join(root, 'data', 'superadmin'))
+startAccountPolicy(OWN)
 // الإعدادات الشخصية : photo de profil, nom, préférences, mot de passe
-initProfile(path.join(root, 'data'))
+initProfile(DATA)
 mountProfile(app)
+// إدارة الفريق : comptes, rôles, profils et activité de l'organisation, par son administrateur (Client Admin)
+mountTeam(app, {
+  seats: () => (TENANT ? orgById(TENANT)?.seats || 0 : 0),
+  link: (t) => `/login?activate=${t}${TENANT ? `&o=${TENANT}` : ''}`,
+  org: () => tenantInfo(brandOf()),
+})
 // Corrections d'articles, articles ajoutés à la main, approbation pour la vitrine publique
-initItemEdits(path.join(root, 'data'), { changed: refreshSourcePolicy })
+initItemEdits(DATA, { changed: refreshSourcePolicy })
 mountItemEdits(app, { getItems, isAdmin: (u) => (u?.role || 'admin') === 'admin' })
 // Diffusion automatique sur la vitrine publique : règles, épingles, exclusions et aperçu (إدارة البوابة العامة)
-initPortalFeed(path.join(root, 'data'))
+initPortalFeed(DATA)
 mountPortalFeed(app, {
   getItems,
   // Validateurs possibles : comptes actifs, nominatifs, ayant le droit de publication (audit v6, constat 12)
@@ -1289,7 +1348,7 @@ app.post('/api/radar/explain', express.json({ limit: '2kb' }), async (req, res) 
 })
 
 // Tableaux de bord composés par les clients, communs à tous les postes : data/dashboards.json
-const BOARDS_FILE = path.join(root, 'data', 'dashboards.json')
+const BOARDS_FILE = path.join(DATA, 'dashboards.json')
 const TYPES = new Set(['news', 'bars', 'columns', 'pie', 'line', 'kpi', 'table', 'cloud', 'tone', 'emerging', 'stories', 'alerts', 'mood', 'timeline', 'treemap', 'feed', 'text'])
 const DIMS = ['channels', 'categories', 'sources', 'flux', 'tones', 'people', 'orgs', 'places', 'languages', 'media', 'countries', 'regions']
 const STYLES = ['area', 'stacked', 'line', 'bars']
@@ -1357,7 +1416,7 @@ app.put('/api/dashboards', express.json({ limit: '300kb' }), (req, res) => {
 })
 
 // الحضور في إجابات الذكاء الاصطناعي : questions du client posées à l'IA configurée, réponses et mesures gardées
-mountGeo(app, path.join(root, 'data'), { aiEnabled, aiRun: aroundRun, getItems })
+mountGeo(app, DATA, { aiEnabled, aiRun: aroundRun, getItems })
 // مجمع البحث : catalogue des sources reçues (lecture)
 mountCatalog(app)
 
@@ -1383,10 +1442,11 @@ app.use((err, req, res, _next) => {
   res.status(status).json({ error: status === 413 ? 'TOO_LARGE' : status < 500 ? 'BAD_REQUEST' : 'FAILED' })
 })
 
-startWatches(path.join(root, 'data'))
-startBriefing(path.join(root, 'data'))
+startWatches(DATA)
+startBriefing(DATA)
 // Veilles permanentes de départ (audit v6) : destinataires = ceux déjà approuvés pour le rapport exécutif hebdomadaire
-try {
+// Veilles libyennes de départ : client historique seulement
+if (!TENANT) try {
   const seeded = seedWatchesV6({ recipients: briefingConf().recipients })
   if (seeded) {
     console.log(`Veilles de départ (audit v6) : ${seeded.created.length} créées, ${seeded.recipients} destinataire(s), Telegram ${seeded.telegram ? 'oui' : 'non'}`)
@@ -1396,12 +1456,14 @@ try {
 } catch (err) {
   console.error('Veilles de départ (audit v6) :', err.message)
 }
-startRadarAlerts(path.join(root, 'data'), getItems, { sendTelegram, telegramReady, sendMail, canSend: canSendAlert, onSent: (r) => logDispatch({ kind: 'radar', name: r.names.slice(0, 3).join(' · '), count: r.count, channels: r.channels, recipients: r.recipients }) })
+startRadarAlerts(DATA, getItems, { sendTelegram, telegramReady, sendMail, canSend: canSendAlert, onSent: (r) => logDispatch({ kind: 'radar', name: r.names.slice(0, 3).join(' · '), count: r.count, channels: r.channels, recipients: r.recipients }) })
 
 // Sur le VPS, MMS_HOST=127.0.0.1 : seul nginx (HTTPS) parle au serveur
 const HOST = process.env.MMS_HOST || undefined
 app.listen(PORT, HOST, () => {
-  console.log(`MMS en écoute sur http://${HOST || 'localhost'}:${PORT}`)
+  console.log(`MMS en écoute sur http://${HOST || 'localhost'}:${PORT}${TENANT ? ` (espace client ${TENANT})` : ''}`)
+  // Processus principal : un processus par espace client actif, relancé s'il s'arrête
+  if (!TENANT) startTenants(root)
   console.log(`  Mosaïque FM : ${process.env.MOSAIQUE_DATA_DIR}`)
   console.log(`  Libye       : ${process.env.LIBYE_DATA_DIR}`)
 })

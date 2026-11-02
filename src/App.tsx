@@ -49,6 +49,8 @@ const PortalFeed = lazy(() => import('./components/PortalFeed').then((m) => ({ d
 // Audit produit v4 : journal d'audit (administrateurs), note de sécurité, base des journalistes, centre d'aide
 const Journalists = lazy(() => import('./components/Journalists'))
 const HelpCenter = lazy(() => import('./components/HelpCenter'))
+// إدارة الفريق : comptes, rôles, permissions et activité de l'organisation (administrateur du client)
+const Team = lazy(() => import('./components/Team'))
 
 type View =
   | 'dashboard'
@@ -71,6 +73,7 @@ type View =
   | 'portal-admin'
   | 'journalists'
   | 'audit-log'
+  | 'team'
   | `media-${MediaPageType}`
   | 'media-live'
 const VIEWS: View[] = [
@@ -94,13 +97,14 @@ const VIEWS: View[] = [
   'portal-admin',
   'journalists',
   'audit-log',
+  'team',
   ...MEDIA_PAGES.map((m) => `media-${m}` as const),
   'media-live',
 ]
 
 /** Module de permissions dont dépend chaque page (null : toujours ouverte) */
 function moduleOf(v: View): ModuleKey | null {
-  if (v === 'help' || v === 'audit-log') return null
+  if (v === 'help' || v === 'audit-log' || v === 'team') return null
   if (v === 'pool' || v === 'portal-admin' || v === 'journalists') return 'news'
   if (v.startsWith('media-')) return 'media'
   return v as ModuleKey
@@ -108,7 +112,9 @@ function moduleOf(v: View): ModuleKey | null {
 const viewAllowed = (user: User | undefined | null, v: View) => {
   const m = moduleOf(v)
   // إدارة البوابة العامة : seulement les profils qui ont le droit de publier sur la vitrine
-  if (v === 'portal-admin' && !canDo(user, 'publish_public')) return false
+  if (v === 'portal-admin' && (!canDo(user, 'publish_public') || user?.org?.features?.portal === false)) return false
+  // إدارة الفريق : administrateur de l'organisation (pas un compte partagé)
+  if (v === 'team') return user?.role === 'admin' && !user?.shared
   // Journal d'audit en lecture seule : administrateurs du client seulement (audit v5)
   if (v === 'audit-log') return user?.role === 'admin'
   return !m || hasModule(user, m)
@@ -174,8 +180,8 @@ function TopProgress() {
 
 /** Initiales affichées dans la pastille de l'utilisateur */
 const ROLE_LABEL = {
-  ar: { admin: 'مدير', analyst: 'محلل', viewer: 'قارئ' },
-  en: { admin: 'Administrator', analyst: 'Analyst', viewer: 'Viewer' },
+  ar: { admin: 'مسؤول الحساب', analyst: 'مدير', viewer: 'مستخدم' },
+  en: { admin: 'Client Admin', analyst: 'Manager', viewer: 'User' },
 } as const
 
 function initials(name: string, email: string) {
@@ -233,6 +239,11 @@ export default function App() {
   const [mfaState, setMfaState] = useState<MfaInfo | null>(null)
   // Marque du client : nom de l'assistant IA (« Around » par défaut), réglé dans la console Super Admin
   const brand = useBrand()
+  // Espace client (organisation autre que le client historique) : identité de l'entreprise cliente dans l'interface
+  const tenant = auth?.user?.org && !auth.user.org.main ? auth.user.org : null
+  useEffect(() => {
+    document.title = tenant ? `${tenant.name} · MMS — Around Expressions` : 'مرصاد — Mearsaad · المركز الوطني لدعم القرار'
+  }, [tenant])
   // « أراوند · مساعدك الذكي » en marque blanche : « المساعد الذكي » seul, sans répétition
   const renameAssistant = (label: string) => renameAround(label, assistantName(brand, lang)).replace(/^(المساعد الذكي|AI assistant) (·|—) (مساعدك الذكي|your AI assistant)$/, '$1')
   useEffect(() => {
@@ -390,6 +401,10 @@ export default function App() {
         items: [{ key: 'portal-admin', label: lang === 'ar' ? 'إدارة البوابة العامة' : 'Public portal' }],
       },
       {
+        group: lang === 'ar' ? 'الإدارة' : 'Administration',
+        items: [{ key: 'team', label: lang === 'ar' ? 'إدارة الفريق والصلاحيات' : 'Team & permissions' }],
+      },
+      {
         group: t.sideHelp,
         items: [
           { key: 'help', label: t.sideHelp },
@@ -439,6 +454,21 @@ export default function App() {
                 <TopProgress />
                 {/* Barre unique, en verre : marque, flux, outils, thème, langue, compte */}
                 <header className="mms-head">
+                  {tenant ? (
+                    /* Espace client : logo ou nom de l'entreprise cliente, puis la marque Around Expressions */
+                    <div className="mms-head__brand mms-head__brand--tenant">
+                      <span className="mms-head__client" title={tenant.name}>
+                        {brand?.logo ? <img src={brand.logo} alt={tenant.name} /> : <strong dir="auto">{tenant.name}</strong>}
+                      </span>
+                      <span className="mms-head__around" dir="ltr">
+                        <img src="/brand/around-mark.png" alt="" width={271} height={212} />
+                        <span>
+                          <b>Around Expressions</b>
+                          <small>MMS</small>
+                        </span>
+                      </span>
+                    </div>
+                  ) : (
                   <div className="mms-head__brand">
                     {/* Logo du client (رئاسة مجلس الوزراء — المركز الوطني لدعم القرار), le produit en petit à côté */}
                     <span className="mms-head__logo">
@@ -455,6 +485,7 @@ export default function App() {
                       />
                     </span>
                   </div>
+                  )}
                   <span className="mms-live">
                     <i aria-hidden />
                     <span>
@@ -629,7 +660,7 @@ export default function App() {
                       {/* Marque blanche (هوية المخرجات) : sans la marque Around */}
                       {!brand?.whiteLabel && <img className="mms-side__logo" src="/around-logo-footer.png" alt="Around Expressions" width={120} height={91} loading="lazy" />}
                       <span dir="ltr">
-                        © {new Date().getFullYear()} {brand?.whiteLabel ? brand.name || 'MMS' : 'Mearsaad — Copyright by Around Expressions'}
+                        © {new Date().getFullYear()} {brand?.whiteLabel ? brand.name || 'MMS' : tenant ? 'MMS — Copyright by Around Expressions' : 'Mearsaad — Copyright by Around Expressions'}
                       </span>
                     </p>
                   </aside>
@@ -681,6 +712,7 @@ export default function App() {
                       {shown === 'help' && <HelpCenter />}
                       {shown === 'journalists' && <Journalists />}
                       {shown === 'audit-log' && <AuditLogClient />}
+                      {shown === 'team' && <Team />}
                       {shown === 'assistant' &&
                         (canDo(auth?.user, 'ai_ask') ? (
                           <Around flux={flux} />

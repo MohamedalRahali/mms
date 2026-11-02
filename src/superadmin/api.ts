@@ -64,7 +64,7 @@ export function flag(cc?: string) {
   return String.fromCodePoint(...[...cc].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65))
 }
 
-export const ROLE_LABEL: Record<string, string> = { admin: 'مدير', analyst: 'محلل', viewer: 'قارئ' }
+export const ROLE_LABEL: Record<string, string> = { admin: 'مسؤول الحساب', analyst: 'مدير', viewer: 'مستخدم' }
 
 export const ACTIVITY_LABEL: Record<string, string> = {
   login: 'تسجيل دخول',

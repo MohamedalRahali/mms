@@ -18,6 +18,7 @@ import { SharedBoard } from './components/Share'
 import { I18nContext, makeI18n } from './lib/i18n'
 import { MfaRequired } from './components/Mfa'
 import { FaceRequired } from './components/Face'
+import { resetBrand } from './lib/brand'
 
 // Console Super Admin : chargée seulement à l'adresse /superadmin, séparée de la plateforme
 const SuperAdmin = lazy(() => import('./superadmin/SuperAdmin'))
@@ -27,6 +28,8 @@ const shareMatch = /^\/share\/([A-Za-z0-9_-]{43})\/?$/.exec(location.pathname)
 // Vitrine publique d'actualités : application à part, sans connexion ni interface interne
 const isPortal = location.pathname === '/portal' || location.pathname.startsWith('/portal/')
 const Portal = lazy(() => import('./portal/Portal'))
+// Page d'accueil publique (Around Expressions MMS) : visiteurs sans session, à l'adresse /
+const Landing = lazy(() => import('./landing/Landing'))
 if (shareMatch) setShareToken(shareMatch[1])
 
 applyPalette(readPalette())
@@ -36,7 +39,25 @@ try {
   applyTheme('dark')
 }
 
-/** Porte d'entrée : la page de connexion tant qu'aucune session n'est ouverte */
+/**
+ * Que montrer sans session : la page de connexion (adresse /login, lien d'activation, lien profond vers une page de
+ * l'application), sinon la page d'accueil publique.
+ */
+function wantsLogin() {
+  const q = new URLSearchParams(location.search)
+  return location.pathname === '/login' || q.has('activate') || q.has('view') || q.has('clip') || q.has('watch')
+}
+
+/** Après connexion : l'application vit à « / » (ses pages dans ?view=…), sans les paramètres de connexion */
+function toAppUrl() {
+  if (location.pathname === '/login') {
+    const q = new URLSearchParams(location.search)
+    for (const k of ['activate', 'o', 'next']) q.delete(k)
+    history.replaceState(null, '', `/${q.toString() ? `?${q}` : ''}`)
+  }
+}
+
+/** Porte d'entrée : la page d'accueil ou de connexion tant qu'aucune session n'est ouverte */
 type PlatformStatus = { announcement: { text: string; level: string } | null; maintenance: { message: string } | null }
 
 function Gate() {
@@ -73,9 +94,17 @@ function Gate() {
   useEffect(() => {
     fetch('/api/auth/me')
       .then((r) => (r.ok ? r.json() : null))
-      .then((json) => setUser(json?.user ?? null))
+      .then((json) => {
+        if (json?.user) toAppUrl()
+        resetBrand()
+        setUser(json?.user ?? null)
+      })
       .catch(() => setUser(null))
-    return watchUnauthorized(() => setUser(null))
+    // Session expirée pendant l'utilisation : retour à la page de connexion (pas à la page d'accueil)
+    return watchUnauthorized(() => {
+      if (location.pathname !== '/login') history.replaceState(null, '', '/login')
+      setUser(null)
+    })
   }, [])
 
   // Juste après la connexion : état du visage (vérification exigée ou non) relu depuis le serveur
@@ -90,6 +119,9 @@ function Gate() {
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+    // Retour à la page d'accueil
+    history.replaceState(null, '', '/')
+    resetBrand()
     setUser(null)
   }
 
@@ -107,13 +139,26 @@ function Gate() {
     </div>
   ) : null
   if (user === undefined) return <div className="mms-boot" aria-busy="true" />
-  if (!user)
+  if (!user) {
+    if (!wantsLogin())
+      return (
+        <Suspense fallback={<div className="mms-boot" aria-busy="true" />}>
+          <Landing />
+        </Suspense>
+      )
     return (
       <>
         {banner}
-        <Login onLogin={setUser} />
+        <Login
+          onLogin={(u) => {
+            toAppUrl()
+            resetBrand()
+            setUser(u)
+          }}
+        />
       </>
     )
+  }
   // Double authentification obligatoire pour ce compte et pas encore activée : activation avant tout le reste
   if (user.mfa?.setup)
     return (

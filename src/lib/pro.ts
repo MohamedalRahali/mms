@@ -115,7 +115,7 @@ export const PRO_TEXT = {
     // équipe
     tmTitle: 'الفريق والصلاحيات',
     tmIntro: 'أنشئ حسابات لفريقك وحدّد صلاحية كل عضو.',
-    tmRoles: { admin: 'مدير', analyst: 'محلّل', viewer: 'مشاهد' } as Record<string, string>,
+    tmRoles: { admin: 'مسؤول الحساب', analyst: 'مدير', viewer: 'مستخدم' } as Record<string, string>,
     tmRoleHelp: { admin: 'كل شيء، بما فيه الحسابات والإرسال التلقائي', analyst: 'ينشئ الرصد واللوحات والوسوم ويشغّل التحليل', viewer: 'قراءة فقط' } as Record<
       string,
       string
@@ -242,7 +242,7 @@ export const PRO_TEXT = {
     ],
     tmTitle: 'Team & roles',
     tmIntro: 'Create accounts for your team and set what each member can do.',
-    tmRoles: { admin: 'Admin', analyst: 'Analyst', viewer: 'Viewer' } as Record<string, string>,
+    tmRoles: { admin: 'Client Admin', analyst: 'Manager', viewer: 'User' } as Record<string, string>,
     tmRoleHelp: {
       admin: 'Everything, including accounts and scheduled sending',
       analyst: 'Creates watches, dashboards and tags, runs analyses',

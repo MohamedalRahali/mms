@@ -23,9 +23,10 @@ let tickets = []
 let conf = { email: DEFAULT_EMAIL }
 const recent = new Map() // compte → horodatages des envois (limite par heure)
 
-export function initSupport(dataDir) {
+// confDir : réglage du Super Admin (adresse du support), commun à tous les espaces clients
+export function initSupport(dataDir, confDir = path.join(dataDir, 'superadmin')) {
   file = path.join(dataDir, 'support-tickets.json')
-  confFile = path.join(dataDir, 'superadmin', 'support.json')
+  confFile = path.join(confDir, 'support.json')
   try {
     tickets = JSON.parse(fs.readFileSync(file, 'utf8')).tickets || []
   } catch {

@@ -572,7 +572,7 @@ export function Builder({ flux }: { flux: Flux | '' }) {
       {bar}
       {/* En-tête du tableau : logo du client (console Super Admin), nom du tableau, partage par lien */}
       <header className="mms-boardhead">
-        <img src={brand?.logo || '/logo-npdc.png'} alt={brand?.name || ''} />
+        <img src={brand?.logo || brand?.fallbackLogo || '/logo-npdc.png'} alt={brand?.name || ''} />
         <div>
           <h2 dir="auto">{boardName(board)}</h2>
           {brand?.name && <small dir="auto">{brand.name}</small>}

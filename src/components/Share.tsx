@@ -274,7 +274,7 @@ function SharedPage({ data }: { data: SharedData | null | undefined }) {
   return (
     <div className="mms-shared" dir={i.dir} lang={i.lang}>
       <header className="mms-boardhead">
-        <img src={data.brand.logo || '/logo-npdc.png'} alt={data.brand.name || ''} />
+        <img src={data.brand.logo || data.brand.fallbackLogo || '/logo-npdc.png'} alt={data.brand.name || ''} />
         <div>
           <h2 dir="auto">{data.options?.title || data.board.name || data.brand.name || 'MMS'}</h2>
           <small>

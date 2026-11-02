@@ -16,13 +16,15 @@ const TEXT = {
     hide: 'إخفاء كلمة المرور',
     remember: 'تذكرني على هذا الجهاز',
     forgot: 'نسيت كلمة المرور؟',
-    forgotHint: 'اتصل بمسؤول المنصة في المركز الوطني لدعم القرار لإعادة تعيين كلمة المرور.',
+    forgotHint: 'اتصل بمسؤول الحساب في مؤسستك ليرسل إليك رابطاً لإعادة تعيين كلمة المرور.',
     submit: 'تسجيل الدخول',
     busy: 'جارٍ التحقق…',
     errors: {
       BAD_CREDENTIALS: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
       LOCKED: 'محاولات كثيرة غير ناجحة. أعد المحاولة بعد 15 دقيقة.',
       DISABLED: 'تم تعطيل هذا الحساب. اتصل بمسؤول المنصة.',
+      SUSPENDED: 'اشتراك مؤسستك موقوف حالياً. اتصل بـ Around Expressions.',
+      TENANT_DOWN: 'مساحة مؤسستك قيد إعادة التشغيل. أعد المحاولة بعد لحظات.',
       MAINTENANCE: 'المنصة قيد الصيانة. أعد المحاولة لاحقًا.',
       BLOCKED: 'الدخول من هذا العنوان أو هذا البلد محظور. اتصل بمسؤول المنصة.',
       BAD_REQUEST: 'البيانات المُدخلة غير صالحة.',
@@ -31,13 +33,14 @@ const TEXT = {
     } as Record<string, string>,
     badge: 'رصد · تحليل · قرار',
     heroTitle: ['كل ما يُقال،', 'في مكان واحد'],
-    heroText: 'منصة رصد وتحليل إعلامي مخصصة لفريق المركز، تجمع المصادر والتنبيهات والمؤشرات في لوحة واحدة آمنة.',
+    heroText: 'منصة دولية للرصد والتحليل الإعلامي بالذكاء الاصطناعي. تدخل كل مؤسسة إلى مساحتها الخاصة: مصادرها وتنبيهاتها ومؤشراتها في لوحة واحدة آمنة.',
     stats: [
       ['24/7', 'رصد متواصل'],
       ['AI', 'تحليل ذكي'],
       ['ع · EN', 'واجهة ثنائية اللغة'],
     ],
     secure: 'اتصال آمن · الدخول مخصص للحسابات المعتمدة',
+    home: 'الصفحة الرئيسية',
   },
   en: {
     title: 'Sign in',
@@ -48,13 +51,15 @@ const TEXT = {
     hide: 'Hide password',
     remember: 'Stay signed in on this device',
     forgot: 'Forgot password?',
-    forgotHint: 'Contact the platform administrator at the National Decision Support Centre to reset it.',
+    forgotHint: "Contact your organisation's account administrator to receive a password reset link.",
     submit: 'Sign in',
     busy: 'Checking…',
     errors: {
       BAD_CREDENTIALS: 'Incorrect email or password.',
       LOCKED: 'Too many attempts. Try again in 15 minutes.',
       DISABLED: 'This account has been disabled. Contact the platform administrator.',
+      SUSPENDED: "Your organisation's subscription is currently suspended. Contact Around Expressions.",
+      TENANT_DOWN: "Your organisation's workspace is restarting. Try again in a moment.",
       MAINTENANCE: 'The platform is under maintenance. Try again later.',
       BLOCKED: 'Access from this address or country is blocked. Contact the platform administrator.',
       BAD_REQUEST: 'Invalid input.',
@@ -63,13 +68,14 @@ const TEXT = {
     } as Record<string, string>,
     badge: 'Monitoring · Analysis · Decision',
     heroTitle: ['Everything that is said,', 'in one place'],
-    heroText: "A media monitoring and analysis platform built for the Centre's team, bringing sources, alerts and indicators together in one secure dashboard.",
+    heroText: 'An international AI-powered media monitoring and intelligence platform. Every organisation signs in to its own workspace: its sources, alerts and indicators in one secure dashboard.',
     stats: [
       ['24/7', 'continuous monitoring'],
       ['AI', 'smart analysis'],
       ['ع · EN', 'bilingual interface'],
     ],
     secure: 'Secure connection · access reserved for authorized accounts',
+    home: 'Home',
   },
 }
 
@@ -77,7 +83,8 @@ const TEXT = {
 
 export function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const loginBrand = useBrand()
-  const [lang, setLang] = useState<'ar' | 'en'>('ar')
+  // Langue choisie sur la page d'accueil (?lang=en|fr) : anglais pour le français, l'écran existe en arabe et en anglais
+  const [lang, setLang] = useState<'ar' | 'en'>(() => (/^(en|fr)$/.test(new URLSearchParams(window.location.search).get('lang') || '') ? 'en' : 'ar'))
   const t = TEXT[lang]
   const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
@@ -90,6 +97,8 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const [ticket, setTicket] = useState('')
   // Lien d'activation (?activate=…) : la personne choisit son mot de passe (audit v5)
   const [activate, setActivate] = useState(() => new URLSearchParams(window.location.search).get('activate') || '')
+  // Espace client du compte à activer (?o=org_…) : la plateforme transmet l'activation à cet espace
+  const activateOrg = new URLSearchParams(window.location.search).get('o') || ''
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -126,9 +135,10 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
     <div className="mms-login" dir={lang === 'ar' ? 'rtl' : 'ltr'} lang={lang}>
       <section className="mms-login__panel">
         <header className="mms-login__top">
-          <span className="mms-login__logo">
-            <img src="/logo-cnsd/v2/logo-anime-fond-sombre.svg" alt="رئاسة مجلس الوزراء — المركز الوطني لدعم القرار" />
-          </span>
+          {/* Avant l'identification de l'organisation : marque de la plateforme (Around Expressions) */}
+          <a className="mms-login__logo mms-login__logo--around" href="/" title={t.home}>
+            <img src="/brand/around-logo-light.png" alt="Around Expressions" width={500} height={500} />
+          </a>
           <div className="mms-login__actions">
             <InstallButton lang={lang} className="mms-login__install" />
             <div className="mms-login__lang" role="group" aria-label="Language">
@@ -165,9 +175,10 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
         {activate ? (
           <Activate
             token={activate}
+            org={activateOrg}
             lang={lang}
             onDone={(email) => {
-              window.history.replaceState(null, '', window.location.pathname)
+              window.history.replaceState(null, '', '/login')
               setActivate('')
               setLogin(email)
             }}
@@ -176,9 +187,13 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
           <MfaCode ticket={ticket} lang={lang} onLogin={onLogin} onBack={() => setTicket('')} />
         ) : (
         <form className="mms-login__card" onSubmit={submit}>
-          {/* Marque produit « مرصاد — Mearsaad » (carte de connexion claire) */}
-          <div className="mms-login__brand">
-            <img className="mms-login__mearsaad" src="/brand/mearsaad-light@2x.png" alt="مرصاد — Mearsaad" height={60} />
+          {/* Marque de la plateforme (carte de connexion claire) : l'organisation est reconnue d'après l'identifiant */}
+          <div className="mms-login__brand mms-login__brand--around">
+            <img src="/brand/around-mark.png" alt="" width={271} height={212} />
+            <span>
+              <strong>Around Expressions</strong>
+              <em>MMS · Media Intelligence</em>
+            </span>
           </div>
           <h2>{t.title}</h2>
           <p className="mms-login__intro">{t.intro}</p>
@@ -241,6 +256,9 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
         </form>
         )}
         {/* Marque blanche (هوية المخرجات) : sans la marque Around */}
+        <a className="mms-login__home" href="/">
+          <span aria-hidden>{lang === 'ar' ? '→' : '←'}</span> {t.home}
+        </a>
         <p className="around-credit">
           {!loginBrand?.whiteLabel && <img src="/around-logo-footer.png" alt="Around Expressions" width={120} height={91} loading="lazy" />}
           <span dir="ltr">© {new Date().getFullYear()} {loginBrand?.whiteLabel ? loginBrand.name || 'MMS' : 'Mearsaad — Copyright by Around Expressions'}</span>
@@ -251,7 +269,7 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
 }
 
 /** Activation d'un compte créé sans mot de passe : lien à usage unique, mot de passe de 10 caractères au moins */
-function Activate({ token, lang, onDone }: { token: string; lang: 'ar' | 'en'; onDone: (email: string) => void }) {
+function Activate({ token, org, lang, onDone }: { token: string; org: string; lang: 'ar' | 'en'; onDone: (email: string) => void }) {
   const ar = lang === 'ar'
   const [pw, setPw] = useState('')
   const [pw2, setPw2] = useState('')
@@ -267,7 +285,7 @@ function Activate({ token, lang, onDone }: { token: string; lang: 'ar' | 'en'; o
     if (pw !== pw2) return setError(ERR.MISMATCH)
     setBusy(true)
     try {
-      const res = await fetch('/api/auth/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, password: pw }) })
+      const res = await fetch('/api/auth/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, password: pw, ...(org ? { org } : {}) }) })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || 'FAILED')
       setDone(json.email)

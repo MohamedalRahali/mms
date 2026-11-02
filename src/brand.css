@@ -571,3 +571,111 @@ body,
     display: none;
   }
 }
+
+/* ---------------------------------------------------------------- connexion multi-clients : marque Around Expressions */
+.mms-login__logo--around img {
+  height: 92px;
+}
+.mms-login__brand--around {
+  flex-direction: row;
+  justify-content: center;
+  gap: 0.7rem;
+}
+.mms-login__brand--around img {
+  width: 54px;
+  height: auto;
+}
+.mms-login__brand--around span {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  text-align: start;
+}
+.mms-login__brand--around strong {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #14213a;
+}
+.mms-login__brand--around em {
+  font-style: normal;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: #1e78d8;
+}
+.mms-login__home {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 1rem;
+  color: var(--l-soft);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+.mms-login__home:hover,
+.mms-login__home:focus-visible {
+  color: var(--l-ink);
+  text-decoration: underline;
+}
+
+/* ---------------------------------------------------------------- espace client : entreprise cliente + Around Expressions */
+.mms-head__brand--tenant {
+  gap: 0.9rem;
+  min-width: 0;
+}
+.mms-head__client {
+  display: inline-flex;
+  align-items: center;
+  max-width: 260px;
+  min-width: 0;
+  padding-inline-end: 0.9rem;
+  border-inline-end: 1px solid var(--line, rgba(127, 127, 127, 0.25));
+  animation: npdc-in 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.mms-head__client img {
+  display: block;
+  max-height: 42px;
+  max-width: 200px;
+  object-fit: contain;
+}
+.mms-head__client strong {
+  overflow: hidden;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mms-head__around {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+  animation: npdc-in 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s both;
+}
+.mms-head__around img {
+  width: 34px;
+  height: auto;
+}
+.mms-head__around span {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+.mms-head__around b {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.mms-head__around small {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: #2b8be6;
+}
+@media (max-width: 700px) {
+  .mms-head__client {
+    max-width: 150px;
+  }
+  .mms-head__around span {
+    display: none;
+  }
+}

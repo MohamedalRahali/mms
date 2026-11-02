@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { useFetch } from '../lib/news'
 import { useI18n } from '../lib/i18n'
-import { canDo, useAuth } from '../lib/auth'
+import { canDo, hasPipeline, useAuth } from '../lib/auth'
 import { type Clip, Highlight } from './BroadcastStudio'
 import { type BoardSummary, listBoards } from './Pinboards'
 import { Recordings } from './Recordings'
@@ -275,6 +275,7 @@ function Editor({ sel, onClear }: { sel: Selection | null; onClear: () => void }
 export function LiveDesk({ id, name, canal, slots, last, via, stat }: { id: string; name: string; canal: 'tv' | 'radio'; slots: string[]; last?: string | null; via: string; stat?: LiveStat }) {
   const i = useI18n()
   const t = useText()
+  const auth = useAuth()
   const [tab, setTab] = useState<Tab>('text')
   const [draft, setDraft] = useState('')
   const [q, setQ] = useState('')
@@ -300,7 +301,7 @@ export function LiveDesk({ id, name, canal, slots, last, via, stat }: { id: stri
   return (
     <section className="ld">
       <div className="mms-rtabs ld-tabs" role="tablist">
-        {(['text', 'program', 'audience', 'editor', 'record'] as Tab[]).map((k) => (
+        {(['text', 'program', 'audience', 'editor', 'record'] as Tab[]).filter((k) => k !== 'record' || hasPipeline(auth?.user)).map((k) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'is-active' : ''} onClick={() => setTab(k)}>
             {t.tabs[k]}
             {k === 'editor' && sel && <i className="ld-dot" aria-hidden />}

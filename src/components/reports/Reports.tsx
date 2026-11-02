@@ -3,6 +3,7 @@ import { useI18n } from '../../lib/i18n'
 import { selection, useSelection } from '../../lib/reportSelection'
 import { type Report, ReportEditor } from './ReportEditor'
 import { reportText } from './text'
+import { useBrand } from '../../lib/brand'
 import '../reports.css'
 
 /** Page التقارير : génération depuis les publications cochées, rapports enregistrés, éditeur */
@@ -25,6 +26,7 @@ function Generator({ onDone, onNews }: { onDone: (r: Report, notes: string[]) =>
   const [org, setOrg] = useState('')
   const [lang, setLang] = useState<'ar' | 'en'>(i.lang === 'en' ? 'en' : 'ar')
   const [logo, setLogo] = useState<string | null>(null) // null : inconnu, '' : logo par défaut
+  const brand = useBrand()
   // Bannière (annonce, publicité) en tête du rapport : '' = aucune
   const [banner, setBanner] = useState('')
   const [useBanner, setUseBanner] = useState(true)
@@ -126,7 +128,7 @@ function Generator({ onDone, onNews }: { onDone: (r: Report, notes: string[]) =>
         </label>
         <label className="rpt-field">
           <span>{t.org}</span>
-          <input dir="auto" value={org} maxLength={300} placeholder={t.orgPh} onChange={(e) => setOrg(e.target.value)} disabled={busy} />
+          <input dir="auto" value={org} maxLength={300} placeholder={brand?.name || t.orgPh} onChange={(e) => setOrg(e.target.value)} disabled={busy} />
         </label>
         <label className="rpt-field">
           <span>{t.docLang}</span>
@@ -138,7 +140,7 @@ function Generator({ onDone, onNews }: { onDone: (r: Report, notes: string[]) =>
         <div className="rpt-field">
           <span>{t.logo}</span>
           <div className="rpt-logo">
-            <img src={logo || '/logo-npdc.png'} alt={logo ? t.logo : t.logoDefault} />
+            <img src={logo || brand?.fallbackLogo || '/logo-npdc.png'} alt={logo ? t.logo : brand?.fallbackLogo?.includes('around') ? 'Around Expressions' : t.logoDefault} />
             <div>
               <button type="button" className="news-btn news-btn--ghost" disabled={busy} onClick={() => file.current?.click()}>
                 {t.logoUpload}

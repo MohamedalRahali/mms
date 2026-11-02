@@ -14,7 +14,7 @@ const posts = [{ id: 'a', title: 'خبر', summary: 'ملخص', date: '2026-10-2
 test('identité des livrables : défauts, validation, application', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mms-brand-'))
   initBrand(dir)
-  assert.deepEqual({ ...brandOf(), updatedAt: null }, { name: '', logo: '', assistant: '', accent: '', whiteLabel: false, updatedAt: null })
+  assert.deepEqual({ ...brandOf(), updatedAt: null }, { name: '', logo: '', fallbackLogo: '/logo-npdc.png', assistant: '', accent: '', whiteLabel: false, updatedAt: null })
   // Par défaut : couleurs et nom d'origine dans les livrables
   const plain = JSON.stringify(buildDoc({ lang: 'ar', title: 'T', org: '', author: 'Me', logo: '', posts, stats: reportStats(posts), ai: null, generatedAt: '2026-10-29T00:00:00Z' }))
   assert.match(plain, /#0d3b66/)

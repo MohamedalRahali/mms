@@ -87,7 +87,7 @@ test('réglages relus depuis le disque ; profils inconnus ou mal formés ignoré
   assert.deepEqual(ids, ['admin', 'analyst', 'viewer', 'p_abc1234'])
   const viewer = listProfiles().find((p) => p.id === 'viewer')
   // Nom des profils de base fixe ; module apparu après l'enregistrement (absent de known) : ouvert
-  assert.equal(viewer.name, 'قارئ')
+  assert.equal(viewer.name, 'مستخدم')
   assert.ok(viewer.modules.includes('news') && viewer.modules.includes('radar'))
   assert.deepEqual(viewer.actions, ['export'])
   assert.deepEqual(listProfiles().find((p) => p.id === 'p_abc1234').modules, ['stats'])
