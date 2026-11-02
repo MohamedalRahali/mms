@@ -849,9 +849,9 @@ export default function Landing() {
             <Brand light />
             {/* Signature du logo Mearsaad */}
             <p className="lp-footer__sign">
-              <span dir="ltr">MEDIA MENTORING SYSTEM</span>
+              <span dir="ltr">MEDIA MINING &amp; MONITORING SYSTEM (MMS)</span>
               <i aria-hidden />
-              <span dir="rtl" lang="ar">نظام التوجيه الإعلامي</span>
+              <span dir="rtl" lang="ar">منظومة الرصد والتحليل الإعلامي</span>
             </p>
             <p>{c.footer.tagline}</p>
           </div>
