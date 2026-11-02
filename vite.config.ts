@@ -5,7 +5,8 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   // L'avertissement de taille (500 ko) part sur stderr et fait échouer le déploiement automatique (auto-deploy.ps1)
-  build: { chunkSizeWarningLimit: 900 },
+  // PLUGIN_TIMINGS (build lent sur le VPS) part aussi sur stderr : désactivé pour la même raison (échec du 02/11 16:38)
+  build: { chunkSizeWarningLimit: 900, rolldownOptions: { checks: { pluginTimings: false } } },
   server: {
     port: 5174,
     host: true,
