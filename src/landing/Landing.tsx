@@ -820,6 +820,12 @@ export default function Landing() {
         <div className="lp-wrap lp-footer__in">
           <div className="lp-footer__brand">
             <Brand light />
+            {/* Signature du logo Mearsaad */}
+            <p className="lp-footer__sign">
+              <span dir="ltr">MEDIA MENTORING SYSTEM</span>
+              <i aria-hidden />
+              <span dir="rtl" lang="ar">نظام التوجيه الإعلامي</span>
+            </p>
             <p>{c.footer.tagline}</p>
           </div>
           <nav aria-label={c.footer.platform}>

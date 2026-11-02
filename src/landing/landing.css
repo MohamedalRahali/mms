@@ -2114,3 +2114,24 @@
     transform: none;
   }
 }
+
+.lp-footer__sign {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.7rem;
+  color: rgba(214, 228, 255, 0.85);
+  font-size: 0.78rem !important;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+}
+.lp-footer__sign span[lang='ar'] {
+  letter-spacing: 0;
+  font-size: 0.9rem;
+}
+.lp-footer__sign i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--blue-2);
+}
