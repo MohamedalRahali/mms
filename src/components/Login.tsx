@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { type User } from '../lib/auth'
 import { MfaCode } from './Mfa'
 import { InstallButton } from './Install'
@@ -83,6 +83,10 @@ const TEXT = {
 
 export function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const loginBrand = useBrand()
+  // Titre de l'onglet neutre (session expirée dans un espace : plus le nom de l'organisation)
+  useEffect(() => {
+    document.title = 'مرصاد — Mearsaad · Around Expressions'
+  }, [])
   // Langue choisie sur la page d'accueil (?lang=en|fr) : anglais pour le français, l'écran existe en arabe et en anglais
   const [lang, setLang] = useState<'ar' | 'en'>(() => (/^(en|fr)$/.test(new URLSearchParams(window.location.search).get('lang') || '') ? 'en' : 'ar'))
   const t = TEXT[lang]
@@ -136,13 +140,10 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
       <section className="mms-login__panel">
         <header className="mms-login__top">
           {/* Avant l'identification de l'organisation : marque de la plateforme (Mearsaad by Around Expressions) */}
-          {/* Marque blanche (هوية المخرجات) : logo ou nom du client, sans la marque Mearsaad / Around */}
+          {/* Page commune à toutes les organisations (avant leur identification) : marque de la plateforme ; la marque
+              blanche d'un client ne s'applique qu'une fois dans son espace */}
           <a className="mms-login__logo mms-login__logo--around" href="/" title={t.home}>
-            {loginBrand?.whiteLabel ? (
-              loginBrand.logo ? <img src={loginBrand.logo} alt={loginBrand.name || ''} /> : <strong className="mms-login__wl">{loginBrand.name || 'MMS'}</strong>
-            ) : (
-              <img src="/brand/mearsaad-intl-light.png" alt="مرصاد — Mearsaad, by Around Expressions" width={900} height={262} />
-            )}
+            <img src="/brand/mearsaad-intl-light.png" alt="مرصاد — Mearsaad, by Around Expressions" width={900} height={262} />
           </a>
           <div className="mms-login__actions">
             <InstallButton lang={lang} className="mms-login__install" />
@@ -193,15 +194,13 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
         ) : (
         <form className="mms-login__card" onSubmit={submit}>
           {/* Marque de la plateforme (carte de connexion claire) : l'organisation est reconnue d'après l'identifiant */}
-          {!loginBrand?.whiteLabel && (
-            <div className="mms-login__brand mms-login__brand--around">
-              <img src="/brand/mearsaad-intl-dark.png" alt="مرصاد — Mearsaad" width={900} height={262} />
-              <span dir="ltr">
-                <em>by</em>
-                <strong>Around Expressions</strong>
-              </span>
-            </div>
-          )}
+          <div className="mms-login__brand mms-login__brand--around">
+            <img src="/brand/mearsaad-intl-dark.png" alt="مرصاد — Mearsaad" width={900} height={262} />
+            <span dir="ltr">
+              <em>by</em>
+              <strong>Around Expressions</strong>
+            </span>
+          </div>
           <h2>{t.title}</h2>
           <p className="mms-login__intro">{t.intro}</p>
 

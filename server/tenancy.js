@@ -232,8 +232,15 @@ export function tenantEnv(org) {
 
 function launch(org) {
   const state = procs.get(org.id) || { restarts: 0, lastExit: null }
-  // Un seul processus par organisation, quoi qu'il arrive (relance, synchronisation, redémarrage demandé)
-  if (state.child && state.child.exitCode === null && !state.child.killed) return
+  // Un seul processus par organisation, quoi qu'il arrive (relance, synchronisation, redémarrage demandé) :
+  // un processus arrêté mais pas encore sorti libère son port à sa sortie, la relance se fait alors
+  if (state.child && state.child.exitCode === null) {
+    if (state.child.killed) {
+      state.wanted = false
+      state.restarting = true
+    }
+    return
+  }
   clearTimeout(state.timer)
   state.timer = null
   state.wanted = true
@@ -247,7 +254,9 @@ function launch(org) {
   state.startedAt = Date.now()
   procs.set(org.id, state)
   child.on('exit', (code, signal) => {
-    if (state.child === child) state.child = null
+    // Sortie d'un ancien processus déjà remplacé : sans effet sur l'état du nouveau
+    if (state.child !== child) return
+    state.child = null
     state.lastExit = { at: new Date().toISOString(), code, signal }
     if (Date.now() - state.startedAt >= STABLE_MS) state.restarts = 0
     if (state.restarting) {
@@ -434,18 +443,29 @@ function orgOfShare(token) {
 
 const LOCK_MS = 15 * 60_000
 const MAX_IP_FAILS = 20
+// Mêmes règles que la connexion du client historique (auth.js) : 5 échecs par compte et par adresse, 20 par adresse
+// tous comptes confondus ; le compteur de l'adresse n'est jamais remis à zéro par une connexion réussie (seulement
+// avec le temps), sinon une connexion à son propre compte permettrait de continuer à deviner ceux des autres
+const MAX_FAILS = 5
 const ipFails = new Map() // ip → { count, at }
+const loginFails = new Map() // ip|identifiant → { count, at }
 setInterval(() => {
   const now = Date.now()
-  for (const [k, f] of ipFails) if (now - f.at >= LOCK_MS) ipFails.delete(k)
+  for (const m of [ipFails, loginFails]) for (const [k, f] of m) if (now - f.at >= LOCK_MS) m.delete(k)
 }, 5 * 60_000).unref()
-const ipLocked = (ip) => {
-  const f = ipFails.get(ip)
-  return Boolean(f && f.count >= MAX_IP_FAILS && Date.now() - f.at < LOCK_MS)
+const over = (m, k, max) => {
+  const f = m.get(k)
+  return Boolean(f && f.count >= max && Date.now() - f.at < LOCK_MS)
 }
-function countFail(ip) {
-  const f = ipFails.get(ip)
-  ipFails.set(ip, { count: (f && Date.now() - f.at < LOCK_MS ? f.count : 0) + 1, at: Date.now() })
+const loginKey = (ip, login) => `${ip}|${lc(login)}`
+const ipLocked = (ip, login) => over(ipFails, ip, MAX_IP_FAILS) || over(loginFails, loginKey(ip, login), MAX_FAILS)
+function bump(m, k) {
+  const f = m.get(k)
+  m.set(k, { count: (f && Date.now() - f.at < LOCK_MS ? f.count : 0) + 1, at: Date.now() })
+}
+function countFail(ip, login) {
+  bump(ipFails, ip)
+  bump(loginFails, loginKey(ip, login))
 }
 
 /** Mot de passe d'un compte d'une organisation, vérifié sur son fichier (espace suspendu : pas de processus) */
@@ -482,14 +502,14 @@ export function mountGateway(app, { log = () => {}, shareOf = () => null, limit 
     const org = id && id !== 'main' ? orgById(id) : null
     if (!org) return stayHere(req, res, next)
     const ip = ipOf(req)
-    if (ipLocked(ip)) {
+    if (ipLocked(ip, login)) {
       log('locked', { ip, ua: uaOf(req), login })
       return res.status(429).json({ error: 'LOCKED' })
     }
     if (org.status !== 'active') {
       // Espace suspendu : signalé seulement à qui connaît le mot de passe (sinon même réponse qu'un compte inconnu)
       if (!checkOrgPassword(org.id, login, password)) {
-        countFail(ip)
+        countFail(ip, login)
         log('login_fail', { ip, ua: uaOf(req), login, detail: org.id })
         return res.status(401).json({ error: 'BAD_CREDENTIALS' })
       }
@@ -501,9 +521,9 @@ export function mountGateway(app, { log = () => {}, shareOf = () => null, limit 
       after: (status, r) => {
         if (status < 300) {
           addCookie(r, orgCookie(req, org.id))
-          ipFails.delete(ip)
+          loginFails.delete(loginKey(ip, login))
         } else if (status === 401 || status === 429) {
-          countFail(ip)
+          countFail(ip, login)
           log(status === 429 ? 'locked' : 'login_fail', { ip, ua: uaOf(req), login, detail: org.id })
         }
       },
@@ -521,11 +541,12 @@ export function mountGateway(app, { log = () => {}, shareOf = () => null, limit 
   })
 
   // Lien de partage d'un tableau d'une organisation : même limite que les autres accès publics, aucun appel en rafale
-  app.get(/^\/api\/public\/share\/([A-Za-z0-9_-]{43})(\/.*)?$/, limit, (req, res, next) => {
+  app.get(/^\/api\/public\/share\/([A-Za-z0-9_-]{43})(\/.*)?$/, (req, res, next) => {
+    // Lien du client historique : sa propre route applique la limite publique (comptée une seule fois)
     if (shareOf(req.params[0])) return next()
     const org = orgOfShare(req.params[0])
     if (!org) return next()
-    forward(req, res, org)
+    limit(req, res, () => forward(req, res, org))
   })
 
   app.use('/api', (req, res, next) => {

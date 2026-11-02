@@ -361,7 +361,7 @@ function Members({ t, data, reload }: { t: T; data: TeamData; reload: () => void
                     </select>
                   </td>
                   <td>
-                    <select value={u.profile} disabled={busy} onChange={(e) => patch(u.email, { profile: e.target.value })} aria-label={t.profile}>
+                    <select value={u.profile} disabled={self || busy} onChange={(e) => patch(u.email, { profile: e.target.value })} aria-label={t.profile}>
                       <option value="">{t.profileOfRole}</option>
                       {custom.map((p) => (
                         <option key={p.id} value={p.id}>

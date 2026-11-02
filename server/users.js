@@ -34,6 +34,11 @@ if (cmd === 'list') {
   } catch {}
   console.log(JSON.stringify(providerAccounts(users, audit), null, 1))
 } else if (cmd === 'add' && email) {
+  // Une adresse n'appartient qu'à une seule organisation (aiguillage à la connexion, server/tenancy.js)
+  const { initTenancy, orgOfLogin } = await import('./tenancy.js')
+  initTenancy(dataDir)
+  const owner = orgOfLogin(email)
+  if (owner && owner !== 'main') throw new Error(`Adresse déjà utilisée dans l'espace client ${owner}`)
   // --role=… : rôle du compte (sans option : administrateur, comme les comptes créés avant les rôles)
   const roleArg = rest.find((a) => a.startsWith('--role='))
   const role = roleArg ? roleArg.slice(7) : ''

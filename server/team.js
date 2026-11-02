@@ -52,7 +52,7 @@ export function mountTeam(app, { seats = () => 0, link = (t) => `/login?activate
   team.use(express.json({ limit: '20kb' }))
   // Administrateurs de l'organisation seulement, sur un profil de permissions complet (un administrateur limité par
   // un profil personnalisé ne gère pas l'équipe) ; un compte partagé ne gère pas l'équipe
-  team.use((req, res, next) => (req.user?.role === 'admin' && !req.user?.profile && !isSharedAccount(req.user.email) ? next() : fail(res, 403, 'FORBIDDEN')))
+  team.use((req, res, next) => (req.user?.role === 'admin' && permsOf(req.user).profile === 'admin' && !isSharedAccount(req.user.email) ? next() : fail(res, 403, 'FORBIDDEN')))
   const audit = (req, action, target, detail = '') => recordAudit({ actor: req.user.email, role: req.user.role, ip: req.ip, category: 'users', action, target, detail })
 
   team.get('/', (_req, res) => {

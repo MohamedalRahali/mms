@@ -18,7 +18,7 @@ import { SharedBoard } from './components/Share'
 import { I18nContext, makeI18n } from './lib/i18n'
 import { MfaRequired } from './components/Mfa'
 import { FaceRequired } from './components/Face'
-import { resetBrand } from './lib/brand'
+import { loadBrand, resetBrand } from './lib/brand'
 
 // Console Super Admin : chargée seulement à l'adresse /superadmin, séparée de la plateforme
 const SuperAdmin = lazy(() => import('./superadmin/SuperAdmin'))
@@ -158,10 +158,12 @@ function Gate() {
             resetBrand()
             // Fiche complète (organisation, visage) relue avant d'afficher l'application : aucun instant avec
             // l'identité ou les fonctions d'un autre espace
-            fetch('/api/auth/me')
-              .then((r) => (r.ok ? r.json() : null))
-              .then((json) => setUser(json?.user ?? u))
-              .catch(() => setUser(u))
+            Promise.all([
+              fetch('/api/auth/me')
+                .then((r) => (r.ok ? r.json() : null))
+                .catch(() => null),
+              loadBrand(),
+            ]).then(([json]) => setUser(json?.user ?? u))
           }}
         />
       </>
