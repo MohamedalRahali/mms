@@ -574,7 +574,8 @@ body,
 
 /* ---------------------------------------------------------------- connexion multi-clients : marque Around Expressions */
 .mms-login__logo--around img {
-  height: 92px;
+  height: 64px;
+  width: auto;
 }
 .mms-login__brand--around {
   flex-direction: row;
@@ -582,8 +583,8 @@ body,
   gap: 0.7rem;
 }
 .mms-login__brand--around img {
-  width: 54px;
-  height: auto;
+  height: 46px;
+  width: auto;
 }
 .mms-login__brand--around span {
   display: flex;
@@ -591,16 +592,19 @@ body,
   line-height: 1.2;
   text-align: start;
 }
+.mms-login__brand--around span {
+  padding-inline-start: 0.7rem;
+  border-inline-start: 1px solid #dbe3ec;
+}
 .mms-login__brand--around strong {
-  font-size: 1.05rem;
+  font-size: 0.85rem;
   font-weight: 700;
-  color: #14213a;
+  color: #0e2742;
 }
 .mms-login__brand--around em {
   font-style: normal;
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
-  color: #1e78d8;
+  font-size: 0.72rem;
+  color: #55637d;
 }
 .mms-login__home {
   display: inline-flex;
@@ -655,6 +659,7 @@ body,
 .mms-head__around img {
   width: 34px;
   height: auto;
+  border-radius: 9px;
 }
 .mms-head__around span {
   display: flex;
@@ -667,9 +672,8 @@ body,
   color: var(--ink);
 }
 .mms-head__around small {
-  font-size: 0.7rem;
-  letter-spacing: 0.08em;
-  color: #2b8be6;
+  font-size: 0.68rem;
+  color: #14b8a6;
 }
 @media (max-width: 700px) {
   .mms-head__client {

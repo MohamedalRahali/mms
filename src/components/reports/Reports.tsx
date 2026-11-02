@@ -140,7 +140,7 @@ function Generator({ onDone, onNews }: { onDone: (r: Report, notes: string[]) =>
         <div className="rpt-field">
           <span>{t.logo}</span>
           <div className="rpt-logo">
-            <img src={logo || brand?.fallbackLogo || '/logo-npdc.png'} alt={logo ? t.logo : brand?.fallbackLogo?.includes('around') ? 'Around Expressions' : t.logoDefault} />
+            <img src={logo || brand?.fallbackLogo || '/logo-npdc.png'} alt={logo ? t.logo : brand?.fallbackLogo?.includes('mearsaad-intl') ? 'Mearsaad' : t.logoDefault} />
             <div>
               <button type="button" className="news-btn news-btn--ghost" disabled={busy} onClick={() => file.current?.click()}>
                 {t.logoUpload}

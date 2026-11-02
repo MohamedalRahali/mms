@@ -9,7 +9,7 @@ const en = {
   hero: {
     eyebrow: 'Media Monitoring · Media Intelligence · AI-Powered Analysis',
     title: ['Every story that shapes', 'your reputation,', 'the moment it breaks.'],
-    text: 'MMS by Around Expressions monitors online news, social media, TV and radio in Arabic, French and English, then turns the coverage into clear indicators, smart alerts and AI analysis your team can act on.',
+    text: 'Mearsaad by Around Expressions monitors online news, social media, TV and radio in Arabic, French and English, then turns the coverage into clear indicators, smart alerts and AI analysis your team can act on.',
     primary: 'Request a demo',
     secondary: 'Take the product tour',
     trust: ['TV & radio', 'Online news', 'Social media', 'Print & podcasts'],
@@ -25,7 +25,7 @@ const en = {
   channels: ['Television', 'Radio', 'News websites', 'Social media', 'YouTube', 'Print', 'Podcasts', 'Forums & comments'],
   tour: {
     eyebrow: 'Product tour',
-    title: 'See how MMS works, one capability at a time',
+    title: 'See how Mearsaad works, one capability at a time',
     text: 'Pick a feature or let the tour play. Each step shows what your team gets on day one.',
     pause: 'Pause tour',
     play: 'Play tour',
@@ -112,7 +112,7 @@ const en = {
       { name: 'User', text: 'Read, search and export, as permitted' },
     ],
   },
-  cta: { title: 'See MMS on your own topics', text: 'Tell us what you need to follow. We will prepare a live demonstration on your subjects and markets.', primary: 'Request a demo', secondary: 'Log in to your workspace' },
+  cta: { title: 'See Mearsaad on your own topics', text: 'Tell us what you need to follow. We will prepare a live demonstration on your subjects and markets.', primary: 'Request a demo', secondary: 'Log in to your workspace' },
   footer: { tagline: 'Media Monitoring, Media Intelligence and AI-Powered Analysis.', platform: 'Platform', company: 'Around Expressions', rights: 'All rights reserved.', contact: 'Contact us' },
   form: {
     title: 'Request a demo',
@@ -143,7 +143,7 @@ const fr: Copy = {
   hero: {
     eyebrow: 'Media Monitoring · Media Intelligence · Analyse par IA',
     title: ['Chaque sujet qui façonne', 'votre réputation,', 'dès qu’il éclate.'],
-    text: 'MMS par Around Expressions surveille la presse en ligne, les réseaux sociaux, la télévision et la radio en arabe, en français et en anglais, puis transforme la couverture en indicateurs clairs, alertes intelligentes et analyses par IA, prêts à l’action.',
+    text: 'Mearsaad par Around Expressions surveille la presse en ligne, les réseaux sociaux, la télévision et la radio en arabe, en français et en anglais, puis transforme la couverture en indicateurs clairs, alertes intelligentes et analyses par IA, prêts à l’action.',
     primary: 'Demander une démo',
     secondary: 'Lancer la visite produit',
     trust: ['TV & radio', 'Presse en ligne', 'Réseaux sociaux', 'Presse écrite & podcasts'],
@@ -159,7 +159,7 @@ const fr: Copy = {
   channels: ['Télévision', 'Radio', 'Sites d’information', 'Réseaux sociaux', 'YouTube', 'Presse écrite', 'Podcasts', 'Forums & commentaires'],
   tour: {
     eyebrow: 'Visite produit',
-    title: 'Découvrez MMS, une fonctionnalité à la fois',
+    title: 'Découvrez Mearsaad, une fonctionnalité à la fois',
     text: 'Choisissez une fonctionnalité ou laissez la visite défiler. Chaque étape montre ce que votre équipe obtient dès le premier jour.',
     pause: 'Mettre en pause',
     play: 'Reprendre la visite',
@@ -246,7 +246,7 @@ const fr: Copy = {
       { name: 'User', text: 'Lecture, recherche et export, selon les droits' },
     ],
   },
-  cta: { title: 'Découvrez MMS sur vos propres sujets', text: 'Dites-nous ce que vous devez suivre. Nous préparons une démonstration en direct sur vos thèmes et vos marchés.', primary: 'Demander une démo', secondary: 'Se connecter à son espace' },
+  cta: { title: 'Découvrez Mearsaad sur vos propres sujets', text: 'Dites-nous ce que vous devez suivre. Nous préparons une démonstration en direct sur vos thèmes et vos marchés.', primary: 'Demander une démo', secondary: 'Se connecter à son espace' },
   footer: { tagline: 'Media Monitoring, Media Intelligence et analyse par IA.', platform: 'Plateforme', company: 'Around Expressions', rights: 'Tous droits réservés.', contact: 'Nous contacter' },
   form: {
     title: 'Demander une démo',
@@ -275,7 +275,7 @@ const ar: Copy = {
   hero: {
     eyebrow: 'الرصد الإعلامي · الذكاء الإعلامي · التحليل بالذكاء الاصطناعي',
     title: ['كل خبر يصنع', 'صورتك وسمعتك،', 'لحظة صدوره.'],
-    text: 'منصة MMS من Around Expressions ترصد المواقع الإخبارية ووسائل التواصل الاجتماعي والتلفزيون والإذاعة بالعربية والفرنسية والإنجليزية، وتحوّل التغطية إلى مؤشرات واضحة وتنبيهات ذكية وتحليلات بالذكاء الاصطناعي يبني عليها فريقك قراره.',
+    text: 'منصة مرصاد من Around Expressions ترصد المواقع الإخبارية ووسائل التواصل الاجتماعي والتلفزيون والإذاعة بالعربية والفرنسية والإنجليزية، وتحوّل التغطية إلى مؤشرات واضحة وتنبيهات ذكية وتحليلات بالذكاء الاصطناعي يبني عليها فريقك قراره.',
     primary: 'اطلب عرضاً تجريبياً',
     secondary: 'ابدأ الجولة في المنصة',
     trust: ['التلفزيون والإذاعة', 'المواقع الإخبارية', 'وسائل التواصل', 'الصحافة المكتوبة والبودكاست'],
@@ -291,7 +291,7 @@ const ar: Copy = {
   channels: ['التلفزيون', 'الإذاعة', 'المواقع الإخبارية', 'وسائل التواصل', 'يوتيوب', 'الصحافة المكتوبة', 'البودكاست', 'المنتديات والتعليقات'],
   tour: {
     eyebrow: 'جولة في المنصة',
-    title: 'تعرّف على MMS، ميزة بعد ميزة',
+    title: 'تعرّف على مرصاد، ميزة بعد ميزة',
     text: 'اختر ميزة أو دع الجولة تعمل تلقائياً. كل مرحلة تُظهر ما يحصل عليه فريقك منذ اليوم الأول.',
     pause: 'إيقاف الجولة',
     play: 'متابعة الجولة',
@@ -378,7 +378,7 @@ const ar: Copy = {
       { name: 'User', text: 'اطلاع وبحث وتصدير حسب الصلاحيات' },
     ],
   },
-  cta: { title: 'شاهد MMS على مواضيعك أنت', text: 'أخبرنا بما تحتاج إلى متابعته، وسنحضّر عرضاً مباشراً على مواضيعك وأسواقك.', primary: 'اطلب عرضاً تجريبياً', secondary: 'الدخول إلى مساحتك' },
+  cta: { title: 'شاهد مرصاد على مواضيعك أنت', text: 'أخبرنا بما تحتاج إلى متابعته، وسنحضّر عرضاً مباشراً على مواضيعك وأسواقك.', primary: 'اطلب عرضاً تجريبياً', secondary: 'الدخول إلى مساحتك' },
   footer: { tagline: 'الرصد الإعلامي والذكاء الإعلامي والتحليل بالذكاء الاصطناعي.', platform: 'المنصة', company: 'Around Expressions', rights: 'جميع الحقوق محفوظة.', contact: 'اتصل بنا' },
   form: {
     title: 'اطلب عرضاً تجريبياً',

@@ -135,9 +135,9 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
     <div className="mms-login" dir={lang === 'ar' ? 'rtl' : 'ltr'} lang={lang}>
       <section className="mms-login__panel">
         <header className="mms-login__top">
-          {/* Avant l'identification de l'organisation : marque de la plateforme (Around Expressions) */}
+          {/* Avant l'identification de l'organisation : marque de la plateforme (Mearsaad by Around Expressions) */}
           <a className="mms-login__logo mms-login__logo--around" href="/" title={t.home}>
-            <img src="/brand/around-logo-light.png" alt="Around Expressions" width={500} height={500} />
+            <img src="/brand/mearsaad-intl-light.png" alt="مرصاد — Mearsaad, by Around Expressions" width={900} height={262} />
           </a>
           <div className="mms-login__actions">
             <InstallButton lang={lang} className="mms-login__install" />
@@ -189,10 +189,10 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
         <form className="mms-login__card" onSubmit={submit}>
           {/* Marque de la plateforme (carte de connexion claire) : l'organisation est reconnue d'après l'identifiant */}
           <div className="mms-login__brand mms-login__brand--around">
-            <img src="/brand/around-mark.png" alt="" width={271} height={212} />
-            <span>
+            <img src="/brand/mearsaad-intl-dark.png" alt="مرصاد — Mearsaad" width={900} height={262} />
+            <span dir="ltr">
+              <em>by</em>
               <strong>Around Expressions</strong>
-              <em>MMS · Media Intelligence</em>
             </span>
           </div>
           <h2>{t.title}</h2>

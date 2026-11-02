@@ -482,13 +482,13 @@ const COLOR_RE = /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\))$/i
 const SIZE_RE = /^\d{1,3}(\.\d+)?(px|pt|em|rem)$/
 const ALIGN = new Set(['left', 'right', 'center', 'justify'])
 
-/** Logo par défaut des rapports : celui du client historique, Around Expressions dans un espace client */
-const defaultLogo = () => (process.env.MMS_TENANT ? '/brand/around-logo.png' : '/logo-npdc.png')
+/** Logo par défaut des rapports : celui du client historique, Mearsaad dans un espace client */
+const defaultLogo = () => (process.env.MMS_TENANT ? '/brand/mearsaad-intl-dark.png' : '/logo-npdc.png')
 
 /** Adresse d'image permise : logo du compte, logo de MMS, ou image intégrée png/jpeg/webp/gif */
 export function safeImageSrc(src) {
   const s = String(src || '')
-  if (/^\/api\/reports\/(logo|banner)(\?v=\d{1,15})?$/.test(s) || s === '/logo-npdc.png' || s === '/brand/around-logo.png') return s
+  if (/^\/api\/reports\/(logo|banner)(\?v=\d{1,15})?$/.test(s) || s === '/logo-npdc.png' || s === '/brand/mearsaad-intl-dark.png') return s
   if (/^data:image\/(png|jpeg|webp|gif);base64,[a-z0-9+/=\s]+$/i.test(s) && s.length < 1_500_000) return s
   return null
 }

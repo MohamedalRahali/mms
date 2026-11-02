@@ -33,8 +33,8 @@ export function cleanBrand(b = {}) {
   }
 }
 
-// fallbackLogo : logo affiché sans logo réglé (client historique : son logo ; espace client : Around Expressions)
-export const brandOf = () => ({ name: brand.name, logo: brand.logo, fallbackLogo: process.env.MMS_TENANT ? '/brand/around-logo.png' : '/logo-npdc.png', assistant: brand.assistant || '', accent: brand.accent, whiteLabel: brand.whiteLabel, updatedAt: brand.updatedAt })
+// fallbackLogo : logo affiché sans logo réglé (client historique : son logo ; espace client : Mearsaad by Around Expressions)
+export const brandOf = () => ({ name: brand.name, logo: brand.logo, fallbackLogo: process.env.MMS_TENANT ? '/brand/mearsaad-intl-dark.png' : '/logo-npdc.png', assistant: brand.assistant || '', accent: brand.accent, whiteLabel: brand.whiteLabel, updatedAt: brand.updatedAt })
 
 export function saveBrand(next) {
   brand = cleanBrand({ ...next, updatedAt: new Date().toISOString() })

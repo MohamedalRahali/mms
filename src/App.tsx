@@ -242,7 +242,7 @@ export default function App() {
   // Espace client (organisation autre que le client historique) : identité de l'entreprise cliente dans l'interface
   const tenant = auth?.user?.org && !auth.user.org.main ? auth.user.org : null
   useEffect(() => {
-    document.title = tenant ? `${tenant.name} · MMS — Around Expressions` : 'مرصاد — Mearsaad · المركز الوطني لدعم القرار'
+    document.title = tenant ? `${tenant.name} · مرصاد Mearsaad — Around Expressions` : 'مرصاد — Mearsaad · المركز الوطني لدعم القرار'
   }, [tenant])
   // « أراوند · مساعدك الذكي » en marque blanche : « المساعد الذكي » seul, sans répétition
   const renameAssistant = (label: string) => renameAround(label, assistantName(brand, lang)).replace(/^(المساعد الذكي|AI assistant) (·|—) (مساعدك الذكي|your AI assistant)$/, '$1')
@@ -461,10 +461,10 @@ export default function App() {
                         {brand?.logo ? <img src={brand.logo} alt={tenant.name} /> : <strong dir="auto">{tenant.name}</strong>}
                       </span>
                       <span className="mms-head__around" dir="ltr">
-                        <img src="/brand/around-mark.png" alt="" width={271} height={212} />
+                        <img src="/brand/mearsaad-intl-icon.png" alt="" width={256} height={256} />
                         <span>
-                          <b>Around Expressions</b>
-                          <small>MMS</small>
+                          <b>Mearsaad</b>
+                          <small>by Around Expressions</small>
                         </span>
                       </span>
                     </div>
@@ -660,7 +660,7 @@ export default function App() {
                       {/* Marque blanche (هوية المخرجات) : sans la marque Around */}
                       {!brand?.whiteLabel && <img className="mms-side__logo" src="/around-logo-footer.png" alt="Around Expressions" width={120} height={91} loading="lazy" />}
                       <span dir="ltr">
-                        © {new Date().getFullYear()} {brand?.whiteLabel ? brand.name || 'MMS' : tenant ? 'MMS — Copyright by Around Expressions' : 'Mearsaad — Copyright by Around Expressions'}
+                        © {new Date().getFullYear()} {brand?.whiteLabel ? brand.name || 'MMS' : tenant ? 'Mearsaad — Copyright by Around Expressions' : 'Mearsaad — Copyright by Around Expressions'}
                       </span>
                     </p>
                   </aside>

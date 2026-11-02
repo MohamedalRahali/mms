@@ -3,10 +3,10 @@ import { COPY, TOURS, type Copy, type LandingLang, type TourKey } from './copy'
 import './landing.css'
 
 /**
- * Page d'accueil publique d'Around Expressions MMS (adresse /, visiteurs sans session).
+ * Page d'accueil publique de Mearsaad (مرصاد) by Around Expressions (adresse /, visiteurs sans session).
  * Concept « visite produit » : présentation de la plateforme fonction par fonction, démonstrations animées,
  * boutons Log in (/login) et Request a demo (formulaire enregistré pour la console Super Admin, POST /api/landing/demo).
- * Identité Around Expressions uniquement (logo, bleu et marine) ; anglais, français, arabe (de droite à gauche).
+ * Identité Mearsaad by Around Expressions uniquement (logo fourni, marine et turquoise) ; anglais, français, arabe.
  * Les illustrations sont des schémas de l'interface, sans chiffres ni noms inventés.
  */
 
@@ -97,11 +97,11 @@ const TOUR_ICONS: Record<TourKey, string> = { monitor: 'search', broadcast: 'tv'
 
 function Brand({ light = false }: { light?: boolean }) {
   return (
-    <a className={`lp-brand${light ? ' is-light' : ''}`} href="/" aria-label="Around Expressions MMS">
-      <img src={light ? '/brand/around-mark-light.png' : '/brand/around-mark.png'} alt="" width={271} height={212} />
+    <a className={`lp-brand${light ? ' is-light' : ''}`} href="/" aria-label="Mearsaad — مرصاد, by Around Expressions">
+      <img src={light ? '/brand/mearsaad-intl-light.png' : '/brand/mearsaad-intl-dark.png'} alt="" width={900} height={262} />
       <span dir="ltr">
+        <small>by</small>
         <b>Around Expressions</b>
-        <small>MMS · Media Intelligence</small>
       </span>
     </a>
   )
@@ -142,7 +142,7 @@ function HeroVisual({ c }: { c: Copy }) {
           <span />
           <span />
           <span />
-          <b>MMS</b>
+          <b>Mearsaad</b>
           <em className="lp-live">
             <i /> {c.hero.live}
           </em>
@@ -348,7 +348,7 @@ function TourVisual({ k, c }: { k: TourKey; c: Copy }) {
         {[0, 1, 2].map((n) => (
           <div key={n} className="tv-page" style={{ animationDelay: `${n * 0.3}s` }}>
             <span className="tv-page__logo">
-              <img src="/brand/around-mark.png" alt="" width={271} height={212} />
+              <img src="/brand/mearsaad-intl-icon.png" alt="" width={256} height={256} />
             </span>
             <i style={{ width: '70%' }} />
             <div className="tv-page__chart">
@@ -589,7 +589,7 @@ export default function Landing() {
   }
   useEffect(() => {
     document.documentElement.lang = lang
-    document.title = lang === 'ar' ? 'Around Expressions MMS — الرصد والذكاء الإعلامي' : lang === 'fr' ? 'Around Expressions MMS — Media Monitoring & Intelligence' : 'Around Expressions MMS — Media Monitoring & Intelligence'
+    document.title = lang === 'ar' ? 'مرصاد — الرصد والذكاء الإعلامي · Around Expressions' : 'Mearsaad — Media Monitoring & Intelligence · Around Expressions'
   }, [lang])
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12)
@@ -842,7 +842,7 @@ export default function Landing() {
           </nav>
         </div>
         <p className="lp-footer__copy" dir="ltr">
-          © {new Date().getFullYear()} Around Expressions LDA · MMS. {c.footer.rights}
+          © {new Date().getFullYear()} Around Expressions LDA · Mearsaad. {c.footer.rights}
         </p>
       </footer>
 
