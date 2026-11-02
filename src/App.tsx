@@ -650,6 +650,16 @@ export default function App() {
                         </div>
                       ))}
                     </nav>
+                    {/* Console Super Admin (Around Expressions) : administrateurs du client historique ; elle demande son
+                        propre identifiant et son mot de passe, distincts des comptes de la plateforme */}
+                    {auth?.user?.role === 'admin' && !tenant && (
+                      <a className="mms-side__logout mms-side__sa" href="/superadmin" title={lang === 'ar' ? 'وحدة التحكم العليا (كلمة مرور خاصة)' : 'Super Admin console (separate password)'}>
+                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+                          <path fill="currentColor" d="M12 1 3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5l-9-4zm0 6a3 3 0 0 1 3 3v1h1v6H8v-6h1v-1a3 3 0 0 1 3-3zm0 2a1 1 0 0 0-1 1v1h2v-1a1 1 0 0 0-1-1z" />
+                        </svg>
+                        {!collapsed && <span>Super Admin</span>}
+                      </a>
+                    )}
                     {auth && (
                       <button type="button" className="mms-side__logout" onClick={auth.logout}>
                         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>

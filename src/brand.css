@@ -684,3 +684,9 @@ body,
   }
 }
 
+
+/* Lien vers la console Super Admin (menu latéral) */
+.mms-side__sa {
+  color: var(--ink);
+  text-decoration: none;
+}
