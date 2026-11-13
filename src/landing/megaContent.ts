@@ -91,6 +91,13 @@ export type Mega = {
     demo: string
     readMore: string
     disclaimer: string
+    talk: string
+    askLike: string
+    meeting: string
+    quote: string
+    privacy: string
+    listening: string
+    mic: string
     qa: { q: string; a: string; to: Target; keys: string[] }[]
   }
 }
@@ -254,8 +261,8 @@ const en: Mega = {
   ask: {
     button: 'Ask Around',
     title: 'Around',
-    subtitle: 'Mearsaad assistant',
-    hello: 'Hello! I am Around. Ask me about Mearsaad: sources, languages, alerts, security or a demo.',
+    subtitle: 'AI assistant',
+    hello: 'Hello! Exploring Mearsaad? Ask me how the platform brings TV, radio, press and social media together to help your team decide faster.',
     placeholder: 'Ask a question…',
     send: 'Send',
     suggestions: 'Popular questions',
@@ -263,6 +270,13 @@ const en: Mega = {
     demo: 'Request a demo',
     readMore: 'Read more',
     disclaimer: 'Answers about Mearsaad only. Inside the platform, Around also answers from your own coverage.',
+    talk: 'Talk with Around',
+    askLike: 'Ask me questions like:',
+    meeting: 'Book a meeting',
+    quote: 'Request a quote',
+    privacy: 'Privacy & security',
+    listening: 'Listening… speak now',
+    mic: 'Dictate your question',
     qa: [
       { q: 'What does Mearsaad monitor?', a: 'Online news, print, podcasts, social networks, YouTube, forums, TV and radio, in one deduplicated feed analysed around the clock.', to: 'platform', keys: ['monitor', 'source', 'what', 'cover', 'tv', 'radio', 'social', 'news'] },
       { q: 'Which languages are supported?', a: 'Arabic, French and English are analysed natively, and the whole interface is available in all three, right-to-left included.', to: 'languages', keys: ['language', 'arabic', 'french', 'english', 'rtl'] },
@@ -433,8 +447,8 @@ const fr: Mega = {
   ask: {
     button: 'Demander à Around',
     title: 'Around',
-    subtitle: 'Assistant Mearsaad',
-    hello: 'Bonjour ! Je suis Around. Posez-moi vos questions sur Mearsaad : sources, langues, alertes, sécurité ou démo.',
+    subtitle: 'Assistant IA',
+    hello: 'Bonjour ! Vous découvrez Mearsaad ? Demandez-moi comment la plateforme réunit télévision, radio, presse et réseaux sociaux pour aider votre équipe à décider plus vite.',
     placeholder: 'Posez une question…',
     send: 'Envoyer',
     suggestions: 'Questions fréquentes',
@@ -442,6 +456,13 @@ const fr: Mega = {
     demo: 'Demander une démo',
     readMore: 'En savoir plus',
     disclaimer: 'Réponses sur Mearsaad uniquement. Dans la plateforme, Around répond aussi à partir de votre propre couverture.',
+    talk: 'Parler avec Around',
+    askLike: 'Posez-moi des questions comme :',
+    meeting: 'Planifier un rendez-vous',
+    quote: 'Demander un devis',
+    privacy: 'Confidentialité et sécurité',
+    listening: 'Je vous écoute… parlez maintenant',
+    mic: 'Dicter votre question',
     qa: [
       { q: 'Que surveille Mearsaad ?', a: 'Presse en ligne, presse écrite, podcasts, réseaux sociaux, YouTube, forums, télévision et radio, dans un flux unique dédoublonné et analysé en continu.', to: 'platform', keys: ['surveill', 'source', 'quoi', 'couvr', 'tv', 'radio', 'réseau', 'presse'] },
       { q: 'Quelles langues sont prises en charge ?', a: 'L’arabe, le français et l’anglais sont analysés nativement, et toute l’interface existe dans les trois langues, de droite à gauche comprise.', to: 'languages', keys: ['langue', 'arabe', 'français', 'anglais', 'rtl'] },
@@ -612,8 +633,8 @@ const ar: Mega = {
   ask: {
     button: 'اسأل Around',
     title: 'Around',
-    subtitle: 'مساعد مرصاد',
-    hello: 'مرحبًا! أنا Around. اسألني عن مرصاد: المصادر واللغات والتنبيهات والأمان أو العرض التوضيحي.',
+    subtitle: 'مساعد ذكي',
+    hello: 'مرحبًا! تكتشف مرصاد؟ اسألني كيف تجمع المنصة التلفزيون والإذاعة والصحافة وشبكات التواصل لتساعد فريقك على اتخاذ القرار أسرع.',
     placeholder: 'اكتب سؤالك…',
     send: 'إرسال',
     suggestions: 'أسئلة شائعة',
@@ -621,6 +642,13 @@ const ar: Mega = {
     demo: 'اطلب عرضًا توضيحيًا',
     readMore: 'اعرف المزيد',
     disclaimer: 'إجابات عن مرصاد فقط. داخل المنصة، يجيب Around أيضًا انطلاقًا من تغطيتك.',
+    talk: 'تحدث مع Around',
+    askLike: 'اسألني أسئلة مثل:',
+    meeting: 'حجز موعد',
+    quote: 'طلب عرض سعر',
+    privacy: 'الخصوصية والأمان',
+    listening: 'أستمع إليك… تحدث الآن',
+    mic: 'إملاء سؤالك',
     qa: [
       { q: 'ماذا يرصد مرصاد؟', a: 'الصحافة الإلكترونية والمطبوعة والبودكاست وشبكات التواصل ويوتيوب والمنتديات والتلفزيون والإذاعة، في تدفق واحد بلا تكرار يُحلَّل باستمرار.', to: 'platform', keys: ['يرصد', 'مصادر', 'مصدر', 'تلفزيون', 'إذاعة', 'شبكات', 'صحافة', 'ماذا'] },
       { q: 'ما اللغات المدعومة؟', a: 'تُحلَّل العربية والفرنسية والإنجليزية تحليلًا أصيلًا، والواجهة كاملة باللغات الثلاث، من اليمين إلى اليسار.', to: 'languages', keys: ['لغة', 'لغات', 'عربية', 'فرنسية', 'إنجليزية'] },

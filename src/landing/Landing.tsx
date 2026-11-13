@@ -314,6 +314,15 @@ export default function Landing() {
     const base = lang === 'ar' ? 'مرصاد — الرصد والذكاء الإعلامي · Around Expressions' : 'Mearsaad — Media Monitoring & Intelligence · Around Expressions'
     document.title = page ? `${mega.pages[page].title} · ${lang === 'ar' ? 'مرصاد' : 'Mearsaad'}` : base
   }, [lang, page, mega])
+  // Police latine de la vitrine (géométrique, proche des grandes plateformes de veille) ; l'arabe reste en IBM Plex Sans Arabic
+  useEffect(() => {
+    if (document.getElementById('lp-font-figtree')) return
+    const l = document.createElement('link')
+    l.id = 'lp-font-figtree'
+    l.rel = 'stylesheet'
+    l.href = 'https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap'
+    document.head.appendChild(l)
+  }, [])
   useEffect(() => {
     const onPop = () => setPath(location.pathname)
     window.addEventListener('popstate', onPop)
@@ -565,7 +574,7 @@ export default function Landing() {
         </p>
       </footer>
 
-      <AskAround mega={mega} go={go} openDemo={openDemo} />
+      <AskAround mega={mega} go={go} openDemo={openDemo} lang={lang} />
       {demo && <DemoModal c={c} lang={lang} onClose={() => setDemo(false)} />}
     </div>
   )

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { Copy } from './copy'
 import { Illustration, type Go } from './MegaNav'
 import { PAGES, menuOf, hrefOf, type Mega, type PageKey, type Target } from './megaContent'
@@ -144,14 +144,28 @@ const norm = (s: string) =>
     .replace(/[̀-ًͯ-ْ]/g, '')
     .replace(/[أإآ]/g, 'ا')
 
-/** Assistant de la vitrine : réponses sur Mearsaad (questions fréquentes), lien vers la bonne page ou la démo */
-export function AskAround({ mega, go, openDemo }: { mega: Mega; go: Go; openDemo: () => void }) {
+type Recognition = { lang: string; interimResults: boolean; start: () => void; stop: () => void; onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onend: (() => void) | null; onerror: (() => void) | null }
+const speechCtor = (): (new () => Recognition) | null => {
+  const w = window as unknown as Record<string, unknown>
+  return ((w.SpeechRecognition || w.webkitSpeechRecognition) as (new () => Recognition) | undefined) ?? null
+}
+const SPEECH_LANG: Record<string, string> = { en: 'en-US', fr: 'fr-FR', ar: 'ar' }
+
+/**
+ * Assistant de la vitrine : panneau blanc épuré, bouton « Parler avec Around » (dictée vocale du navigateur),
+ * suggestions de questions, rendez-vous et devis, réponses sur Mearsaad avec lien vers la bonne page.
+ */
+export function AskAround({ mega, go, openDemo, lang }: { mega: Mega; go: Go; openDemo: () => void; lang: string }) {
   const a = mega.ask
   const [open, setOpen] = useState(false)
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [text, setText] = useState('')
   const [typing, setTyping] = useState(false)
-  useEffect(() => setMsgs([{ from: 'bot', text: a.hello }]), [a.hello])
+  const [tips, setTips] = useState(true)
+  const [listening, setListening] = useState(false)
+  const rec = useRef<Recognition | null>(null)
+  const canSpeak = typeof window !== 'undefined' && !!speechCtor()
+  useEffect(() => setMsgs([]), [a.hello])
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
@@ -161,6 +175,7 @@ export function AskAround({ mega, go, openDemo }: { mega: Mega; go: Go; openDemo
   useEffect(() => {
     document.querySelector('.mm-ask__log')?.scrollTo({ top: 1e6, behavior: 'smooth' })
   }, [msgs, typing])
+  useEffect(() => () => rec.current?.stop(), [])
 
   const answer = (q: string) => {
     const n = norm(q)
@@ -173,6 +188,7 @@ export function AskAround({ mega, go, openDemo }: { mega: Mega; go: Go; openDemo
         best = item
       }
     }
+    setTips(false)
     setMsgs((m) => [...m, { from: 'me', text: q }])
     setTyping(true)
     window.setTimeout(() => {
@@ -180,34 +196,72 @@ export function AskAround({ mega, go, openDemo }: { mega: Mega; go: Go; openDemo
       setMsgs((m) => [...m, best ? { from: 'bot', text: best.a, to: best.to } : { from: 'bot', text: a.fallback, demo: true }])
     }, 650)
   }
-  const submit = (e: FormEvent) => {
-    e.preventDefault()
+  const submit = (e?: FormEvent) => {
+    e?.preventDefault()
     const q = text.trim()
     if (!q) return
     setText('')
     answer(q)
   }
-  const asked = new Set(msgs.filter((m) => m.from === 'me').map((m) => m.text))
+  /** Dictée : la question parlée s'écrit dans le champ puis part toute seule */
+  const listen = () => {
+    const Ctor = speechCtor()
+    if (!Ctor) return
+    if (listening) {
+      rec.current?.stop()
+      return
+    }
+    const r = new Ctor()
+    r.lang = SPEECH_LANG[lang] ?? 'en-US'
+    r.interimResults = true
+    let said = ''
+    r.onresult = (e) => {
+      said = Array.from(e.results)
+        .map((x) => x[0].transcript)
+        .join(' ')
+      setText(said)
+    }
+    r.onend = () => {
+      setListening(false)
+      if (said.trim()) {
+        setText('')
+        answer(said.trim())
+      }
+    }
+    r.onerror = () => setListening(false)
+    rec.current = r
+    setListening(true)
+    r.start()
+  }
+  const toDemo = () => {
+    setOpen(false)
+    openDemo()
+  }
 
   return (
     <div className={`mm-ask${open ? ' is-open' : ''}`}>
       {open && (
         <div className="mm-ask__panel" role="dialog" aria-label={a.title}>
           <header>
-            <span className="mm-ask__avatar">
-              <img src="/around-logo.png" alt="" width={64} height={64} />
-            </span>
             <span>
               <b>{a.title}</b>
-              <small>
-                <i /> {a.subtitle}
-              </small>
+              <small>{a.subtitle}</small>
             </span>
-            <button type="button" onClick={() => setOpen(false)} aria-label={mega.ui.close}>
-              <Icon name="x" size={18} />
+            <button type="button" className="mm-ask__x" onClick={() => setOpen(false)} aria-label={mega.ui.close}>
+              <Icon name="x" size={20} />
             </button>
           </header>
           <div className="mm-ask__log" aria-live="polite">
+            {canSpeak && (
+              <button type="button" className={`mm-ask__talk${listening ? ' is-on' : ''}`} onClick={listen}>
+                <span className="mm-ask__avatar">
+                  <img src="/brand/mearsaad-intl-icon.png" alt="" width={64} height={64} />
+                </span>
+                <Icon name="mic" size={18} />
+                {listening ? a.listening : a.talk}
+              </button>
+            )}
+            <p className="mm-ask__hello">{a.hello}</p>
             {msgs.map((m, n) => (
               <div key={n} className={`mm-ask__msg is-${m.from}`}>
                 <p>{m.text}</p>
@@ -223,7 +277,7 @@ export function AskAround({ mega, go, openDemo }: { mega: Mega; go: Go; openDemo
                   </a>
                 )}
                 {m.demo && (
-                  <button type="button" onClick={() => (setOpen(false), openDemo())}>
+                  <button type="button" onClick={toDemo}>
                     {a.demo} <Icon name="arrow" size={14} />
                   </button>
                 )}
@@ -238,25 +292,53 @@ export function AskAround({ mega, go, openDemo }: { mega: Mega; go: Go; openDemo
                 </span>
               </div>
             )}
-            <div className="mm-ask__chips">
-              <small>{a.suggestions}</small>
-              {a.qa
-                .filter((x) => !asked.has(x.q))
-                .slice(0, 4)
-                .map((x) => (
-                  <button key={x.q} type="button" onClick={() => answer(x.q)}>
+          </div>
+          <div className="mm-ask__foot">
+            {tips && (
+              <div className="mm-ask__tips">
+                <div className="mm-ask__tips-head">
+                  <b>{a.askLike}</b>
+                  <button type="button" onClick={() => setTips(false)} aria-label={mega.ui.close}>
+                    <Icon name="x" size={14} />
+                  </button>
+                </div>
+                {a.qa.slice(0, 3).map((x) => (
+                  <button key={x.q} type="button" className="mm-ask__tip" onClick={() => answer(x.q)}>
                     {x.q}
                   </button>
                 ))}
+              </div>
+            )}
+            <div className="mm-ask__actions">
+              <button type="button" onClick={toDemo}>
+                {a.meeting}
+              </button>
+              <button type="button" onClick={toDemo}>
+                {a.quote}
+              </button>
             </div>
+            <form onSubmit={submit} className="mm-ask__input">
+              <input value={text} onChange={(e) => setText(e.target.value)} placeholder={a.placeholder} aria-label={a.placeholder} maxLength={300} />
+              {canSpeak && (
+                <button type="button" className={`mm-ask__mic${listening ? ' is-on' : ''}`} onClick={listen} aria-label={a.mic} aria-pressed={listening}>
+                  <Icon name="mic" size={20} />
+                </button>
+              )}
+              <button type="submit" className="mm-ask__send" aria-label={a.send} disabled={!text.trim()}>
+                <Icon name="arrow" size={18} />
+              </button>
+            </form>
+            <a
+              className="mm-ask__privacy"
+              href={hrefOf('security')}
+              onClick={(e) => {
+                setOpen(false)
+                go('security')(e)
+              }}
+            >
+              {a.privacy} <Icon name="external" size={13} />
+            </a>
           </div>
-          <form onSubmit={submit}>
-            <input value={text} onChange={(e) => setText(e.target.value)} placeholder={a.placeholder} aria-label={a.placeholder} maxLength={300} />
-            <button type="submit" aria-label={a.send} disabled={!text.trim()}>
-              <Icon name="arrow" size={18} />
-            </button>
-          </form>
-          <p className="mm-ask__note">{a.disclaimer}</p>
         </div>
       )}
       <button type="button" className="mm-ask__fab" aria-expanded={open} onClick={() => setOpen(!open)}>
