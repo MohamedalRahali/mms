@@ -5,6 +5,7 @@ import './mega.css'
 import { MegaNav, type Go } from './MegaNav'
 import { MEGA, MENU_KEYS, hrefOf, pageFromPath, type Target } from './megaContent'
 import { AskAround, SubPage } from './SubPage'
+import { Pricing } from './Pricing'
 import { CHANNEL_ICONS, HeroVisual, Icon, TOUR_ICONS, TourVisual } from './visuals'
 
 /**
@@ -372,7 +373,11 @@ export default function Landing() {
       <MegaNav c={c} mega={mega} lang={lang} setLang={setLang} go={go} openDemo={openDemo} loginHref={loginHref} brand={<Brand onClick={go('#top')} />} current={page} />
 
       {page ? (
-        <SubPage k={page} c={c} mega={mega} go={go} openDemo={openDemo} />
+        page === 'pricing' ? (
+          <Pricing lang={lang} mega={mega} go={go} openDemo={openDemo} />
+        ) : (
+          <SubPage k={page} c={c} mega={mega} go={go} openDemo={openDemo} />
+        )
       ) : (
       <main>
         <section className="lp-hero">
@@ -556,7 +561,7 @@ export default function Landing() {
         <div className="lp-wrap mm-footer-cols">
           {MENU_KEYS.map((k) => {
             const m = mega.menus[k]
-            const items = [...(m.intros ?? []).map((i) => ({ to: i.to, label: i.title })), ...m.cols.flatMap((col) => col.items)].filter((it, n, all) => all.findIndex((x) => x.to === it.to) === n)
+            const items = [...(k === 'company' ? [{ to: 'pricing' as Target, label: mega.ui.pricing }] : []), ...(m.intros ?? []).map((i) => ({ to: i.to, label: i.title })), ...m.cols.flatMap((col) => col.items)].filter((it, n, all) => all.findIndex((x) => x.to === it.to) === n)
             return (
               <nav key={k} aria-label={m.label}>
                 <h4>{m.label}</h4>

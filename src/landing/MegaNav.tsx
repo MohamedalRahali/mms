@@ -267,7 +267,7 @@ export function MegaNav({
     setOpen(null)
     setDrawer(false)
   }
-  const activeMenu = current ? menuOf(mega.menus, current) : null
+  const activeMenu = current && current !== 'pricing' ? menuOf(mega.menus, current) : null
 
   const langs = (long: boolean) => (
     <div className="lp-lang" role="group" aria-label="Language">
@@ -313,6 +313,9 @@ export function MegaNav({
           {langs(false)}
           <a className="lp-btn lp-btn--ghost" href={loginHref}>
             {c.nav.login}
+          </a>
+          <a className={`lp-btn lp-btn--ghost mm-pricing${current === 'pricing' ? ' is-current' : ''}`} href={hrefOf('pricing')} onClick={go('pricing')} aria-current={current === 'pricing' ? 'page' : undefined}>
+            {mega.ui.pricing}
           </a>
           <button type="button" className="lp-btn lp-btn--primary" onClick={openDemo}>
             {c.nav.demo}
@@ -365,6 +368,10 @@ export function MegaNav({
                 </section>
               )
             })}
+            <a className="mm-acc__head mm-acc__link" href={hrefOf('pricing')} onClick={(e) => (close(), go('pricing')(e))}>
+              {mega.ui.pricing}
+              <Icon name="arrow" size={20} />
+            </a>
           </div>
           <div className="mm-drawer__foot">
             {langs(true)}

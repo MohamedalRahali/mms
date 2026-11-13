@@ -43,6 +43,7 @@ export const PAGES = {
   careers: { path: '/company/careers', icon: 'briefcase', visual: 'team' },
   press: { path: '/company/press', icon: 'news', visual: 'book' },
   contact: { path: '/company/contact', icon: 'mail', visual: 'team' },
+  pricing: { path: '/pricing', icon: 'star', visual: 'reports' },
 } satisfies Record<string, { path: string; icon: string; visual: Visual }>
 
 export type PageKey = keyof typeof PAGES
@@ -78,7 +79,7 @@ type PageCopy = { eyebrow: string; title: string; lead: string; points: [string,
 export type Mega = {
   menus: Record<MenuKey, Menu>
   pages: Record<PageKey, PageCopy>
-  ui: { home: string; related: string; explore: string; back: string; demoTitle: string; demoText: string; demo: string; login: string; open: string; close: string }
+  ui: { home: string; related: string; explore: string; back: string; demoTitle: string; demoText: string; demo: string; login: string; pricing: string; open: string; close: string }
   ask: {
     button: string
     title: string
@@ -256,8 +257,9 @@ const en: Mega = {
     careers: { eyebrow: 'Company', title: 'Careers', lead: 'We look for analysts, engineers and media specialists who want to build the region’s reference monitoring platform.', points: [['Media analysts', 'Arabic, French and English media expertise.'], ['Engineers', 'Data, AI and web platforms.'], ['Trainers', 'Help clients get the most from Mearsaad.'], ['Spontaneous applications', 'Send us your profile through the contact form.']] },
     press: { eyebrow: 'Company', title: 'Press & media kit', lead: 'For journalists and partners: information about Mearsaad and Around Expressions, and our brand assets on request.', points: [['About Mearsaad', 'A media monitoring and intelligence platform by Around Expressions.'], ['Brand assets', 'Logos and visuals available on request.'], ['Interviews', 'Our team is available to talk about media trends.'], ['Press contact', 'Use the contact form and mention “Press”.']] },
     contact: { eyebrow: 'Company', title: 'Contact us', lead: 'Tell us what you need to follow. We will answer quickly and prepare a demonstration on your own subjects.', points: [['Demo on your topics', 'A live session prepared with your subjects and markets.'], ['Pricing', 'An offer adapted to your sources, users and services.'], ['Support', 'Existing clients can also write from the platform.'], ['Partnerships', 'Agencies and resellers are welcome.']] },
+    pricing: { eyebrow: 'Pricing', title: 'Mearsaad pricing', lead: 'Plans for every team, adjusted to your sources, languages and users.', points: [] },
   },
-  ui: { home: 'Home', related: 'Related', explore: 'Explore', back: 'Back to home', demoTitle: 'See Mearsaad on your own topics', demoText: 'We will prepare a live demonstration on your subjects and markets.', demo: 'Request a demo', login: 'Log in', open: 'Open menu', close: 'Close menu' },
+  ui: { home: 'Home', related: 'Related', explore: 'Explore', back: 'Back to home', demoTitle: 'See Mearsaad on your own topics', demoText: 'We will prepare a live demonstration on your subjects and markets.', demo: 'Request a demo', login: 'Log in', pricing: 'Pricing', open: 'Open menu', close: 'Close menu' },
   ask: {
     button: 'Ask Around',
     title: 'Around',
@@ -283,7 +285,8 @@ const en: Mega = {
       { q: 'How do alerts work?', a: 'You set watches on any query with thresholds. Mearsaad notifies by email or Telegram and can sound an on-screen activity alarm when coverage spikes.', to: 'alerts', keys: ['alert', 'alarm', 'notify', 'telegram', 'email', 'spike'] },
       { q: 'Is my data secure?', a: 'Each client has an isolated workspace with personal access, two-factor authentication, optional face verification, an audit log and copy protection.', to: 'security', keys: ['secure', 'security', 'data', 'privacy', 'safe', 'mfa'] },
       { q: 'What can the AI do?', a: 'Inside the platform, Around answers questions on your coverage with sources, writes summaries and daily briefings, and explains spikes and tone.', to: 'around', keys: ['ai', 'assistant', 'summary', 'briefing', 'around', 'gpt'] },
-      { q: 'How do I get a demo?', a: 'Click “Request a demo” and leave your details. We prepare a live session on your own topics and markets.', to: 'contact', keys: ['demo', 'price', 'pricing', 'contact', 'trial', 'cost'] },
+      { q: 'How do I get a demo?', a: 'Click “Request a demo” and leave your details. We prepare a live session on your own topics and markets.', to: 'contact', keys: ['demo', 'contact', 'trial'] },
+      { q: 'How much does Mearsaad cost?', a: 'Pricing depends on your sources, the number of users and the services you need. Compare the four plans, then ask us for a quote.', to: 'pricing', keys: ['price', 'pricing', 'cost', 'plan', 'quote', 'budget'] },
     ],
   },
 }
@@ -442,8 +445,9 @@ const fr: Mega = {
     careers: { eyebrow: 'Entreprise', title: 'Carrières', lead: 'Nous recherchons analystes, ingénieurs et spécialistes des médias qui veulent construire la plateforme de veille de référence de la région.', points: [['Analystes médias', 'Expertise des médias arabes, francophones et anglophones.'], ['Ingénieurs', 'Données, IA et plateformes web.'], ['Formateurs', 'Aider nos clients à tirer le meilleur de Mearsaad.'], ['Candidatures spontanées', 'Envoyez votre profil via le formulaire de contact.']] },
     press: { eyebrow: 'Entreprise', title: 'Presse & kit média', lead: 'Pour les journalistes et partenaires : informations sur Mearsaad et Around Expressions, et éléments de marque sur demande.', points: [['À propos de Mearsaad', 'Une plateforme de veille et d’intelligence médias par Around Expressions.'], ['Éléments de marque', 'Logos et visuels disponibles sur demande.'], ['Interviews', 'Notre équipe peut parler des tendances médiatiques.'], ['Contact presse', 'Utilisez le formulaire de contact en précisant « Presse ».']] },
     contact: { eyebrow: 'Entreprise', title: 'Nous contacter', lead: 'Dites-nous ce que vous devez suivre. Nous répondons vite et préparons une démonstration sur vos propres sujets.', points: [['Démo sur vos sujets', 'Une session en direct préparée avec vos sujets et marchés.'], ['Tarifs', 'Une offre adaptée à vos sources, utilisateurs et services.'], ['Assistance', 'Les clients peuvent aussi écrire depuis la plateforme.'], ['Partenariats', 'Agences et revendeurs bienvenus.']] },
+    pricing: { eyebrow: 'Tarifs', title: 'Tarifs Mearsaad', lead: 'Des formules pour chaque équipe, ajustées à vos sources, vos langues et vos utilisateurs.', points: [] },
   },
-  ui: { home: 'Accueil', related: 'À voir aussi', explore: 'Découvrir', back: 'Retour à l’accueil', demoTitle: 'Découvrez Mearsaad sur vos propres sujets', demoText: 'Nous préparons une démonstration en direct sur vos sujets et vos marchés.', demo: 'Demander une démo', login: 'Connexion', open: 'Ouvrir le menu', close: 'Fermer le menu' },
+  ui: { home: 'Accueil', related: 'À voir aussi', explore: 'Découvrir', back: 'Retour à l’accueil', demoTitle: 'Découvrez Mearsaad sur vos propres sujets', demoText: 'Nous préparons une démonstration en direct sur vos sujets et vos marchés.', demo: 'Demander une démo', login: 'Connexion', pricing: 'Tarifs', open: 'Ouvrir le menu', close: 'Fermer le menu' },
   ask: {
     button: 'Demander à Around',
     title: 'Around',
@@ -469,7 +473,8 @@ const fr: Mega = {
       { q: 'Comment fonctionnent les alertes ?', a: 'Vous créez des veilles sur toute requête avec des seuils. Mearsaad prévient par e-mail ou Telegram et peut déclencher une alarme d’activité à l’écran en cas de pic.', to: 'alerts', keys: ['alerte', 'alarme', 'notif', 'telegram', 'mail', 'pic'] },
       { q: 'Mes données sont-elles protégées ?', a: 'Chaque client a un espace isolé avec accès nominatif, double authentification, vérification faciale en option, journal d’audit et protection anti-copie.', to: 'security', keys: ['sécur', 'secur', 'donnée', 'confidential', 'protég'] },
       { q: 'Que peut faire l’IA ?', a: 'Dans la plateforme, Around répond aux questions sur votre couverture avec les sources, rédige synthèses et notes quotidiennes, et explique pics et tonalité.', to: 'around', keys: ['ia', 'assistant', 'synthèse', 'note', 'around', 'intelligence'] },
-      { q: 'Comment obtenir une démo ?', a: 'Cliquez sur « Demander une démo » et laissez vos coordonnées. Nous préparons une session en direct sur vos sujets et marchés.', to: 'contact', keys: ['démo', 'demo', 'prix', 'tarif', 'contact', 'essai', 'coût'] },
+      { q: 'Comment obtenir une démo ?', a: 'Cliquez sur « Demander une démo » et laissez vos coordonnées. Nous préparons une session en direct sur vos sujets et marchés.', to: 'contact', keys: ['démo', 'demo', 'contact', 'essai'] },
+      { q: 'Combien coûte Mearsaad ?', a: 'Le tarif dépend de vos sources, du nombre d’utilisateurs et des services souhaités. Comparez les quatre formules, puis demandez-nous un devis.', to: 'pricing', keys: ['prix', 'tarif', 'coût', 'cout', 'formule', 'devis', 'budget', 'combien'] },
     ],
   },
 }
@@ -628,8 +633,9 @@ const ar: Mega = {
     careers: { eyebrow: 'الشركة', title: 'الوظائف', lead: 'نبحث عن محللين ومهندسين ومختصين في الإعلام يريدون بناء منصة الرصد المرجعية في المنطقة.', points: [['محللون إعلاميون', 'خبرة في الإعلام العربي والفرنسي والإنجليزي.'], ['مهندسون', 'البيانات والذكاء الاصطناعي ومنصات الويب.'], ['مدربون', 'مساعدة عملائنا على الاستفادة القصوى من مرصاد.'], ['ترشيحات تلقائية', 'أرسل ملفك عبر نموذج الاتصال.']] },
     press: { eyebrow: 'الشركة', title: 'الصحافة والملف الإعلامي', lead: 'للصحفيين والشركاء: معلومات عن مرصاد وAround Expressions، وعناصر الهوية عند الطلب.', points: [['عن مرصاد', 'منصة للرصد والذكاء الإعلامي من Around Expressions.'], ['عناصر الهوية', 'الشعارات والصور متاحة عند الطلب.'], ['مقابلات', 'فريقنا متاح للحديث عن اتجاهات الإعلام.'], ['التواصل الصحفي', 'استخدم نموذج الاتصال واذكر «صحافة».']] },
     contact: { eyebrow: 'الشركة', title: 'اتصل بنا', lead: 'أخبرنا بما تحتاج إلى متابعته. نجيب بسرعة ونعدّ عرضًا توضيحيًا على مواضيعك.', points: [['عرض على مواضيعك', 'جلسة مباشرة معدّة بمواضيعك وأسواقك.'], ['الأسعار', 'عرض يناسب مصادرك ومستخدميك وخدماتك.'], ['الدعم', 'يمكن للعملاء الكتابة من المنصة أيضًا.'], ['الشراكات', 'نرحب بالوكالات والموزعين.']] },
+    pricing: { eyebrow: 'الأسعار', title: 'أسعار مرصاد', lead: 'باقات لكل فريق، تُعدَّل حسب مصادرك ولغاتك وعدد مستخدميك.', points: [] },
   },
-  ui: { home: 'الرئيسية', related: 'اطّلع أيضًا', explore: 'اكتشف', back: 'العودة إلى الرئيسية', demoTitle: 'شاهد مرصاد على مواضيعك', demoText: 'نعدّ لك عرضًا مباشرًا على مواضيعك وأسواقك.', demo: 'اطلب عرضًا توضيحيًا', login: 'تسجيل الدخول', open: 'فتح القائمة', close: 'إغلاق القائمة' },
+  ui: { home: 'الرئيسية', related: 'اطّلع أيضًا', explore: 'اكتشف', back: 'العودة إلى الرئيسية', demoTitle: 'شاهد مرصاد على مواضيعك', demoText: 'نعدّ لك عرضًا مباشرًا على مواضيعك وأسواقك.', demo: 'اطلب عرضًا توضيحيًا', login: 'تسجيل الدخول', pricing: 'الأسعار', open: 'فتح القائمة', close: 'إغلاق القائمة' },
   ask: {
     button: 'اسأل Around',
     title: 'Around',
@@ -655,7 +661,8 @@ const ar: Mega = {
       { q: 'كيف تعمل التنبيهات؟', a: 'تنشئ متابعات على أي استعلام بعتبات تختارها. يبلغك مرصاد بالبريد أو تيليغرام، ويمكنه إطلاق إنذار نشاط على الشاشة عند الذروة.', to: 'alerts', keys: ['تنبيه', 'تنبيهات', 'إنذار', 'تيليغرام', 'بريد', 'ذروة'] },
       { q: 'هل بياناتي آمنة؟', a: 'لكل عميل مساحة معزولة بدخول شخصي ومصادقة ثنائية وتحقق اختياري بالوجه وسجل تدقيق وحماية من النسخ.', to: 'security', keys: ['أمان', 'آمنة', 'بيانات', 'خصوصية', 'حماية'] },
       { q: 'ماذا يفعل الذكاء الاصطناعي؟', a: 'داخل المنصة، يجيب Around عن أسئلتك حول تغطيتك مع المصادر، ويكتب الملخصات والموجزات اليومية، ويفسر الذروات والنبرة.', to: 'around', keys: ['ذكاء', 'مساعد', 'ملخص', 'موجز', 'around'] },
-      { q: 'كيف أحصل على عرض توضيحي؟', a: 'انقر على «اطلب عرضًا توضيحيًا» واترك بياناتك. نعدّ لك جلسة مباشرة على مواضيعك وأسواقك.', to: 'contact', keys: ['عرض', 'سعر', 'أسعار', 'اتصال', 'تجربة', 'تكلفة'] },
+      { q: 'كيف أحصل على عرض توضيحي؟', a: 'انقر على «اطلب عرضًا توضيحيًا» واترك بياناتك. نعدّ لك جلسة مباشرة على مواضيعك وأسواقك.', to: 'contact', keys: ['عرض', 'اتصال', 'تجربة'] },
+      { q: 'كم تبلغ تكلفة مرصاد؟', a: 'يتوقف السعر على مصادرك وعدد المستخدمين والخدمات المطلوبة. قارن الباقات الأربع ثم اطلب منا عرض سعر.', to: 'pricing', keys: ['سعر', 'أسعار', 'تكلفة', 'باقة', 'كم'] },
     ],
   },
 }
