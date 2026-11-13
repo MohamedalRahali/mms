@@ -106,12 +106,6 @@ const en: Mega = {
         { to: 'platform', title: 'The Mearsaad platform', text: 'Media monitoring and intelligence in one workspace: every source, every language, analysed continuously.', cta: 'Explore the platform', icon: 'layers' },
         { to: 'around', title: 'Around, AI assistant', text: 'Ask your coverage a question and get a sourced answer, a summary or a briefing in seconds.', cta: 'Meet Around', icon: 'spark' },
       ],
-      quick: [
-        { to: 'dashboards', label: 'Dashboards & analytics' },
-        { to: 'reports', label: 'Reports & exports' },
-        { to: 'api', label: 'Integrations & API' },
-        { to: 'aivis', label: 'AI visibility' },
-      ],
       cols: [
         {
           heading: 'Capabilities',
@@ -291,12 +285,6 @@ const fr: Mega = {
         { to: 'platform', title: 'La plateforme Mearsaad', text: 'Veille et intelligence médias dans un seul espace : toutes les sources, toutes les langues, analysées en continu.', cta: 'Découvrir la plateforme', icon: 'layers' },
         { to: 'around', title: 'Around, assistant IA', text: 'Posez une question à votre couverture et obtenez en quelques secondes une réponse sourcée, une synthèse ou une note.', cta: 'Découvrir Around', icon: 'spark' },
       ],
-      quick: [
-        { to: 'dashboards', label: 'Tableaux de bord & mesure' },
-        { to: 'reports', label: 'Rapports & exports' },
-        { to: 'api', label: 'Intégrations & API' },
-        { to: 'aivis', label: 'Visibilité dans les IA' },
-      ],
       cols: [
         {
           heading: 'Fonctionnalités',
@@ -475,12 +463,6 @@ const ar: Mega = {
       intros: [
         { to: 'platform', title: 'منصة مرصاد', text: 'الرصد والذكاء الإعلامي في مساحة واحدة: كل المصادر وكل اللغات، تُحلَّل باستمرار.', cta: 'اكتشف المنصة', icon: 'layers' },
         { to: 'around', title: 'Around، المساعد الذكي', text: 'اطرح سؤالًا على تغطيتك واحصل خلال ثوانٍ على إجابة موثقة بالمصادر أو ملخص أو موجز.', cta: 'تعرّف على Around', icon: 'spark' },
-      ],
-      quick: [
-        { to: 'dashboards', label: 'لوحات القيادة والقياس' },
-        { to: 'reports', label: 'التقارير والتصدير' },
-        { to: 'api', label: 'التكامل وواجهة البرمجة' },
-        { to: 'aivis', label: 'الحضور في إجابات الذكاء الاصطناعي' },
       ],
       cols: [
         {
