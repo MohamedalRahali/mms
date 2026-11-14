@@ -6,6 +6,7 @@ import { MegaNav, type Go } from './MegaNav'
 import { MEGA, MENU_KEYS, hrefOf, pageFromPath, type Target } from './megaContent'
 import { AskAround, SubPage } from './SubPage'
 import { Pricing } from './Pricing'
+import { TourPage } from './TourPage'
 import { CHANNEL_ICONS, HeroVisual, Icon, TOUR_ICONS, TourVisual } from './visuals'
 
 /**
@@ -362,7 +363,7 @@ export default function Landing() {
   const loginHref = `/login?lang=${lang}`
   const openDemo = () => setDemo(true)
   const navLinks: [Target, string][] = [
-    ['#tour', c.nav.tour],
+    ['tour', c.nav.tour],
     ['platform', c.nav.platform],
     ['security', c.nav.security],
     ['contact', mega.menus.company.cols[0].items[3].label],
@@ -375,6 +376,8 @@ export default function Landing() {
       {page ? (
         page === 'pricing' ? (
           <Pricing lang={lang} mega={mega} go={go} openDemo={openDemo} />
+        ) : page === 'tour' ? (
+          <TourPage lang={lang} c={c} mega={mega} go={go} openDemo={openDemo} />
         ) : (
           <SubPage k={page} c={c} mega={mega} go={go} openDemo={openDemo} />
         )

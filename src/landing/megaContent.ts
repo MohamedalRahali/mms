@@ -44,6 +44,7 @@ export const PAGES = {
   press: { path: '/company/press', icon: 'news', visual: 'book' },
   contact: { path: '/company/contact', icon: 'mail', visual: 'team' },
   pricing: { path: '/pricing', icon: 'star', visual: 'reports' },
+  tour: { path: '/product-tour', icon: 'play', visual: 'monitor' },
 } satisfies Record<string, { path: string; icon: string; visual: Visual }>
 
 export type PageKey = keyof typeof PAGES
@@ -58,9 +59,9 @@ export const hrefOf = (t: Target) => (t.startsWith('#') ? `/${t}` : PAGES[t as P
 
 export type MenuKey = 'product' | 'solutions' | 'why' | 'resources' | 'company'
 export const MENU_KEYS: MenuKey[] = ['product', 'solutions', 'why', 'resources', 'company']
-/** Menu « d'origine » d'une page (pour le fil d'Ariane et l'onglet actif) : le produit d'abord, les ressources en dernier */
+/** Menu « d'origine » d'une page (pour le fil d'Ariane et l'onglet actif) : le produit d'abord, les solutions en dernier */
 export const menuOf = (menus: Record<MenuKey, { cols: unknown; intros?: unknown; quick?: unknown }>, k: string): MenuKey =>
-  (['product', 'why', 'company', 'solutions', 'resources'] as MenuKey[]).find((m) => JSON.stringify(menus[m]).includes(`"to":"${k}"`)) ?? 'product'
+  (['product', 'why', 'company', 'resources', 'solutions'] as MenuKey[]).find((m) => JSON.stringify(menus[m]).includes(`"to":"${k}"`)) ?? 'product'
 
 type Item = { to: Target; label: string; desc?: string }
 type Intro = { to: Target; title: string; text: string; cta: string; icon?: string }
@@ -167,7 +168,7 @@ const en: Mega = {
           ],
         },
       ],
-      featured: { to: '#tour', visual: 'monitor', tag: 'Interactive', title: 'Guided product tour', text: 'See the platform in action. Walk through monitoring, broadcast, analysis, AI, alerts and reports step by step.', cta: 'Start the tour' },
+      featured: { to: 'tour', visual: 'monitor', tag: 'Interactive', title: 'Guided product tour', text: 'See the platform in action. Walk through monitoring, broadcast, analysis, AI, alerts and reports step by step.', cta: 'Start the tour' },
     },
     why: {
       label: 'Why Mearsaad',
@@ -198,7 +199,7 @@ const en: Mega = {
           items: [
             { to: 'guides', label: 'Practical guides' },
             { to: 'glossary', label: 'Media monitoring glossary' },
-            { to: '#tour', label: 'Product tour' },
+            { to: 'tour', label: 'Product tour' },
             { to: 'contact', label: 'Ask an expert' },
           ],
         },
@@ -257,6 +258,7 @@ const en: Mega = {
     careers: { eyebrow: 'Company', title: 'Careers', lead: 'We look for analysts, engineers and media specialists who want to build the region’s reference monitoring platform.', points: [['Media analysts', 'Arabic, French and English media expertise.'], ['Engineers', 'Data, AI and web platforms.'], ['Trainers', 'Help clients get the most from Mearsaad.'], ['Spontaneous applications', 'Send us your profile through the contact form.']] },
     press: { eyebrow: 'Company', title: 'Press & media kit', lead: 'For journalists and partners: information about Mearsaad and Around Expressions, and our brand assets on request.', points: [['About Mearsaad', 'A media monitoring and intelligence platform by Around Expressions.'], ['Brand assets', 'Logos and visuals available on request.'], ['Interviews', 'Our team is available to talk about media trends.'], ['Press contact', 'Use the contact form and mention “Press”.']] },
     contact: { eyebrow: 'Company', title: 'Contact us', lead: 'Tell us what you need to follow. We will answer quickly and prepare a demonstration on your own subjects.', points: [['Demo on your topics', 'A live session prepared with your subjects and markets.'], ['Pricing', 'An offer adapted to your sources, users and services.'], ['Support', 'Existing clients can also write from the platform.'], ['Partnerships', 'Agencies and resellers are welcome.']] },
+    tour: { eyebrow: 'Guided tour', title: 'Mearsaad guided tour', lead: 'Walk through the platform section by section.', points: [] },
     pricing: { eyebrow: 'Pricing', title: 'Mearsaad pricing', lead: 'Plans for every team, adjusted to your sources, languages and users.', points: [] },
   },
   ui: { home: 'Home', related: 'Related', explore: 'Explore', back: 'Back to home', demoTitle: 'See Mearsaad on your own topics', demoText: 'We will prepare a live demonstration on your subjects and markets.', demo: 'Request a demo', login: 'Log in', pricing: 'Pricing', open: 'Open menu', close: 'Close menu' },
@@ -355,7 +357,7 @@ const fr: Mega = {
           ],
         },
       ],
-      featured: { to: '#tour', visual: 'monitor', tag: 'Interactif', title: 'Visite guidée du produit', text: 'Voyez la plateforme en action : veille, audiovisuel, analyse, IA, alertes et rapports, étape par étape.', cta: 'Lancer la visite' },
+      featured: { to: 'tour', visual: 'monitor', tag: 'Interactif', title: 'Visite guidée du produit', text: 'Voyez la plateforme en action : veille, audiovisuel, analyse, IA, alertes et rapports, étape par étape.', cta: 'Lancer la visite' },
     },
     why: {
       label: 'Pourquoi Mearsaad',
@@ -386,7 +388,7 @@ const fr: Mega = {
           items: [
             { to: 'guides', label: 'Guides pratiques' },
             { to: 'glossary', label: 'Glossaire de la veille' },
-            { to: '#tour', label: 'Visite produit' },
+            { to: 'tour', label: 'Visite produit' },
             { to: 'contact', label: 'Parler à un expert' },
           ],
         },
@@ -445,6 +447,7 @@ const fr: Mega = {
     careers: { eyebrow: 'Entreprise', title: 'Carrières', lead: 'Nous recherchons analystes, ingénieurs et spécialistes des médias qui veulent construire la plateforme de veille de référence de la région.', points: [['Analystes médias', 'Expertise des médias arabes, francophones et anglophones.'], ['Ingénieurs', 'Données, IA et plateformes web.'], ['Formateurs', 'Aider nos clients à tirer le meilleur de Mearsaad.'], ['Candidatures spontanées', 'Envoyez votre profil via le formulaire de contact.']] },
     press: { eyebrow: 'Entreprise', title: 'Presse & kit média', lead: 'Pour les journalistes et partenaires : informations sur Mearsaad et Around Expressions, et éléments de marque sur demande.', points: [['À propos de Mearsaad', 'Une plateforme de veille et d’intelligence médias par Around Expressions.'], ['Éléments de marque', 'Logos et visuels disponibles sur demande.'], ['Interviews', 'Notre équipe peut parler des tendances médiatiques.'], ['Contact presse', 'Utilisez le formulaire de contact en précisant « Presse ».']] },
     contact: { eyebrow: 'Entreprise', title: 'Nous contacter', lead: 'Dites-nous ce que vous devez suivre. Nous répondons vite et préparons une démonstration sur vos propres sujets.', points: [['Démo sur vos sujets', 'Une session en direct préparée avec vos sujets et marchés.'], ['Tarifs', 'Une offre adaptée à vos sources, utilisateurs et services.'], ['Assistance', 'Les clients peuvent aussi écrire depuis la plateforme.'], ['Partenariats', 'Agences et revendeurs bienvenus.']] },
+    tour: { eyebrow: 'Visite guidée', title: 'Visite guidée de Mearsaad', lead: 'Parcourez la plateforme section par section.', points: [] },
     pricing: { eyebrow: 'Tarifs', title: 'Tarifs Mearsaad', lead: 'Des formules pour chaque équipe, ajustées à vos sources, vos langues et vos utilisateurs.', points: [] },
   },
   ui: { home: 'Accueil', related: 'À voir aussi', explore: 'Découvrir', back: 'Retour à l’accueil', demoTitle: 'Découvrez Mearsaad sur vos propres sujets', demoText: 'Nous préparons une démonstration en direct sur vos sujets et vos marchés.', demo: 'Demander une démo', login: 'Connexion', pricing: 'Tarifs', open: 'Ouvrir le menu', close: 'Fermer le menu' },
@@ -543,7 +546,7 @@ const ar: Mega = {
           ],
         },
       ],
-      featured: { to: '#tour', visual: 'monitor', tag: 'تفاعلي', title: 'جولة إرشادية في المنتج', text: 'شاهد المنصة أثناء العمل: الرصد والبث والتحليل والذكاء الاصطناعي والتنبيهات والتقارير خطوة بخطوة.', cta: 'ابدأ الجولة' },
+      featured: { to: 'tour', visual: 'monitor', tag: 'تفاعلي', title: 'جولة إرشادية في المنتج', text: 'شاهد المنصة أثناء العمل: الرصد والبث والتحليل والذكاء الاصطناعي والتنبيهات والتقارير خطوة بخطوة.', cta: 'ابدأ الجولة' },
     },
     why: {
       label: 'لماذا مرصاد',
@@ -574,7 +577,7 @@ const ar: Mega = {
           items: [
             { to: 'guides', label: 'أدلة عملية' },
             { to: 'glossary', label: 'مسرد مصطلحات الرصد' },
-            { to: '#tour', label: 'جولة في المنتج' },
+            { to: 'tour', label: 'جولة في المنتج' },
             { to: 'contact', label: 'تحدث إلى خبير' },
           ],
         },
@@ -633,6 +636,7 @@ const ar: Mega = {
     careers: { eyebrow: 'الشركة', title: 'الوظائف', lead: 'نبحث عن محللين ومهندسين ومختصين في الإعلام يريدون بناء منصة الرصد المرجعية في المنطقة.', points: [['محللون إعلاميون', 'خبرة في الإعلام العربي والفرنسي والإنجليزي.'], ['مهندسون', 'البيانات والذكاء الاصطناعي ومنصات الويب.'], ['مدربون', 'مساعدة عملائنا على الاستفادة القصوى من مرصاد.'], ['ترشيحات تلقائية', 'أرسل ملفك عبر نموذج الاتصال.']] },
     press: { eyebrow: 'الشركة', title: 'الصحافة والملف الإعلامي', lead: 'للصحفيين والشركاء: معلومات عن مرصاد وAround Expressions، وعناصر الهوية عند الطلب.', points: [['عن مرصاد', 'منصة للرصد والذكاء الإعلامي من Around Expressions.'], ['عناصر الهوية', 'الشعارات والصور متاحة عند الطلب.'], ['مقابلات', 'فريقنا متاح للحديث عن اتجاهات الإعلام.'], ['التواصل الصحفي', 'استخدم نموذج الاتصال واذكر «صحافة».']] },
     contact: { eyebrow: 'الشركة', title: 'اتصل بنا', lead: 'أخبرنا بما تحتاج إلى متابعته. نجيب بسرعة ونعدّ عرضًا توضيحيًا على مواضيعك.', points: [['عرض على مواضيعك', 'جلسة مباشرة معدّة بمواضيعك وأسواقك.'], ['الأسعار', 'عرض يناسب مصادرك ومستخدميك وخدماتك.'], ['الدعم', 'يمكن للعملاء الكتابة من المنصة أيضًا.'], ['الشراكات', 'نرحب بالوكالات والموزعين.']] },
+    tour: { eyebrow: 'جولة إرشادية', title: 'جولة إرشادية في مرصاد', lead: 'تصفّح المنصة قسمًا بعد قسم.', points: [] },
     pricing: { eyebrow: 'الأسعار', title: 'أسعار مرصاد', lead: 'باقات لكل فريق، تُعدَّل حسب مصادرك ولغاتك وعدد مستخدميك.', points: [] },
   },
   ui: { home: 'الرئيسية', related: 'اطّلع أيضًا', explore: 'اكتشف', back: 'العودة إلى الرئيسية', demoTitle: 'شاهد مرصاد على مواضيعك', demoText: 'نعدّ لك عرضًا مباشرًا على مواضيعك وأسواقك.', demo: 'اطلب عرضًا توضيحيًا', login: 'تسجيل الدخول', pricing: 'الأسعار', open: 'فتح القائمة', close: 'إغلاق القائمة' },

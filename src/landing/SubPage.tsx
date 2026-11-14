@@ -47,7 +47,7 @@ export function SubPage({ k, c, mega, go, openDemo }: { k: PageKey; c: Copy; meg
               <button type="button" className="lp-btn lp-btn--primary lp-btn--lg" onClick={openDemo}>
                 {mega.ui.demo} <Icon name="arrow" size={18} />
               </button>
-              <a className="lp-btn lp-btn--glass lp-btn--lg" href="/#tour" onClick={go('#tour')}>
+              <a className="lp-btn lp-btn--glass lp-btn--lg" href={hrefOf('tour')} onClick={go('tour')}>
                 <Icon name="play" size={16} /> {c.hero.secondary}
               </a>
             </div>
