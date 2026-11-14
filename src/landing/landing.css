@@ -413,6 +413,12 @@
   position: relative;
   animation: lp-rise 1s var(--ease) 0.3s both;
 }
+/* au-delà de 760 px, le visuel est un conteneur : les bulles se rangent autrement s'il manque de place (voir .lp-float--ai) */
+@media (min-width: 761px) {
+  .lp-hero__visual {
+    container: lp-hero / inline-size;
+  }
+}
 .lp-dash {
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 20px;
@@ -503,6 +509,20 @@
   display: grid;
   gap: 0.5rem;
   animation: lp-scroll 16s linear infinite;
+}
+/* le fil remplit toute la carte, à la hauteur de la colonne de droite ; la piste en absolu ne pèse pas sur cette hauteur */
+.lp-card--feed {
+  display: flex;
+  flex-direction: column;
+}
+.lp-card--feed .lp-feed {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 264px;
+}
+.lp-card--feed .lp-feed__track {
+  position: absolute;
+  inset: 0 0 auto;
 }
 .lp-row {
   display: flex;
@@ -669,12 +689,46 @@
     lp-pop 0.7s var(--ease) 1.4s both,
     lp-bob 6s ease-in-out 2.2s infinite;
 }
+/* posée sur le bord haut du tableau, centrée dans l'espace libre entre « Mearsaad » et la pastille « En direct » : elle ne cache aucune carte.
+   « Mearsaad » finit à 144 px d'un bord, la pastille à 17 px de l'autre : centre = 50 % + (127 px − largeur de la pastille) / 2,
+   d'où --ai-k selon la langue (pastille de 54 px en anglais et en arabe, 83 px en français) */
 .lp-float--ai {
-  top: 58px;
-  inset-inline-end: -22px;
+  --ai-k: 36px;
+  top: -26px;
+  inset-inline: calc(2 * var(--ai-k)) 0;
+  width: max-content;
+  margin-inline: auto;
   animation:
     lp-pop 0.7s var(--ease) 2.2s both,
     lp-bob 7s ease-in-out 3s infinite reverse;
+}
+.lp-float--ai:lang(fr) {
+  --ai-k: 22px;
+}
+/* Le tableau a une largeur en px mais ses textes sont en rem : avec un texte du navigateur agrandi (réglage « grand »
+   ou « très grand »), la bulle IA ne tient plus entre « Mearsaad » et la pastille, et « Pic détecté » empiète sur la
+   colonne de droite. Si le visuel est trop étroit pour la taille du texte (place nécessaire : 91 px + 21,2 rem, ou
+   22,8 rem en français, soit 430 et 456 px au réglage normal, toujours disponibles au-delà de 760 px), la bulle IA
+   passe au-dessus de la barre, sans toucher ses textes, et « Pic détecté » se range sous le tableau. */
+@container lp-hero (max-width: calc(91px + 21.2rem)) {
+  .lp-float--ai {
+    top: auto;
+    bottom: calc(100% - 0.35rem);
+  }
+  .lp-float--alert {
+    top: calc(100% - 2px);
+    bottom: auto;
+  }
+}
+@container lp-hero (max-width: calc(91px + 22.8rem)) {
+  .lp-float--ai:lang(fr) {
+    top: auto;
+    bottom: calc(100% - 0.35rem);
+  }
+  .lp-float--alert:lang(fr) {
+    top: calc(100% - 2px);
+    bottom: auto;
+  }
 }
 .lp-float--ai .lp-float__ico {
   background: linear-gradient(135deg, #17395c, #14b8a6);
@@ -1918,6 +1972,8 @@
     max-width: 640px;
     margin-inline: auto;
     width: 100%;
+    /* de l'air entre la liste du dessus et la bulle posée sur le bord haut du tableau */
+    margin-top: 0.5rem;
   }
   .lp-cards,
   .lp-pillars {
@@ -2022,14 +2078,25 @@
   .lp-feed {
     height: 170px;
   }
+  .lp-card--feed .lp-feed {
+    min-height: 170px;
+  }
+  /* la marge du bas laisse la place à la bulle « Pic détecté », qui dépasse sous le tableau */
+  .lp-hero__visual {
+    margin-block: 0 2.5rem;
+  }
+  /* sous la rangée des trois mini-graphiques, sans toucher les cartes même en haut de son balancement (8 px) */
   .lp-float--alert {
     inset-inline-start: 6px;
-    bottom: -18px;
+    top: calc(100% - 3px);
+    bottom: auto;
   }
   .lp-float--ai {
     top: auto;
     bottom: 42%;
-    inset-inline-end: 6px;
+    inset-inline: auto 6px;
+    width: auto;
+    margin-inline: 0;
   }
   .lp-section {
     padding: 4rem 0;
@@ -2150,5 +2217,15 @@
   .lp-tour__side .lp-tour__tabs {
     flex: 1;
     min-width: 0;
+  }
+}
+/* téléphone : les onglets prennent toute la largeur, le bouton lecture/pause passe dessous */
+@media (max-width: 760px) {
+  .lp-tour__side {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .lp-tour__side .lp-tour__play {
+    align-self: flex-start;
   }
 }

@@ -1194,30 +1194,9 @@ a:hover > .mm-more .lp-ico {
   color: #fff;
 }
 
-/* ---------------------------------------------------------------- tablette et mobile */
-@media (max-width: 1240px) {
-  .mm-trigger {
-    padding-inline: 0.6rem;
-    font-size: 0.92rem;
-  }
-  .mm-nav .lp-nav__cta .lp-btn--ghost {
-    display: none;
-  }
-}
+/* ---------------------------------------------------------------- tablette et mobile
+ * (la barre du haut se replie selon la place réellement disponible : voir « barre adaptative » plus bas) */
 @media (max-width: 1080px) {
-  .mm-triggers,
-  .mm-dropdown,
-  .mm-scrim {
-    display: none;
-  }
-  .mm-burger {
-    display: inline-grid;
-    place-items: center;
-    margin-inline-start: 0.6rem;
-  }
-  .mm-nav .lp-nav__cta .lp-btn--ghost {
-    display: inline-flex;
-  }
   .mm-page__hero-in {
     grid-template-columns: 1fr;
     gap: 2.5rem;
@@ -1275,7 +1254,7 @@ a:hover > .mm-more .lp-ico {
 
 /* ---------------------------------------------------------------- barre : largeur et lien de connexion */
 .mm-nav .lp-wrap.lp-nav__in {
-  width: min(1360px, 100% - 2.5rem);
+  width: min(1440px, 100% - 2.5rem);
   gap: 1rem;
 }
 .mm-nav .lp-nav__cta .lp-btn--ghost {
@@ -1285,11 +1264,6 @@ a:hover > .mm-more .lp-ico {
 }
 .mm-nav .lp-nav__cta .lp-btn--ghost:hover {
   border-color: transparent;
-}
-@media (max-width: 1500px) {
-  .mm-nav .lp-brand span {
-    display: none;
-  }
 }
 
 /* ---------------------------------------------------------------- ajustements */
@@ -1312,7 +1286,8 @@ a:hover > .mm-more .lp-ico {
   display: none;
 }
 @media (max-width: 760px) {
-  .mm-ask__fab {
+  .mm-ask__fab,
+  .lp .mm-ask__fab {
     padding: 0.4rem;
     font-size: 0;
     gap: 0;
@@ -1326,7 +1301,8 @@ a:hover > .mm-more .lp-ico {
   }
 }
 @media (max-width: 760px) {
-  .mm-burger {
+  .mm-burger,
+  .mm-nav[data-fit~='burger'] .mm-burger {
     margin-inline-start: auto;
   }
 }
@@ -1524,10 +1500,6 @@ a:hover > .mm-more .lp-ico {
   font-size: 1.02rem;
 }
 @media (max-width: 1240px) {
-  .mm-trigger {
-    font-size: 0.98rem;
-    padding-inline: 0.6rem;
-  }
   .mm-panel {
     padding: 2.4rem 2.6rem;
     gap: 2.2rem;
@@ -2659,5 +2631,81 @@ a:hover > .mm-more .lp-ico {
   .gt-card {
     gap: 0.5rem;
     padding: 1.5rem 1.2rem;
+  }
+}
+
+/* ================================================================ barre adaptative
+ * MegaNav pose data-fit sur la barre : la première mise en page où tout tient sur une ligne (voir FITS dans MegaNav.tsx).
+ * Aucun élément ne rétrécit : un dépassement se mesure et fait passer à la mise en page suivante.
+ */
+.mm-nav .lp-nav__in > * {
+  flex-shrink: 0;
+}
+/* pendant la mesure : valeurs appliquées tout de suite, même avec « réduire les animations » (règle .lp * de landing.css) */
+.mm-nav[data-measuring] *,
+.lp .mm-nav[data-measuring] * {
+  transition: none !important;
+}
+.mm-nav[data-fit~='snug'] .lp-wrap.lp-nav__in {
+  gap: 0.75rem;
+}
+.mm-nav[data-fit~='snug'] .mm-triggers {
+  gap: 0.1rem;
+  margin-inline-start: 0.25rem;
+}
+.mm-nav[data-fit~='snug'] .mm-trigger {
+  gap: 0.3rem;
+  padding-inline: 0.6rem;
+}
+.mm-nav[data-fit~='snug'] .lp-nav__cta {
+  gap: 0.4rem;
+}
+.mm-nav[data-fit~='snug'] .lp-nav__cta .lp-btn--ghost {
+  padding-inline: 0.55rem;
+}
+.mm-nav[data-fit~='snug'] .lp-nav__cta .lp-btn--primary {
+  padding-inline: 1.2rem;
+}
+.mm-nav[data-fit~='snug'] .lp-nav__cta .lp-lang button {
+  padding-inline: 0.45rem;
+}
+.mm-nav[data-fit~='nobrand'] .lp-brand span {
+  display: none;
+}
+.mm-nav[data-fit~='tight'] .mm-trigger {
+  padding-inline: 0.45rem;
+  font-size: 0.98rem;
+}
+.mm-nav[data-fit~='tight'] .lp-nav__cta .lp-btn--ghost {
+  font-size: 0.98rem;
+}
+.mm-nav[data-fit~='tight'] .lp-nav__cta .lp-btn--primary {
+  padding-inline: 1rem;
+  font-size: 0.95rem;
+}
+.mm-nav[data-fit~='burger'] .mm-triggers,
+.mm-nav[data-fit~='burger'] .mm-dropdown,
+.mm-nav[data-fit~='burger'] .mm-scrim {
+  display: none;
+}
+.mm-nav[data-fit~='burger'] .mm-burger {
+  display: inline-grid;
+  place-items: center;
+  margin-inline-start: 0;
+}
+.mm-nav[data-fit~='noaux'] .lp-nav__cta .lp-btn--ghost,
+.mm-nav[data-fit~='nolang'] .lp-nav__cta .lp-lang {
+  display: none;
+}
+@media (max-width: 760px) {
+  .mm-nav[data-fit~='burger'] .mm-burger {
+    margin-inline-start: auto;
+  }
+}
+/* tiroir sur un écran large : une colonne centrée plutôt que des accordéons étirés sur toute la largeur */
+@media (min-width: 761px) {
+  .mm-drawer__scroll,
+  .mm-drawer__foot {
+    padding-inline: max(1.25rem, (100% - 720px) / 2);
   }
 }

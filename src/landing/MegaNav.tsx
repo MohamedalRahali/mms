@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type RefObject } from 'react'
 import type { Copy, LandingLang } from './copy'
 import { MENU_KEYS, PAGES, menuOf, hrefOf, type Mega, type MenuKey, type PageKey, type Target, type Visual } from './megaContent'
 import { Icon, TourVisual } from './visuals'
@@ -117,6 +117,98 @@ function useHoverIntent(onOpen: (k: MenuKey) => void, onClose: () => void) {
   }
 }
 
+/**
+ * Mises en page possibles de la barre, de la plus aérée à la plus compacte. On garde la première où tout
+ * tient sur une ligne : la place dépend de la langue, de la police chargée, du zoom et de la largeur de
+ * l'écran, donc on mesure au lieu de deviner un point de rupture.
+ * snug : espacements resserrés · nobrand : sans « by Around Expressions » · tight : textes un peu plus petits
+ * burger : menus repliés dans le tiroir · noaux : sans Connexion ni Tarifs (dans le tiroir) · nolang : sans langues
+ */
+const FITS = ['', 'snug', 'snug nobrand', 'snug nobrand tight', 'burger', 'nobrand burger', 'nobrand burger noaux', 'nobrand burger noaux nolang']
+const BURGER = FITS.indexOf('burger')
+/** Même seuil que landing.css : en dessous, langues, Connexion, Tarifs et démo ne sont plus que dans le tiroir. */
+const SMALL = '(max-width: 760px)'
+
+function useFit(bar: RefObject<HTMLElement | null>, row: RefObject<HTMLDivElement | null>, deps: unknown[]) {
+  const [fit, setFit] = useState(0)
+  const width = useRef(0)
+  const gutter = useRef(0)
+  useLayoutEffect(() => {
+    const el = bar.current
+    const box = row.current
+    if (!el || !box) return
+    let alive = true
+    let frame = 0
+    const overflows = () => {
+      const r = box.getBoundingClientRect()
+      let lo = Infinity
+      let hi = -Infinity
+      for (const k of Array.from(box.children)) {
+        const b = k.getBoundingClientRect()
+        if (!b.width) continue
+        lo = Math.min(lo, b.left)
+        hi = Math.max(hi, b.right)
+      }
+      return hi - lo > r.width + 0.5
+    }
+    const measure = () => {
+      if (!alive) return
+      // Défilement bloqué (tiroir, formulaire de démo) : la barre de défilement de Windows disparaît et la ligne
+      // s'élargit de quelques pixels. Tant que la fenêtre garde sa largeur, on ne revient pas à une mise en page
+      // plus aérée (les menus complets refermeraient le tiroir aussitôt ouvert), mais on peut encore se resserrer,
+      // par exemple après un changement de langue dans le tiroir. Si la fenêtre change de largeur pendant le
+      // blocage, on mesure en retirant à la barre la place que prendrait la barre de défilement.
+      const locked = document.body.style.overflow === 'hidden'
+      const held = locked && window.innerWidth === width.current
+      if (!locked) gutter.current = window.innerWidth - document.documentElement.clientWidth
+      width.current = window.innerWidth
+      const pad = locked && !held ? gutter.current : 0
+      // Aucune transition pendant la mesure (voir mega.css) : avec « réduire les animations », chaque propriété
+      // reçoit une transition très courte et les espacements garderaient leur ancienne valeur le temps de mesurer.
+      el.dataset.measuring = ''
+      if (pad) el.style.paddingRight = `${pad}px`
+      // Petit écran : la feuille de style range déjà langues, Connexion, Tarifs et démo dans le tiroir, qui est
+      // alors le seul accès : on part directement des mises en page avec menu replié.
+      let n = Math.max(held ? FITS.indexOf(el.dataset.fit ?? '') : 0, window.matchMedia?.(SMALL).matches ? BURGER : 0)
+      for (; n < FITS.length - 1; n++) {
+        el.dataset.fit = FITS[n]
+        if (!overflows()) break
+      }
+      el.dataset.fit = FITS[n]
+      if (pad) el.style.paddingRight = ''
+      box.getBoundingClientRect()
+      delete el.dataset.measuring
+      setFit(n)
+    }
+    const later = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(measure)
+    }
+    measure()
+    // la ligne et chacun de ses blocs : une police appliquée un peu après son chargement élargit les textes
+    // sans changer la largeur de la ligne
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(later) : null
+    for (const k of [box, ...Array.from(box.children)]) ro?.observe(k)
+    // blocage puis déblocage du défilement : on remesure une fois la page rendue
+    const mo = typeof MutationObserver === 'function' ? new MutationObserver(later) : null
+    mo?.observe(document.body, { attributes: true, attributeFilter: ['style'] })
+    window.addEventListener('resize', later)
+    const fonts = document.fonts
+    fonts?.addEventListener?.('loadingdone', later)
+    fonts?.ready?.then(later)
+    return () => {
+      alive = false
+      cancelAnimationFrame(frame)
+      ro?.disconnect()
+      mo?.disconnect()
+      window.removeEventListener('resize', later)
+      fonts?.removeEventListener?.('loadingdone', later)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps)
+  return FITS[fit]
+}
+
 function Panel({ mega, k, c, go, onNavigate }: { mega: Mega; k: MenuKey; c: Copy; go: Go; onNavigate: () => void }) {
   const m = mega.menus[k]
   const link = (to: Target) => (e: ReactMouseEvent) => {
@@ -228,8 +320,16 @@ export function MegaNav({
   const [acc, setAcc] = useState<MenuKey | null>(null)
   const [scrolled, setScrolled] = useState(false)
   const ref = useRef<HTMLElement>(null)
+  const row = useRef<HTMLDivElement>(null)
   const triggers = useRef<Record<string, HTMLButtonElement | null>>({})
   const hover = useHoverIntent(setOpen, () => setOpen(null))
+  const burger = useFit(ref, row, [lang, current]).includes('burger')
+
+  // menus repliés : pas de panneau déroulant ; barre complète : pas de tiroir
+  useEffect(() => {
+    if (burger) setOpen(null)
+    else setDrawer(false)
+  }, [burger])
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12)
@@ -281,7 +381,7 @@ export function MegaNav({
 
   return (
     <header ref={ref} className={`lp-nav mm-nav${scrolled ? ' is-scrolled' : ''}${open ? ' is-mega' : ''}${drawer ? ' is-open' : ''}`} onMouseLeave={hover.leave} onMouseEnter={hover.clear}>
-      <div className="lp-wrap lp-nav__in">
+      <div className="lp-wrap lp-nav__in" ref={row}>
         {brand}
         <nav className="mm-triggers" aria-label="Main">
           {MENU_KEYS.map((k) => (

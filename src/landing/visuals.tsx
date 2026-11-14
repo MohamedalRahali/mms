@@ -89,6 +89,13 @@ export const ROWS: { icon: string; w1: number; w2: number; tone: 'pos' | 'neu' |
   { icon: 'print', w1: 74, w2: 57, tone: 'neu' },
 ]
 
+/** Fil du tableau de bord d'accueil : assez de lignes pour remplir la carte sur toute la hauteur de la colonne de droite */
+const HERO_ROWS: typeof ROWS = [
+  ...ROWS,
+  { icon: 'podcast', w1: 70, w2: 44, tone: 'neu' },
+  { icon: 'forum', w1: 84, w2: 52, tone: 'pos' },
+]
+
 export function HeroVisual({ c }: { c: Copy }) {
   return (
     <div className="lp-hero__visual" aria-hidden>
@@ -107,7 +114,7 @@ export function HeroVisual({ c }: { c: Copy }) {
             <h4>{c.hero.feed}</h4>
             <div className="lp-feed">
               <div className="lp-feed__track">
-                {[...ROWS, ...ROWS].map((r, k) => (
+                {[...HERO_ROWS, ...HERO_ROWS].map((r, k) => (
                   <FeedRow key={k} {...r} delay={0} />
                 ))}
               </div>
