@@ -59,14 +59,17 @@ function useReveal() {
 
 /* ---------------------------------------------------------------- logo */
 
-function Brand({ light = false, onClick }: { light?: boolean; onClick?: (e: ReactMouseEvent) => void }) {
+/** by : mention « by Around Expressions » à côté du logo (pied de page ; retirée de l'en-tête à la demande du client) */
+function Brand({ light = false, by = true, onClick }: { light?: boolean; by?: boolean; onClick?: (e: ReactMouseEvent) => void }) {
   return (
-    <a className={`lp-brand${light ? ' is-light' : ''}`} href="/" onClick={onClick} aria-label="Mearsaad — مرصاد, by Around Expressions">
+    <a className={`lp-brand${light ? ' is-light' : ''}`} href="/" onClick={onClick} aria-label={by ? 'Mearsaad — مرصاد, by Around Expressions' : 'Mearsaad — مرصاد'}>
       <img src={light ? '/brand/mearsaad-intl-light.png' : '/brand/mearsaad-intl-dark.png'} alt="" width={900} height={262} />
-      <span dir="ltr">
-        <small>by</small>
-        <b>Around Expressions</b>
-      </span>
+      {by && (
+        <span dir="ltr">
+          <small>by</small>
+          <b>Around Expressions</b>
+        </span>
+      )}
     </a>
   )
 }
@@ -371,7 +374,7 @@ export default function Landing() {
 
   return (
     <div className="lp" dir={c.dir} lang={lang}>
-      <MegaNav c={c} mega={mega} lang={lang} setLang={setLang} go={go} openDemo={openDemo} loginHref={loginHref} brand={<Brand onClick={go('#top')} />} current={page} />
+      <MegaNav c={c} mega={mega} lang={lang} setLang={setLang} go={go} openDemo={openDemo} loginHref={loginHref} brand={<Brand by={false} onClick={go('#top')} />} current={page} />
 
       {page ? (
         page === 'pricing' ? (
